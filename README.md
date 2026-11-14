@@ -36,19 +36,17 @@
 
 ## Розгортання (один раз)
 
-1. **Neon** (neon.com): New project → регіон **AWS Europe Central 1 (Frankfurt)**.
-   Branches → створіть гілку `dev` (для локальної роботи). Для кожної гілки в Connect скопіюйте
-   рядок з `-pooler` (DATABASE_URL) і без нього (DIRECT_URL).
+1. **Neon** (neon.com): New project → регіон **AWS Europe Central 1 (Frankfurt)** → Connect: скопіюйте рядок
+   з `-pooler` (DATABASE_URL) і без нього (DIRECT_URL, перемикач «Connection pooling» вимкнути).
 2. **Код на GitHub** у **приватному** репозиторії.
-3. **Vercel** (vercel.com): Add New → Project → імпорт репозиторію. У Environment Variables додайте всі змінні з
-   `.env.example` (для гілки `main` Neon), `COOKIE_SECURE` не заповнюйте. Deploy.
-4. **Створити таблиці й адміністратора в основній базі** (з вашого ПК, один раз):
-   ```
-   set "DATABASE_URL=рядок main з -pooler" && set "DIRECT_URL=рядок main без -pooler" && npm run db:push && npm run db:seed
-   ```
-5. Відкрийте сайт, увійдіть, Налаштування → завантажити товари, створити комірки й постачальників.
+3. **Vercel** (vercel.com, вхід через GitHub): Add New → Project → імпорт репозиторію → Environment Variables:
+   усі змінні з `.env.example` (`COOKIE_SECURE` не потрібна) → Deploy.
+4. Під час кожної публікації сервер сам оновлює структуру бази (`prisma db push`; зміни з втратою даних не застосовуються —
+   публікація тоді зупиниться з помилкою) і створює адміністратора з `ADMIN_LOGIN`/`ADMIN_PASSWORD`, якщо його ще немає.
+5. Відкрийте адресу сайту, увійдіть, Налаштування → завантажити товари, створити комірки й постачальників.
 
-Після цього кожна зміна коду в GitHub автоматично публікується на сайті за 1–2 хвилини.
+Після цього кожна зміна коду в GitHub автоматично публікується на сайті за 1–2 хвилини. У Vercel → Deployments
+будь-яку попередню версію можна повернути кнопкою «Promote to Production».
 
 ## Локальна робота (для перевірки змін)
 
