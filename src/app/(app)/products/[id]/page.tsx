@@ -7,7 +7,7 @@ import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
-import { addProductCell, addProductCode, createKitCard, pushKitSetForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
+import { addProductCell, addProductCode, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -129,25 +129,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   ]);
   const suppliers = ctx.suppliers;
   const inCells = product.cells.reduce((s, c) => s + c.qty, 0);
-  // Створення картки для сайту (комплект із цього товару) — під іншу модель/бренд для SEO
-  const newCardForm = (
-    <details style={{ marginTop: 8 }}>
-      <summary className="small">
-        <b>+ Створити картку для сайту</b> (комплект із цього товару під іншу модель чи бренд)
-      </summary>
-      <form action={createKitCard} className="row" style={{ marginTop: 10 }}>
-        <input type="hidden" name="baseId" value={product.id} />
-        <input name="name" required minLength={2} placeholder="Назва картки, напр. Гальмівні колодки передні Geon X-Road 250" style={{ flex: 1, minWidth: 280 }} />
-        <input name="sku" placeholder={product.sku ? `${product.sku}-N (авто)` : "артикул"} style={{ width: 150 }} />
-        <input name="price" type="number" min={0} step="0.01" placeholder={`ціна (${product.price})`} style={{ width: 120 }} />
-        <button className="btn sm primary">Створити</button>
-      </form>
-      <p className="muted small">
-        Опис, характеристики, категорія й виробник скопіюються з цього товару — потім відредагуйте їх під модель. У SalesDrive картка створиться як
-        комплект, залишок списуватиметься з цього товару.
-      </p>
-    </details>
-  );
+
   const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
 
   return (
@@ -212,10 +194,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           </Link>{" "}
           ({product.base.sku ?? "—"}){product.kitQty !== 1 ? `, ×${product.kitQty} шт` : ""}. Прихід, комірки, наліпки й інвентаризація ведуться на
           основному товарі; скан цієї картки в документах підставить основний.{" "}
-          <button className="btn sm">Відв&apos;язати</button>{" "}
-          <button className="btn sm" formAction={pushKitSetForm} title="Якщо в SalesDrive у картки немає позначки «К» (комплект)">
-            Записати комплект у SalesDrive
-          </button>
+          <button className="btn sm">Відв&apos;язати</button>
         </form>
       ) : product.kits.length > 0 ? (
         <div className="panel">
@@ -225,7 +204,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
               ↳ <Link href={`/products/${k.id}`}>{k.name}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн</span>
             </div>
           ))}
-          {newCardForm}
         </div>
       ) : (
         <details className="panel">
@@ -241,7 +219,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           </form>
         </details>
       )}
-      {!product.base && product.kits.length === 0 && <div className="panel">{newCardForm}</div>}
+
 
       <ProductForm product={product} {...ctx} kitsCount={product.kits.length} />
 
