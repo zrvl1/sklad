@@ -114,7 +114,7 @@ async function detectDeleted(present: Set<string>) {
       deletedAt: null,
       sdId: { not: null },
       syncedAt: { not: null },
-      createdAt: { lt: new Date(Date.now() - 2 * 60 * 60 * 1000) }, // щойно створені могли ще не потрапити в YML
+      createdAt: { lt: new Date(Date.now() - 20 * 60 * 1000) }, // щойно створені могли ще не потрапити в YML (він оновлюється раз на кілька хвилин)
     },
   });
   const missing = active.filter((p) => !present.has(p.sdId!));
