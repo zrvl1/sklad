@@ -16,6 +16,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     db.actionLog.findMany({ orderBy: { createdAt: "desc" }, take: 30, include: { user: true } }),
     isAdmin ? db.loginAttempt.findMany({ orderBy: { createdAt: "desc" }, take: 20 }) : Promise.resolve([]),
   ]);
+  const sdDebugRaw = isAdmin ? await getSetting("lastSdResponse") : null;
+  const sdDebug = sdDebugRaw ? (JSON.parse(sdDebugRaw) as { at: string; status: number; sent: string; response: string }) : null;
   const lastSync = lastSyncRaw ? (JSON.parse(lastSyncRaw) as { at: string; total: number; created: number; updated: number }) : null;
   const ymlOn = Boolean(process.env.SALESDRIVE_YML_URL);
 
@@ -201,6 +203,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <button className="btn sm">Змінити пароль</button>
         </form>
       </div>
+
+      {isAdmin && sdDebug && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Остання відповідь SalesDrive</h2>
+          <p className="small muted">
+            {dateTimeUa(new Date(sdDebug.at))} · статус {sdDebug.status}
+          </p>
+          <div className="small">
+            <b>Відправлено:</b>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", background: "#f7f8fa", padding: 8, borderRadius: 6 }}>{sdDebug.sent}</pre>
+            <b>Відповідь:</b>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", background: "#f7f8fa", padding: 8, borderRadius: 6 }}>{sdDebug.response || "(порожня)"}</pre>
+          </div>
+        </div>
+      )}
 
       {isAdmin && (
         <div className="panel">

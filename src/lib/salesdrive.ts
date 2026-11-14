@@ -138,6 +138,18 @@ export function productToSd(
   return payload;
 }
 
+async function saveSdDebug(sent: unknown, status: number, response: string) {
+  try {
+    const { setSetting } = await import("./util");
+    await setSetting(
+      "lastSdResponse",
+      JSON.stringify({ at: new Date().toISOString(), status, sent: JSON.stringify(sent).slice(0, 3000), response: response.slice(0, 3000) })
+    );
+  } catch {
+    /* діагностика не повинна ламати роботу */
+  }
+}
+
 /** Додати/оновити товари в SalesDrive */
 export async function sdUpdateProducts(products: SdProductPayload[]) {
   const { url, key } = config();
@@ -151,6 +163,8 @@ export async function sdUpdateProducts(products: SdProductPayload[]) {
       cache: "no-store",
     });
     const text = await res.text();
+    // для діагностики: що саме відправили і що відповів SalesDrive (без ключа)
+    await saveSdDebug(chunk, res.status, text);
     if (!res.ok) throw new Error(`SalesDrive відповів ${res.status}: ${text.slice(0, 300)}`);
     let data: unknown = null;
     try {
