@@ -18,7 +18,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   const [statuses, saleStatusesRaw, lastSync] = await Promise.all([cachedStatuses(), getSetting("saleStatuses"), getSetting("lastOrderSync")]);
   const savedSale: number[] = saleStatusesRaw ? JSON.parse(saleStatusesRaw) : [];
   // якщо не налаштовано — рахуємо продажем статус «Продано» (поки посилку не отримали, це ще не продаж)
-  const autoSale = savedSale.length ? [] : statuses.filter((s) => /продан/i.test(s.name)).map((s) => s.id);
+  const autoSale = savedSale.length ? [] : statuses.filter((s) => /прода[нж]/i.test(s.name)).map((s) => s.id);
   const saleStatuses: number[] = savedSale.length ? savedSale : autoSale;
   const statusFilter = saleStatuses.length ? { statusId: { in: saleStatuses } } : {};
 
