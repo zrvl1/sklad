@@ -474,6 +474,9 @@ export async function linkKitForm(formData: FormData) {
     try {
       await linkKit(kitId, found[0].id, qty);
       await logAction(user.id, "link-kit", "product", kitId, { baseId: found[0].id, qty });
+      // записуємо склад комплекту і в SalesDrive, щоб CRM теж знала, що це комплект
+      const r = await pushKitSet(kitId);
+      if (!r.ok) msg = `Прив'язано в додатку, але SalesDrive не прийняв склад комплекту: ${r.error}`;
     } catch (e) {
       msg = e instanceof Error ? e.message : String(e);
     }
@@ -568,4 +571,25 @@ export async function createKitCard(formData: FormData) {
   }
   await logAction(user.id, "create-kit-card", "product", card.id, { baseId, name, sku });
   redirect(`/products/${card.id}?saved=${warn ? 0 : 1}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`);
+}
+
+/** Записати склад комплекту в SalesDrive: картка = kitQty шт основного товару (поле set) */
+async function pushKitSet(kitId: number) {
+  const kit = await db.product.findUniqueOrThrow({ where: { id: kitId }, include: { base: true } });
+  if (!kit.base?.sdId) return { ok: false as const, error: "немає основного товару в SalesDrive" };
+  if (!isSalesDriveConfigured()) return { ok: false as const, error: "SalesDrive не налаштовано" };
+  try {
+    await sdUpdateProducts([productToSd(kit, null, { set: [{ id: kit.base.sdId, quantity: kit.kitQty || 1 }] })]);
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function pushKitSetForm(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const kitId = Number(formData.get("kitId"));
+  const r = await pushKitSet(kitId);
+  await logAction(user.id, "push-kit-set", "product", kitId, r);
+  redirect(`/products/${kitId}?${r.ok ? "saved=1" : `warn=${encodeURIComponent(`SalesDrive не прийняв склад комплекту: ${r.error}`)}`}`);
 }
