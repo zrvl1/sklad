@@ -117,9 +117,17 @@ export default function InventoryEditor(props: Props) {
 
   const post = () => {
     if (!lines.length) return;
+    // великі розбіжності частіше означають помилку сканування, ніж реальну нестачу
+    const big = diffs.filter((d) => Math.abs(d.counted - d.system) >= 5 || (d.system > 0 && Math.abs(d.counted - d.system) / d.system > 0.5));
+    const bigText = big.length
+      ? `\n\n⚠ Великі розбіжності — перевірте:\n${big
+          .slice(0, 10)
+          .map((d) => `• ${d.name}: облік ${d.system}, факт ${d.counted}`)
+          .join("\n")}`
+      : "";
     if (
       !confirm(
-        `Провести інвентаризацію?\nПораховано товарів: ${summary.length}, з розбіжностями: ${diffs.length}.\nЗалишки цих товарів у SalesDrive буде встановлено рівними порахованим.`
+        `Провести інвентаризацію?\nПораховано товарів: ${summary.length}, з розбіжностями: ${diffs.length}.\nЗалишки цих товарів у SalesDrive буде встановлено рівними порахованим.${bigText}`
       )
     )
       return;

@@ -275,6 +275,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <label className="check">
             <input type="checkbox" required /> так, видалити і в SalesDrive
           </label>
+          {stockTotal > 0 && (
+            <label className="check">
+              <input type="checkbox" name="force" /> на складі ще {stockTotal} шт — все одно видалити
+            </label>
+          )}
           <button className="btn danger">Видалити</button>
           <span className="muted small" style={{ width: "100%" }}>
             Товар зникне з SalesDrive і з усіх списків. Історія зберігається, а в «Видалених товарах» з'явиться нагадування прибрати його на Prom і

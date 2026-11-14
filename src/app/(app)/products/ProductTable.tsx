@@ -34,7 +34,8 @@ export default function ProductTable({ products }: { products: Row[] }) {
     const reason = prompt(`Видалити ${ids.length} товар(и) у SalesDrive і в додатку?\nВкажіть причину (необов'язково) і натисніть OK.`);
     if (reason === null) return;
     start(async () => {
-      const r = await deleteProducts(ids, reason);
+      let r = await deleteProducts(ids, reason);
+      if (!r.ok && "needForce" in r && r.needForce && confirm(`${r.error}\n\nВидалити все одно?`)) r = await deleteProducts(ids, reason, true);
       if (!r.ok) return setErr(r.error);
       setSelected({});
       setErr(null);

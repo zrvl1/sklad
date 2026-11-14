@@ -14,9 +14,24 @@ type Line = {
   price: number;
   qty: number;
   cost: number;
+  prevCost: number; // попередня собівартість товару — для перевірки помилок введення
   newPrice: number | null;
   cellId: number | null;
 };
+
+/** Попередження по рядку приходу: ловимо типові помилки введення до проведення */
+function lineWarnings(l: Line, rate: number) {
+  const w: string[] = [];
+  const costUah = l.cost * rate;
+  const sale = l.newPrice ?? l.price;
+  if (l.cost <= 0) w.push("закупівля 0");
+  if (sale > 0 && costUah > sale) w.push(`закупівля (${costUah.toFixed(2)}) вища за ціну продажу (${sale})`);
+  if (l.prevCost > 0 && l.cost > 0 && Math.abs(costUah - l.prevCost) / l.prevCost > 0.5) w.push(`закупівля відрізняється від попередньої (${l.prevCost}) більш ніж на 50%`);
+  if (l.newPrice !== null && l.newPrice <= 0) w.push("нова ціна 0");
+  if (l.qty > 1000) w.push("дуже велика кількість");
+  if (!Number.isInteger(l.qty)) w.push("дробова кількість");
+  return w;
+}
 
 type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string };
 
@@ -95,6 +110,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           price: p.price,
           qty: 1,
           cost: p.cost,
+          prevCost: p.cost,
           newPrice: null,
           cellId: activeCellId,
         },
@@ -156,6 +172,8 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
 
   const post = () => {
     if (!lines.length) return setMsg({ type: "err", text: "Додайте товари" });
+    const warns = lines.flatMap((l) => lineWarnings(l, rate || 1).map((w) => `• ${l.name}: ${w}`));
+    if (warns.length && !confirm(`Перевірте перед проведенням:\n${warns.slice(0, 15).join("\n")}${warns.length > 15 ? `\n…ще ${warns.length - 15}` : ""}\n\nВсе правильно, проводимо?`)) return;
     const sum = cur === "UAH" ? `${fmt(total)} грн` : `${fmt(total)} ${cur} (≈ ${fmt(total * rate)} грн)`;
     if (!confirm(`Провести прихід: ${lines.length} позицій, ${totalQty} шт на ${sum}?\nЗалишки в SalesDrive буде збільшено, собівартість оновлено.`)) return;
     start(async () => {
@@ -319,6 +337,11 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                   <div className="muted small">
                     {[l.sku, l.barcode].filter(Boolean).join(" · ")} · ціна зараз {fmt(l.price)}
                   </div>
+                  {lineWarnings(l, rate || 1).map((w) => (
+                    <div key={w} className="small" style={{ color: "var(--warn)" }}>
+                      ⚠ {w}
+                    </div>
+                  ))}
                 </td>
                 <td>
                   <input type="number" min={0} step="any" value={l.qty} onChange={(e) => update(l.key, { qty: n(e.target.value) })} />

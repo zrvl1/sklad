@@ -25,5 +25,6 @@ export default function Barcode({ value, height, fontSize = 10, width = 1.4 }: {
       } catch {}
     }
   }, [value, height, fontSize, width]);
-  return <svg ref={ref} style={{ maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} />;
+  // crispEdges — чіткі смуги на термопринтері без розмиття
+  return <svg ref={ref} shapeRendering="crispEdges" style={{ maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} />;
 }

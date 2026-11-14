@@ -2,6 +2,7 @@ import type { Product, Supplier } from "@prisma/client";
 import { dateInput } from "@/lib/util";
 import { parseParams } from "@/lib/salesdrive";
 import DetailsFields, { type ClientTemplate } from "@/components/DetailsFields";
+import CodeInput from "@/components/CodeInput";
 import { saveProduct } from "./actions";
 
 export default function ProductForm({
@@ -27,7 +28,7 @@ export default function ProductForm({
       <div className="grid2">
         <label style={{ gridColumn: "1 / -1" }}>
           Назва *
-          <input name="name" defaultValue={p?.name} required autoFocus={!p} />
+          <input name="name" defaultValue={p?.name} required minLength={2} maxLength={255} autoFocus={!p} />
         </label>
         <label>
           Категорія
@@ -44,12 +45,12 @@ export default function ProductForm({
         </label>
         <label>
           Ціна продажу, грн
-          <input name="price" inputMode="decimal" defaultValue={p?.price ?? ""} />
+          <input name="price" type="number" min={0} step="0.01" defaultValue={p?.price ?? ""} />
         </label>
         <label>
           Собівартість{showCurrency ? "" : ", грн"}
           <span className="row" style={{ gap: 6 }}>
-            <input name="cost" inputMode="decimal" defaultValue={foreignCost ? p?.costOriginal ?? "" : p?.cost ?? ""} style={{ width: 140 }} />
+            <input name="cost" type="number" min={0} step="0.01" defaultValue={foreignCost ? p?.costOriginal ?? "" : p?.cost ?? ""} style={{ width: 140 }} />
             {showCurrency ? (
               <select name="costCurrency" defaultValue={p?.costCurrency ?? "UAH"}>
                 {[...new Set(["UAH", ...currencies])].map((c) => (
@@ -96,11 +97,11 @@ export default function ProductForm({
         </label>
         <label>
           Артикул (SKU)
-          <input name="sku" defaultValue={p?.sku ?? ""} placeholder="свій або залиште порожнім" />
+          <CodeInput name="sku" kind="sku" defaultValue={p?.sku} productId={p?.id} placeholder="свій або залиште порожнім" />
         </label>
         <label>
           Штрихкод
-          <input name="barcode" defaultValue={p?.barcode ?? ""} placeholder="відскануйте або залиште порожнім" />
+          <CodeInput name="barcode" kind="barcode" defaultValue={p?.barcode} productId={p?.id} placeholder="відскануйте або залиште порожнім" />
         </label>
         <label>
           ID у SalesDrive

@@ -71,6 +71,8 @@ export async function postInventory(id: number, zeroMissing: boolean) {
     db.product.findMany({ where: { id: { in: ids } } }),
     db.stockBalance.findMany({ where: { warehouseId: inv.warehouseId, productId: { in: ids } } }),
   ]);
+  const gone = products.filter((p) => p.deletedAt);
+  if (gone.length) return { ok: false as const, error: `Товари видалено, приберіть їх із документа: ${gone.map((p) => p.name).join(", ")}` };
   const system = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
   const changed = products.filter((p) => Math.abs((counted.get(p.id) ?? 0) - (system.get(p.id) ?? 0)) > 1e-9);
 

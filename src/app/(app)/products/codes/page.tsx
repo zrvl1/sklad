@@ -2,11 +2,11 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/util";
-import { bulkGenerate, saveSkuSettings } from "../actions";
+import { bulkGenerate, replaceBarcodes, saveSkuSettings } from "../actions";
 
 // Штрихкоди й артикули: генерація, шаблон артикула, пошук дублікатів
-export default async function CodesPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
-  const { msg } = await searchParams;
+export default async function CodesPage({ searchParams }: { searchParams: Promise<{ msg?: string; replaced?: string }> }) {
+  const { msg, replaced } = await searchParams;
   const user = await requireUser();
   const isAdmin = user.role === "admin";
   const [noBarcode, noSku, prefix, digits, dupBarcodes, dupSkus, supplierCodes] = await Promise.all([
@@ -96,6 +96,47 @@ export default async function CodesPage({ searchParams }: { searchParams: Promis
               </button>
             </form>
           </div>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Замінити штрихкоди на нові</h2>
+          <p className="small muted">
+            Кожен товар отримає власний штрихкод EAN-13 виду <b>200XXXXXXXXXX</b>. Старий штрихкод не губиться: він стає додатковим кодом товару, тож
+            старі наліпки й заводські коди й далі скануються. Нові штрихкоди одразу відправляються в SalesDrive. Далі нові товари отримують такий
+            штрихкод автоматично.
+          </p>
+          <p className="small" style={{ color: "var(--warn)" }}>
+            ⚠ Якщо Prom чи Horoshop шукають товари за штрихкодом — після заміни перевірте вивантаження на сайти. Наліпки на товарі в магазині варто
+            передрукувати.
+          </p>
+          <form action={replaceBarcodes} className="row">
+            <label>
+              Кому
+              <select name="scope" defaultValue="nonean">
+                <option value="nonean">лише з неправильним або без штрихкоду</option>
+                <option value="empty">лише без штрихкоду</option>
+                <option value="all">усім товарам</option>
+              </select>
+            </label>
+            <label>
+              Підтвердження: впишіть ЗАМІНИТИ
+              <input name="confirm" autoComplete="off" required style={{ width: 160 }} />
+            </label>
+            <button className="btn primary">Замінити</button>
+          </form>
+          {replaced && Number(replaced) > 0 && (
+            <div className="msg ok" style={{ marginTop: 12 }}>
+              Надрукуйте нові наліпки:{" "}
+              <a className="btn sm" href="/print/labels?stock=1&tpl=40x25" target="_blank">
+                🖨 на весь залишок (кожна одиниця)
+              </a>{" "}
+              <a className="btn sm" href="/print/labels?all=1&tpl=40x25" target="_blank">
+                🖨 по одній на кожен товар
+              </a>
+            </div>
+          )}
         </div>
       )}
 

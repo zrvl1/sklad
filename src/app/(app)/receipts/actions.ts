@@ -37,6 +37,8 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
   if (!r) return { ok: false as const, error: "Документ не знайдено" };
   if (r.status !== "draft") return { ok: false as const, error: "Проведений документ змінювати не можна" };
 
+  if (input.lines.some((l) => !Number.isFinite(l.qty) || !Number.isFinite(l.cost) || l.cost < 0 || (l.newPrice !== null && l.newPrice < 0)))
+    return { ok: false as const, error: "Кількість, закупівля і ціна мають бути додатними числами" };
   const lines = input.lines.filter((l) => l.productId && l.qty > 0);
   const currency = (input.currency || "UAH").toUpperCase();
   const rate = currency === "UAH" ? 1 : (await getRates())[currency];
@@ -123,6 +125,8 @@ export async function postReceipt(id: number) {
     db.product.findMany({ where: { id: { in: ids } } }),
     db.stockBalance.findMany({ where: { warehouseId: r.warehouseId, productId: { in: ids } } }),
   ]);
+  const gone = products.filter((p) => p.deletedAt);
+  if (gone.length) return { ok: false as const, error: `Товари видалено, приберіть їх із документа: ${gone.map((p) => p.name).join(", ")}` };
   const curQty = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
 
   const plan = products.map((p) => {

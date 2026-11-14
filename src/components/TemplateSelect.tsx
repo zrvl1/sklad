@@ -7,7 +7,7 @@ const KEY = "labelTemplate";
 
 /** Запам'ятовує обраний шаблон цінника у браузері */
 export function useTemplate(): [TemplateId, (t: TemplateId) => void] {
-  const [tpl, setTpl] = useState<TemplateId>("58x40");
+  const [tpl, setTpl] = useState<TemplateId>("40x25");
   useEffect(() => {
     try {
       const saved = localStorage.getItem(KEY) as TemplateId | null;

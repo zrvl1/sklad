@@ -63,6 +63,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               price: l.product.price,
               qty: l.qty,
               cost: l.cost,
+              prevCost: l.product.cost,
               newPrice: l.newPrice,
               cellId: l.cellId,
             })),

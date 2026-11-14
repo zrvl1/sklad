@@ -76,6 +76,8 @@ export async function postWriteOff(id: number) {
     db.product.findMany({ where: { id: { in: ids } } }),
     db.stockBalance.findMany({ where: { warehouseId: w.warehouseId, productId: { in: ids } } }),
   ]);
+  const gone = products.filter((p) => p.deletedAt);
+  if (gone.length) return { ok: false as const, error: `Товари видалено, приберіть їх із документа: ${gone.map((p) => p.name).join(", ")}` };
   const cur = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
   const short = products.filter((p) => (cur.get(p.id) ?? 0) < (qty.get(p.id) ?? 0) - 1e-9);
   if (short.length) {

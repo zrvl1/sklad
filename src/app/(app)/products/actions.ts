@@ -8,6 +8,7 @@ import { internalEan13 } from "@/lib/barcode";
 import { addCode, codeOwner, refreshSearch } from "@/lib/codes";
 import { isSalesDriveConfigured, parseParams, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { applyTemplate } from "@/lib/templates";
+import { moneyProblem, validateCodes } from "@/lib/validate";
 import { setCellQty } from "@/lib/stock";
 import { buildSearch, getSetting, logAction, num, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
@@ -109,6 +110,25 @@ export async function saveProduct(formData: FormData) {
       : { cost: toUah(costInput, costCurrency, await getRates()), costCurrency, costOriginal: costInput };
   const gen = { genBarcode: Boolean(formData.get("genBarcode")), genSku: Boolean(formData.get("genSku")) };
 
+  // Перевірки перед збереженням: дублікати й формат кодів, коректні суми
+  // для наявного товару перевіряємо лише змінені коди (старі дублікати з CRM не блокують редагування)
+  const prev = id ? await db.product.findUnique({ where: { id }, select: { barcode: true, sku: true } }) : null;
+  const errors = [
+    ...(await validateCodes({
+      id,
+      barcode: prev && prev.barcode === data.barcode ? null : data.barcode,
+      sku: prev && prev.sku === data.sku ? null : data.sku,
+    })),
+    moneyProblem("Ціна", data.price),
+    moneyProblem("Собівартість", costInput),
+    data.discountValue !== null && data.discountType === "percent" && (data.discountValue < 0 || data.discountValue >= 100) ? "Знижка у відсотках має бути від 0 до 99" : null,
+    data.discountFrom && data.discountTo && data.discountFrom > data.discountTo ? "Початок знижки пізніше за кінець" : null,
+  ].filter(Boolean) as string[];
+  if (errors.length) {
+    const msg = encodeURIComponent(`Не збережено: ${errors.join("; ")}`);
+    redirect(id ? `/products/${id}?warn=${msg}` : `/products/new?err=${msg}`);
+  }
+
   let productId: number;
   let opts: PushOpts = { ...ALL, withDetails: true };
   if (id) {
@@ -170,6 +190,10 @@ export async function createProductQuick(input: {
   const user = await requireUser();
   if (!input.name.trim()) return { ok: false as const, error: "Вкажіть назву" };
   const barcode = input.barcode?.trim() || null;
+  const { barcodeProblem } = await import("@/lib/validate");
+  const bp = barcodeProblem(barcode);
+  if (bp) return { ok: false as const, error: bp };
+  if (moneyProblem("Ціна", input.price || 0) || moneyProblem("Закупівля", input.cost || 0)) return { ok: false as const, error: "Ціна і закупівля мають бути додатними числами" };
   if (barcode) {
     const other = await codeOwner(barcode);
     if (other) return { ok: false as const, error: `Код ${barcode} вже є в товару «${other.name}»` };
@@ -317,11 +341,20 @@ export async function saveSkuSettings(formData: FormData) {
  * У додатку товар не стирається, а позначається видаленим: історія приходів і продажів зберігається.
  * Кожен видалений товар потрапляє в журнал «Видалені товари» із завданнями для сайтів (Prom, Horoshop…).
  */
-export async function deleteProducts(ids: number[], reason: string) {
+export async function deleteProducts(ids: number[], reason: string, force = false) {
   const user = await requireUser();
   if (user.role === "storekeeper") return { ok: false as const, error: "Видаляти товари може лише менеджер або адміністратор" };
-  const products = await db.product.findMany({ where: { id: { in: ids }, deletedAt: null } });
+  const products = await db.product.findMany({ where: { id: { in: ids }, deletedAt: null }, include: { stocks: true } });
   if (!products.length) return { ok: false as const, error: "Товари не знайдено" };
+  // Перевірка: товар із залишком на складі видаляти лише свідомо
+  const withStock = products.filter((p) => p.stocks.some((s) => s.qty > 0));
+  if (withStock.length && !force) {
+    return {
+      ok: false as const,
+      needForce: true,
+      error: `На складі ще є: ${withStock.map((p) => `«${p.name}» — ${p.stocks.reduce((a, s) => a + s.qty, 0)} шт`).join("; ")}. Спишіть залишок або підтвердіть видалення.`,
+    };
+  }
   const withSd = products.filter((p) => p.sdId);
   if (withSd.length && isSalesDriveConfigured()) {
     try {
@@ -338,7 +371,8 @@ export async function deleteProducts(ids: number[], reason: string) {
   for (const p of products) {
     await db.product.update({ where: { id: p.id }, data: { deletedAt: new Date() } });
     await db.productCell.deleteMany({ where: { productId: p.id } }); // звільняємо комірки
-    await recordDeletion(p, "app", user.id, reason.trim() || null);
+    const { stocks: _s, ...plain } = p;
+    await recordDeletion(plain, "app", user.id, reason.trim() || null);
     await logAction(user.id, "delete", "product", p.id, { name: p.name, sdId: p.sdId, reason });
   }
   revalidatePath("/products");
@@ -346,7 +380,7 @@ export async function deleteProducts(ids: number[], reason: string) {
 }
 
 export async function deleteProductForm(formData: FormData) {
-  const r = await deleteProducts([Number(formData.get("id"))], String(formData.get("reason") ?? ""));
+  const r = await deleteProducts([Number(formData.get("id"))], String(formData.get("reason") ?? ""), Boolean(formData.get("force")));
   if (!r.ok) redirect(`/products/${formData.get("id")}?warn=${encodeURIComponent(r.error)}`);
   redirect(`/products/deleted?msg=${encodeURIComponent("Товар видалено. Не забудьте прибрати його на сайтах.")}`);
 }
@@ -363,4 +397,53 @@ export async function restoreProduct(formData: FormData) {
   await db.deletedProduct.update({ where: { id: deletedId }, data: { reason: `${d.reason ?? ""} · відновлено ${new Date().toLocaleDateString("uk-UA")}` } });
   await logAction(user.id, "restore", "product", d.productId);
   redirect(`/products/${d.productId}?saved=${res.ok ? 1 : 0}`);
+}
+
+/**
+ * Масова заміна штрихкодів на нові EAN-13 (префікс 200).
+ * Старий штрихкод НЕ губиться: він зберігається як додатковий код товару, тож старі наліпки й далі скануються.
+ * scope: all — усім; nonean — лише тим, у кого штрихкод не є правильним EAN-13; empty — лише без штрихкоду.
+ */
+export async function replaceBarcodes(formData: FormData) {
+  const user = await requireAdmin();
+  const scope = String(formData.get("scope"));
+  if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "ЗАМІНИТИ")
+    redirect(`/products/codes?msg=${encodeURIComponent("Помилка: для підтвердження впишіть слово ЗАМІНИТИ")}`);
+  const { isValidEan13 } = await import("@/lib/barcode");
+  const all = await db.product.findMany({ where: { deletedAt: null }, select: { id: true, barcode: true } });
+  const targets = all.filter((p) =>
+    scope === "empty" ? !p.barcode : scope === "nonean" ? !p.barcode || !isValidEan13(p.barcode) : true
+  );
+  const changed: number[] = [];
+  for (const p of targets) {
+    let code = internalEan13(p.id);
+    if (p.barcode === code) continue;
+    if (await codeOwner(code, p.id)) code = internalEan13(p.id + 500000000);
+    if (p.barcode) {
+      try {
+        await db.productCode.create({ data: { productId: p.id, code: p.barcode, type: "barcode" } }); // старий — як додатковий
+      } catch {
+        /* такий код уже збережено */
+      }
+    }
+    await db.product.update({ where: { id: p.id }, data: { barcode: code } });
+    await refreshSearch(p.id);
+    changed.push(p.id);
+  }
+  let error = "";
+  if (changed.length && isSalesDriveConfigured()) {
+    const full = await db.product.findMany({ where: { id: { in: changed } } });
+    try {
+      await sdUpdateProducts(full.filter((p) => p.sdId).map((p) => productToSd(p, null, {})));
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      await db.product.updateMany({ where: { id: { in: changed } }, data: { syncError: error } });
+    }
+  }
+  await logAction(user.id, "replace-barcodes", "products", null, { scope, count: changed.length, error });
+  redirect(
+    `/products/codes?replaced=${changed.length}&msg=${encodeURIComponent(
+      error ? `Помилка відправки в SalesDrive: ${error}` : `Замінено штрихкодів: ${changed.length}. Старі збережено як додаткові коди.`
+    )}`
+  );
 }
