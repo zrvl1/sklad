@@ -1,0 +1,202 @@
+// Схема бази даних складського сервісу для SalesDrive.
+// SalesDrive — джерело правди для товарів і залишків.
+// Тут зберігаємо те, чого в CRM немає: комірки, документи приходу, журнал дій, витрати.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // з'єднання через пул (для сайту)
+  directUrl = env("DIRECT_URL")   // пряме з'єднання (для npm run db:push)
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  name         String
+  login        String     @unique
+  passwordHash String
+  role         String     @default("manager") // admin | manager | storekeeper
+  active       Boolean    @default(true)
+  passwordChangedAt DateTime @default(now()) // зміна пароля завершує всі старі сесії
+  createdAt    DateTime   @default(now())
+  receipts     Receipt[]  @relation("ReceiptCreatedBy")
+  posted       Receipt[]  @relation("ReceiptPostedBy")
+  logs         ActionLog[]
+  expenses     Expense[]
+}
+
+// Склад (точка). sdStockId — ID складу в SalesDrive (Установки → ... → API).
+model Warehouse {
+  id        Int            @id @default(autoincrement())
+  name      String
+  sdStockId String?
+  isDefault Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  cells     Cell[]
+  stocks    StockBalance[]
+  receipts  Receipt[]
+  expenses  Expense[]
+}
+
+model Supplier {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  phone     String?
+  note      String?
+  createdAt DateTime  @default(now())
+  receipts  Receipt[]
+}
+
+model Product {
+  id               Int            @id @default(autoincrement())
+  sdId             String?        @unique // поле "ID" у SalesDrive
+  name             String
+  nameForDocuments String?
+  categorySdId     String?
+  categoryName     String?
+  price            Float          @default(0) // ціна продажу (у SalesDrive: costPerItem)
+  cost             Float          @default(0) // собівартість (у SalesDrive: expenses)
+  discountValue    Float?
+  discountType     String?        // percent | amount
+  discountFrom     DateTime?
+  discountTo       DateTime?
+  sku              String?
+  barcode          String?
+  manufacturer     String?
+  supplierName     String?
+  search           String         @default("") // нижній регістр: назва + sku + штрихкод + ID, для пошуку
+  syncedAt         DateTime?      // коли востаннє оновлено з SalesDrive
+  syncError        String?        // остання помилка відправки в SalesDrive
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  stocks           StockBalance[]
+  cells            ProductCell[]
+  receiptLines     ReceiptLine[]
+
+  @@index([barcode])
+  @@index([sku])
+}
+
+// Копія залишку із SalesDrive по складу
+model StockBalance {
+  productId   Int
+  warehouseId Int
+  qty         Float     @default(0)
+  updatedAt   DateTime  @updatedAt
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@id([productId, warehouseId])
+}
+
+// Комірка: код на кшталт "A-03-2" (ряд-стелаж-полиця)
+model Cell {
+  id          Int           @id @default(autoincrement())
+  code        String
+  warehouseId Int
+  note        String?
+  createdAt   DateTime      @default(now())
+  warehouse   Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  products    ProductCell[]
+  lines       ReceiptLine[]
+
+  @@unique([warehouseId, code])
+}
+
+// Що лежить у комірці (один товар може бути в кількох комірках)
+model ProductCell {
+  productId Int
+  cellId    Int
+  qty       Float    @default(0)
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cell      Cell     @relation(fields: [cellId], references: [id], onDelete: Cascade)
+
+  @@id([productId, cellId])
+}
+
+// Документ приходу
+model Receipt {
+  id          Int           @id @default(autoincrement())
+  number      String        @unique
+  date        DateTime      @default(now())
+  warehouseId Int
+  supplierId  Int?
+  invoiceNo   String?       // номер накладної постачальника
+  note        String?
+  status      String        @default("draft") // draft | posted
+  total       Float         @default(0)
+  createdById Int
+  postedById  Int?
+  postedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  warehouse   Warehouse     @relation(fields: [warehouseId], references: [id])
+  supplier    Supplier?     @relation(fields: [supplierId], references: [id])
+  createdBy   User          @relation("ReceiptCreatedBy", fields: [createdById], references: [id])
+  postedBy    User?         @relation("ReceiptPostedBy", fields: [postedById], references: [id])
+  lines       ReceiptLine[]
+
+  @@index([date])
+}
+
+model ReceiptLine {
+  id        Int     @id @default(autoincrement())
+  receiptId Int
+  productId Int
+  qty       Float
+  cost      Float   // закупівельна ціна за одиницю
+  newPrice  Float?  // нова ціна продажу (якщо змінюємо при приході)
+  cellId    Int?
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+  cell      Cell?   @relation(fields: [cellId], references: [id], onDelete: SetNull)
+}
+
+// Витрати — на майбутнє (оренда, доставка, зарплата…)
+model Expense {
+  id          Int        @id @default(autoincrement())
+  date        DateTime   @default(now())
+  category    String
+  amount      Float
+  warehouseId Int?
+  legalEntity String?    // ФОП
+  note        String?
+  createdById Int
+  createdAt   DateTime   @default(now())
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  createdBy   User       @relation(fields: [createdById], references: [id])
+}
+
+// Журнал дій: хто, що і коли зробив
+model ActionLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+// Спроби входу: для захисту від підбору пароля і для журналу
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  login     String
+  ip        String
+  ok        Boolean
+  createdAt DateTime @default(now())
+
+  @@index([login, createdAt])
+  @@index([ip, createdAt])
+}

@@ -1,0 +1,150 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { db } from "@/lib/db";
+import { dateInput, dateTimeUa, dateUa, money } from "@/lib/util";
+import ReceiptEditor from "./ReceiptEditor";
+import { deleteReceipt } from "../actions";
+import PrintReceiptLabels from "./PrintReceiptLabels";
+
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ posted?: string; warn?: string }> };
+
+export default async function ReceiptPage({ params, searchParams }: Props) {
+  const { id } = await params;
+  const { posted, warn } = await searchParams;
+  const r = await db.receipt.findUnique({
+    where: { id: Number(id) },
+    include: {
+      lines: { include: { product: true, cell: true }, orderBy: { id: "asc" } },
+      warehouse: true,
+      supplier: true,
+      createdBy: true,
+      postedBy: true,
+    },
+  });
+  if (!r) notFound();
+
+  if (r.status === "draft") {
+    const [warehouses, suppliers, cells] = await Promise.all([
+      db.warehouse.findMany({ orderBy: { name: "asc" } }),
+      db.supplier.findMany({ orderBy: { name: "asc" } }),
+      db.cell.findMany({ orderBy: { code: "asc" } }),
+    ]);
+    return (
+      <>
+        <div className="toolbar">
+          <h1 style={{ margin: 0 }}>Прихід {r.number}</h1>
+          <span className="badge warn">чернетка</span>
+          <span className="spacer" />
+          <form action={deleteReceipt}>
+            <input type="hidden" name="id" value={r.id} />
+            <button className="btn danger">Видалити чернетку</button>
+          </form>
+        </div>
+        <ReceiptEditor
+          receiptId={r.id}
+          initial={{
+            date: dateInput(r.date),
+            warehouseId: r.warehouseId,
+            supplierId: r.supplierId,
+            invoiceNo: r.invoiceNo ?? "",
+            note: r.note ?? "",
+            lines: r.lines.map((l) => ({
+              key: String(l.id),
+              productId: l.productId,
+              name: l.product.name,
+              sku: l.product.sku,
+              barcode: l.product.barcode,
+              price: l.product.price,
+              qty: l.qty,
+              cost: l.cost,
+              newPrice: l.newPrice,
+              cellId: l.cellId,
+            })),
+          }}
+          warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+          suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+          cells={cells.map((c) => ({ id: c.id, code: c.code, warehouseId: c.warehouseId }))}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="toolbar">
+        <h1 style={{ margin: 0 }}>Прихід {r.number}</h1>
+        <span className="badge ok">проведено</span>
+        <span className="spacer" />
+        <Link className="btn" href="/receipts">
+          До журналу
+        </Link>
+      </div>
+      <div className="panel grid2 small">
+        <div>
+          Дата: <b>{dateUa(r.date)}</b>
+        </div>
+        <div>
+          Склад: <b>{r.warehouse.name}</b>
+        </div>
+        <div>
+          Постачальник: <b>{r.supplier?.name ?? "—"}</b>
+        </div>
+        <div>
+          Накладна: <b>{r.invoiceNo ?? "—"}</b>
+        </div>
+        <div>
+          Створив: {r.createdBy.name}
+        </div>
+        <div>
+          Провів: {r.postedBy?.name ?? "—"}, {dateTimeUa(r.postedAt)}
+        </div>
+        {r.note && <div style={{ gridColumn: "1 / -1" }}>Коментар: {r.note}</div>}
+      </div>
+
+      {warn && <div className="msg warn">{warn}</div>}
+      <PrintReceiptLabels receiptId={r.id} highlight={posted === "1"} />
+
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Товар</th>
+              <th>Штрихкод</th>
+              <th>Комірка</th>
+              <th className="num">К-сть</th>
+              <th className="num">Закупівля</th>
+              <th className="num">Сума</th>
+              <th className="num">Нова ціна</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.lines.map((l, i) => (
+              <tr key={l.id}>
+                <td>{i + 1}</td>
+                <td>
+                  <Link href={`/products/${l.productId}`}>{l.product.name}</Link>
+                </td>
+                <td>{l.product.barcode}</td>
+                <td>{l.cell?.code ?? "—"}</td>
+                <td className="num">{l.qty}</td>
+                <td className="num">{money(l.cost)}</td>
+                <td className="num">{money(l.qty * l.cost)}</td>
+                <td className="num">{l.newPrice ? money(l.newPrice) : "—"}</td>
+              </tr>
+            ))}
+            <tr>
+              <td colSpan={6} className="num">
+                <b>Разом</b>
+              </td>
+              <td className="num">
+                <b>{money(r.total)}</b>
+              </td>
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
