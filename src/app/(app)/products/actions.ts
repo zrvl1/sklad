@@ -86,6 +86,7 @@ export async function saveProduct(formData: FormData) {
 
   const data = {
     name,
+    nameTranslate: str(formData.get("nameTranslate")),
     nameForDocuments: str(formData.get("nameForDocuments")),
     categoryName: str(formData.get("categoryName")),
     price: num(formData.get("price")),
@@ -99,6 +100,7 @@ export async function saveProduct(formData: FormData) {
     supplierName: str(formData.get("supplierName")),
     sdId: str(formData.get("sdId")),
     description: str(formData.get("description")),
+    descriptionTranslate: str(formData.get("descriptionTranslate")),
     params: normParams(String(formData.get("params") ?? "[]")) as string | null,
   };
   // Собівартість: у гривні або у валюті закупівлі (тоді в гривні рахуємо за курсом SalesDrive)
@@ -136,11 +138,14 @@ export async function saveProduct(formData: FormData) {
     // відправляємо лише те, що змінилося (назва, ціна, собівартість, опис/характеристики)
     const beforeParams = normParams(before.params ?? "[]");
     if (before.description === null && !data.description) data.description = null;
+    if (before.descriptionTranslate === null && !data.descriptionTranslate) data.descriptionTranslate = null;
     if (before.params === null && data.params === "[]") data.params = null; // характеристики не завантажені — не чіпаємо
     opts = {
-      withName: before.name !== data.name,
+      withName: before.name !== data.name || (before.nameTranslate ?? null) !== data.nameTranslate,
       withPrice: before.price !== data.price,
-      withDetails: (before.description ?? null) !== data.description || (data.params !== null && beforeParams !== data.params),
+      withDetails:
+        (before.description ?? null) !== data.description ||
+        (before.descriptionTranslate ?? null) !== data.descriptionTranslate || (data.params !== null && beforeParams !== data.params),
       paramsMode: before.params === null ? "add" : "replace",
       withCost: before.cost !== costData.cost || (before.costCurrency ?? null) !== costData.costCurrency || (before.costOriginal ?? null) !== costData.costOriginal,
     };
@@ -177,7 +182,9 @@ export async function saveProduct(formData: FormData) {
     if (kitErr) warn = [warn, `Ціни карток не оновлено в SalesDrive: ${kitErr}`].filter(Boolean).join("; ");
   }
   revalidatePath("/products");
-  redirect(`/products/${productId}?saved=${res.ok ? 1 : 0}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`);
+  const q = `saved=${res.ok ? 1 : 0}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`;
+  if (!id && formData.get("thenCards")) redirect(`/products/${productId}/cards?${q}`);
+  redirect(`/products/${productId}?${q}`);
 }
 
 /** Швидке створення товару прямо з документа приходу або інвентаризації */
@@ -527,4 +534,111 @@ export async function makeBaseForm(formData: FormData) {
   }
   revalidatePath("/products/kits");
   redirect(`${back.startsWith("/") ? back : `/products/${kitId}`}?${msg.startsWith("Помилка") ? "warn" : "msg"}=${encodeURIComponent(msg)}`);
+}
+
+/**
+ * Створити картки-комплекти основного товару (вітрини під різні моделі).
+ * Картки йдуть у SalesDrive як звичайні товари; у CRM їх ще треба позначити «Комплект» і додати основний —
+ * API SalesDrive склад комплекту не приймає. До того вони висять у списку «Налаштувати в SalesDrive».
+ */
+export async function createKitCards(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const baseId = Number(formData.get("baseId"));
+  const base = await db.product.findUniqueOrThrow({ where: { id: baseId } });
+  const back = (m: string) => redirect(`/products/${baseId}/cards?err=${encodeURIComponent(m)}`);
+  if (base.baseProductId) back("Цей товар сам є карткою — створюйте картки від основного");
+  if (base.deletedAt) back("Товар видалено");
+  if (!base.sku) back("Задайте основному товару артикул — від нього утворяться артикули карток (АРТИКУЛ-1, -2…)");
+
+  type Row = { name: string; nameTranslate: string | null; price: number; qty: number; description: string | null; descriptionTranslate: string | null; extra: string };
+  const rows: Row[] = [];
+  const count = Number(formData.get("count")) || 0;
+  for (let i = 0; i < count; i++) {
+    const name = str(formData.get(`name_${i}`));
+    if (!name) continue;
+    rows.push({
+      name,
+      nameTranslate: str(formData.get(`nameTr_${i}`)),
+      price: num(formData.get(`price_${i}`)),
+      qty: Math.max(1, num(formData.get(`qty_${i}`), 1)),
+      description: str(formData.get(`desc_${i}`)),
+      descriptionTranslate: str(formData.get(`descTr_${i}`)),
+      extra: String(formData.get(`extra_${i}`) ?? ""),
+    });
+  }
+  if (!rows.length) back("Додайте хоча б одну картку з назвою");
+  const problems = rows.map((r) => moneyProblem(`Ціна «${r.name}»`, r.price)).filter(Boolean);
+  if (problems.length) back(problems.join("; "));
+  const names = new Set<string>();
+  for (const r of rows) {
+    if (names.has(r.name.toLowerCase())) back(`Назва повторюється: «${r.name}»`);
+    names.add(r.name.toLowerCase());
+  }
+
+  const { nextKitSkus } = await import("@/lib/kits");
+  const skus = await nextKitSkus(base.sku!, rows.length);
+  const baseParams = parseParams(base.params).filter((x) => x.name.trim() && x.value.trim());
+  const created: number[] = [];
+  for (const [i, r] of rows.entries()) {
+    // характеристики основного + додаткові для цієї картки («Назва: значення», кожна з нового рядка; однакова назва — замінює)
+    const params = baseParams.map((x) => ({ ...x }));
+    for (const line of r.extra.split(/\r?\n/)) {
+      const at = line.indexOf(":");
+      if (at < 1) continue;
+      const pname = line.slice(0, at).trim();
+      const value = line.slice(at + 1).trim();
+      if (!pname || !value) continue;
+      const ex = params.find((x) => x.name.toLowerCase() === pname.toLowerCase());
+      if (ex) ex.value = value;
+      else params.push({ name: pname, type: "text", value });
+    }
+    const data = {
+      name: r.name,
+      nameTranslate: r.nameTranslate,
+      price: r.price,
+      priceCurrency: base.priceCurrency,
+      cost: Math.round(base.cost * r.qty * 100) / 100, // лише для звітів додатку; у SalesDrive собівартість комплекту рахує CRM
+      categorySdId: base.categorySdId,
+      categoryName: base.categoryName,
+      manufacturer: base.manufacturer,
+      supplierName: base.supplierName,
+      description: r.description,
+      descriptionTranslate: r.descriptionTranslate,
+      params: JSON.stringify(params),
+      sku: skus[i],
+      baseProductId: base.id,
+      kitQty: r.qty,
+      sdKitPending: true,
+    };
+    const p = await db.product.create({ data: { ...data, search: buildSearch(data) } });
+    await finalizeNewProduct(p.id, { genBarcode: true });
+    created.push(p.id);
+  }
+  await logAction(user.id, "create-kit-cards", "product", base.id, { cards: created });
+
+  let warn = "";
+  if (isSalesDriveConfigured()) {
+    const full = await db.product.findMany({ where: { id: { in: created } } });
+    try {
+      await sdUpdateProducts(full.map((p) => productToSd(p, null, { withName: true, withPrice: true, withDetails: true, paramsMode: "replace" })));
+      await db.product.updateMany({ where: { id: { in: created } }, data: { syncError: null, syncedAt: new Date() } });
+    } catch (e) {
+      warn = e instanceof Error ? e.message : String(e);
+      await db.product.updateMany({ where: { id: { in: created } }, data: { syncError: warn } });
+    }
+  } else warn = "SalesDrive не налаштовано — картки збережено лише в додатку";
+  revalidatePath("/products");
+  revalidatePath("/products/kits");
+  const msg = `Створено карток: ${created.length} (${skus.join(", ")}). Тепер у SalesDrive позначте кожну «Комплект» і додайте основний ${base.sku}.`;
+  redirect(`/products/kits?msg=${encodeURIComponent(msg)}${warn ? `&warn=${encodeURIComponent(`Не відправлено в SalesDrive: ${warn}`)}` : ""}#pending`);
+}
+
+/** Картку позначено комплектом у SalesDrive вручну */
+export async function confirmKitSd(formData: FormData) {
+  await requirePerm("products.edit");
+  const ids = formData.getAll("kitId").map(Number).filter(Boolean);
+  if (ids.length) await db.product.updateMany({ where: { id: { in: ids } }, data: { sdKitPending: false } });
+  const back = String(formData.get("back") ?? "/products/kits");
+  revalidatePath("/products/kits");
+  redirect(back.startsWith("/") ? back : "/products/kits");
 }

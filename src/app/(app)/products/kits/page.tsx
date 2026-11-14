@@ -1,18 +1,22 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { detectKits } from "@/lib/kits";
-import { applyKitLinks, makeBaseForm, unlinkKit } from "../actions";
+import { applyKitLinks, confirmKitSd, makeBaseForm, unlinkKit } from "../actions";
 
 // Основні товари та їхні картки-комплекти (вітрини під різні моделі для SEO)
 export default async function KitsPage({ searchParams }: { searchParams: Promise<{ msg?: string; warn?: string }> }) {
   const { msg: okMsg, warn } = await searchParams;
-  const msg = warn ?? okMsg;
-  const [proposals, bases] = await Promise.all([
+  const [proposals, bases, pending] = await Promise.all([
     detectKits(),
     db.product.findMany({
       where: { deletedAt: null, kits: { some: { deletedAt: null } } },
       include: { kits: { where: { deletedAt: null }, orderBy: { sku: "asc" } }, stocks: true, cells: { include: { cell: true } } },
       orderBy: { name: "asc" },
+    }),
+    db.product.findMany({
+      where: { sdKitPending: true, deletedAt: null, baseProductId: { not: null } },
+      include: { base: { select: { id: true, name: true, sku: true } } },
+      orderBy: { sku: "asc" },
     }),
   ]);
   const kitCount = bases.reduce((s, b) => s + b.kits.length, 0);
@@ -20,7 +24,49 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
   return (
     <>
       <h1>Основні товари й картки-комплекти</h1>
-      {msg && <div className={`msg ${msg.includes("Помилки") ? "warn" : "ok"}`}>{msg}</div>}
+      {okMsg && <div className="msg ok">{okMsg}</div>}
+      {warn && <div className="msg warn">{warn}</div>}
+
+      {pending.length > 0 && (
+        <form action={confirmKitSd} className="panel" id="pending" style={{ borderColor: "#f0c36d" }}>
+          <input type="hidden" name="back" value="/products/kits" />
+          <h2 style={{ marginTop: 0 }}>Налаштувати в SalesDrive ({pending.length})</h2>
+          <p className="small muted">
+            Ці картки створено в додатку. У SalesDrive відкрийте кожну (пошук за артикулом) → поставте галочку <b>«Комплект»</b> → додайте основний товар
+            і кількість → збережіть. Після наступної синхронізації додаток сам побачить, що залишок картки дорівнює залишку основного, і прибере її зі
+            списку (якщо основного зараз 0 — позначте вручну).
+          </p>
+          <div className="tablewrap">
+            <table className="small">
+              <thead>
+                <tr>
+                  <th style={{ width: 30 }} />
+                  <th>Картка (артикул · ID)</th>
+                  <th>Додати в комплект</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((k) => (
+                  <tr key={k.id}>
+                    <td>
+                      <input type="checkbox" name="kitId" value={k.id} />
+                    </td>
+                    <td>
+                      <b>{k.sku}</b> · {k.sdId} — <Link href={`/products/${k.id}`}>{k.name}</Link>
+                    </td>
+                    <td>
+                      <b>{k.base?.sku}</b> × {k.kitQty} — {k.base?.name}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button className="btn" style={{ marginTop: 10 }}>
+            ✓ Позначені вже налаштовано
+          </button>
+        </form>
+      )}
       <p className="muted small">
         Один фізичний товар у SalesDrive зібраний у кілька карток під різні моделі. Прихід, комірки, наліпки, інвентаризація і списання ведуться лише на
         <b> основному</b> товарі: скан штрихкоду чи артикула будь-якої картки автоматично підставляє основний. Під час пакування наліпка основного

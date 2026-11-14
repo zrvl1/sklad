@@ -32,6 +32,10 @@ export default function ProductForm({
           Назва *
           <input name="name" defaultValue={p?.name} required minLength={2} maxLength={255} autoFocus={!p} />
         </label>
+        <label style={{ gridColumn: "1 / -1" }}>
+          Назва — друга мова (переклад у SalesDrive)
+          <input name="nameTranslate" defaultValue={p?.nameTranslate ?? ""} maxLength={255} placeholder="порожньо — піде така сама, як основна" />
+        </label>
         <label>
           Категорія
           <input name="categoryName" list="categories" defaultValue={p?.categoryName ?? ""} placeholder="оберіть або впишіть" autoComplete="off" />
@@ -137,6 +141,7 @@ export default function ProductForm({
 
         <DetailsFields
           description={p?.description ?? null}
+          descriptionTranslate={p?.descriptionTranslate ?? null}
           params={parseParams(p?.params)}
           templates={templates}
           isNew={!p}
@@ -145,6 +150,11 @@ export default function ProductForm({
       </div>
       <div className="toolbar" style={{ marginTop: 16, marginBottom: 0 }}>
         <button className="btn primary">Зберегти і відправити в SalesDrive</button>
+        {!p && (
+          <label className="check small">
+            <input type="checkbox" name="thenCards" /> далі — створити картки-комплекти під моделі
+          </label>
+        )}
         {kitsCount > 0 && (
           <label className="check small">
             <input type="checkbox" name="applyKits" defaultChecked /> нову ціну — на всі картки-комплекти ({kitsCount})

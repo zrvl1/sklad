@@ -30,24 +30,33 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
     }),
     db.sdOrderLine.findMany({
       where: { order: { orderTime: { gte: from, lte: to }, ...statusFilter } },
-      include: { product: { select: { id: true, name: true, cost: true, categoryName: true } } },
+      include: {
+        product: {
+          select: { id: true, name: true, cost: true, categoryName: true, kitQty: true, base: { select: { id: true, name: true, cost: true, categoryName: true } } },
+        },
+      },
     }),
   ]);
 
-  // По товарах
-  const byProduct = new Map<string, { id: number | null; name: string; category: string; qty: number; revenue: number; cost: number }>();
+  // По товарах: продажі карток-комплектів зводимо на основний (фізичний) товар, у штуках основного
+  const byProduct = new Map<string, { id: number | null; name: string; category: string; qty: number; revenue: number; cost: number; cards: number }>();
   for (const l of lines) {
-    const key = l.productId ? `p${l.productId}` : `n${l.name}`;
-    const unitCost = l.costPrice || l.product?.cost || 0;
+    const base = l.product?.base ?? null;
+    const target = base ?? l.product;
+    const mult = base ? l.product?.kitQty || 1 : 1;
+    const key = target ? `p${target.id}` : `n${l.name}`;
+    const unitCost = l.costPrice || (base ? base.cost * mult : l.product?.cost) || 0;
     const x = byProduct.get(key) ?? {
-      id: l.productId,
-      name: l.product?.name ?? l.name,
-      category: l.product?.categoryName ?? "Без категорії",
+      id: target?.id ?? null,
+      name: target?.name ?? l.name,
+      category: target?.categoryName ?? "Без категорії",
       qty: 0,
       revenue: 0,
       cost: 0,
+      cards: 0,
     };
-    x.qty += l.qty;
+    if (base) x.cards += l.qty;
+    x.qty += l.qty * mult;
     x.revenue += l.qty * l.price - l.discount;
     x.cost += l.qty * unitCost;
     byProduct.set(key, x);
@@ -170,7 +179,10 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
           <tbody>
             {top.slice(0, 100).map((x, i) => (
               <tr key={i}>
-                <td>{x.id ? <Link href={`/products/${x.id}`}>{x.name}</Link> : <span title="не зіставлено з товаром">{x.name} ⚠</span>}</td>
+                <td>
+                  {x.id ? <Link href={`/products/${x.id}`}>{x.name}</Link> : <span title="не зіставлено з товаром">{x.name} ⚠</span>}
+                  {x.cards > 0 && <span className="muted small"> · з них через картки-комплекти: {x.cards}</span>}
+                </td>
                 <td className="num">{x.qty}</td>
                 <td className="num">{money(x.revenue)}</td>
                 <td className="num">{money(x.revenue - x.cost)}</td>

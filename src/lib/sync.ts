@@ -67,6 +67,8 @@ export async function syncFromYml() {
             // опис і характеристики — лише якщо в YML-експорті увімкнено «опис, фото та характеристики»
             ...(o.description !== undefined ? { description: o.description } : {}),
             ...(o.params !== undefined ? { params: JSON.stringify(o.params) } : {}),
+            ...(o.nameTranslate !== undefined ? { nameTranslate: o.nameTranslate } : {}),
+            ...(o.descriptionTranslate !== undefined ? { descriptionTranslate: o.descriptionTranslate } : {}),
           };
           const id = existing.get(o.sdId);
           const product = id
@@ -97,6 +99,7 @@ export async function syncFromYml() {
   await setSetting("syncWarning", "");
   const removed = await detectDeleted(new Set(offers.map((o) => o.sdId)));
   const cellsReduced = defaultWh ? await reconcileCells(defaultWh.id) : 0;
+  await (await import("./kits")).autoConfirmKits();
   await setSetting("lastSync", JSON.stringify({ at: now.toISOString(), total: offers.length, created, updated, removed, cellsReduced }));
   return { total: offers.length, created, updated, removed, cellsReduced };
 }

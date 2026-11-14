@@ -123,3 +123,47 @@ export async function makeBase(kitId: number) {
     await tx.productCell.deleteMany({ where: { productId: oldBaseId } });
   });
 }
+
+/**
+ * Картки, створені в додатку, у SalesDrive ще треба позначити «Комплект» і додати основний товар.
+ * Після синхронізації перевіряємо: якщо залишок картки в SalesDrive = залишку основного / к-сть — значить уже налаштовано.
+ */
+export async function autoConfirmKits() {
+  const pending = await db.product.findMany({
+    where: { sdKitPending: true, deletedAt: null, baseProductId: { not: null } },
+    select: { id: true, kitQty: true, baseProductId: true, stocks: { select: { qty: true } } },
+  });
+  if (!pending.length) return 0;
+  const baseStocks = await db.stockBalance.groupBy({
+    by: ["productId"],
+    where: { productId: { in: pending.map((p) => p.baseProductId!) } },
+    _sum: { qty: true },
+  });
+  const bs = new Map<number, number>(baseStocks.map((b) => [b.productId, b._sum.qty ?? 0]));
+  const done: number[] = [];
+  for (const p of pending) {
+    const base = bs.get(p.baseProductId!) ?? 0;
+    const kit = p.stocks.reduce((s, x) => s + x.qty, 0);
+    if (base > 0 && kit === Math.floor(base / (p.kitQty || 1))) done.push(p.id);
+  }
+  if (done.length) await db.product.updateMany({ where: { id: { in: done } }, data: { sdKitPending: false } });
+  return done.length;
+}
+
+/** Наступні вільні артикули карток: ОСНОВНИЙ-1, ОСНОВНИЙ-2… (пропускаючи зайняті будь-яким товаром чи кодом) */
+export async function nextKitSkus(baseSku: string, count: number) {
+  const { codeOwner } = await import("./codes");
+  const rows = await db.product.findMany({ where: { sku: { startsWith: `${baseSku}-` } }, select: { sku: true } });
+  let n = 0;
+  for (const r of rows) {
+    const m = r.sku!.slice(baseSku.length + 1);
+    if (/^\d{1,3}$/.test(m)) n = Math.max(n, Number(m));
+  }
+  const out: string[] = [];
+  while (out.length < count) {
+    n++;
+    const sku = `${baseSku}-${n}`;
+    if (!(await codeOwner(sku))) out.push(sku);
+  }
+  return out;
+}

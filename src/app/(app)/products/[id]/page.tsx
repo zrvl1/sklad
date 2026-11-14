@@ -7,7 +7,7 @@ import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
-import { addProductCell, addProductCode, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
+import { addProductCell, addProductCode, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -205,12 +205,29 @@ export default async function ProductPage({ params, searchParams }: Props) {
           {product.kits.map((k) => (
             <div key={k.id} className="small" style={{ padding: "2px 0 2px 12px" }}>
               ↳ <Link href={`/products/${k.id}`}>{k.name}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн</span>
+              {k.sdKitPending && (
+                <form action={confirmKitSd} style={{ display: "inline" }}>
+                  <input type="hidden" name="kitId" value={k.id} />
+                  <input type="hidden" name="back" value={`/products/${product.id}`} />{" "}
+                  <span className="badge warn" title="У SalesDrive позначте картку «Комплект» і додайте цей товар">
+                    налаштувати в SalesDrive
+                  </span>{" "}
+                  <button className="btn sm">✓ зроблено</button>
+                </form>
+              )}
             </div>
           ))}
+          <div style={{ marginTop: 8 }}>
+            <Link className="btn sm" href={`/products/${product.id}/cards`}>
+              ＋ Ще картки-комплекти
+            </Link>
+          </div>
         </div>
       ) : (
         <details className="panel">
-          <summary className="small">Це картка-комплект іншого товару? Прив&apos;язати до основного</summary>
+          <summary className="small">
+            Картки-комплекти: <Link href={`/products/${product.id}/cards`}>створити картки під моделі</Link> · або це картка іншого товару? Прив&apos;язати до основного
+          </summary>
           <form action={linkKitForm} className="row" style={{ marginTop: 10 }}>
             <input type="hidden" name="kitId" value={product.id} />
             <input name="baseCode" required placeholder="артикул, штрихкод або ID основного товару" style={{ width: 300 }} />

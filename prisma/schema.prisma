@@ -61,6 +61,7 @@ model Product {
   sdId             String?        @unique // поле "ID" у SalesDrive
   name             String
   nameForDocuments String?
+  nameTranslate    String?        // назва другою мовою (у SalesDrive: nameTranslate); порожня — іде основна
   categorySdId     String?
   categoryName     String?
   price            Float          @default(0) // ціна продажу (у SalesDrive: costPerItem)
@@ -77,11 +78,13 @@ model Product {
   manufacturer     String?
   supplierName     String?
   description      String?        // опис (HTML або текст), іде в SalesDrive
+  descriptionTranslate String?    // опис другою мовою (у SalesDrive: descriptionTranslate)
   params           String?        // характеристики: JSON [{name, type, value}]
   search           String         @default("") // нижній регістр: назва + sku + штрихкод + ID, для пошуку
   deletedAt        DateTime?      // видалено (у CRM або з додатку) — у списках не показується, історія зберігається
   baseProductId    Int?           // картка-комплект (вітрина для SEO): посилається на основний фізичний товар
   kitQty           Float          @default(1) // скільки штук основного товару в одній картці
+  sdKitPending     Boolean        @default(false) // картку створено в додатку — у SalesDrive ще треба позначити «Комплект» і додати основний
   base             Product?       @relation("KitBase", fields: [baseProductId], references: [id], onDelete: SetNull)
   kits             Product[]      @relation("KitBase")
   syncedAt         DateTime?      // коли востаннє оновлено з SalesDrive

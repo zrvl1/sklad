@@ -89,13 +89,13 @@ export function productToSd(
   if (opts.withName) {
     // в обидва мовні поля (UA і RU) — для нових товарів або коли назву змінили
     payload.name = p.name;
-    payload.nameTranslate = p.name;
+    payload.nameTranslate = p.nameTranslate?.trim() || p.name;
   }
   if (opts.withDetails) {
     // опис — в обидва мовні поля (як і назва); характеристики — повним списком із заміною
     if (p.description !== null) {
       payload.description = p.description;
-      payload.descriptionTranslate = p.description;
+      payload.descriptionTranslate = p.descriptionTranslate?.trim() ? p.descriptionTranslate : p.description;
     }
     const params = parseParams(p.params).filter((x) => x.value.trim());
     if (params.length) {
@@ -204,6 +204,8 @@ export async function sdDeleteProducts(ids: string[]) {
 export type YmlOffer = {
   sdId: string;
   name: string;
+  nameTranslate: string | undefined; // друга мова, якщо YML її віддає
+  descriptionTranslate: string | undefined;
   price: number;
   priceCurrency: string | null;
   description: string | null | undefined; // undefined — у YML немає опису (вимкнено в експорті)
@@ -283,10 +285,17 @@ export function parseYml(xml: string): YmlOffer[] {
       const param = (...names: string[]) => params.find((p) => names.includes(p.name))?.value ?? null;
 
       const sdId = text(o["@_id"] as Node);
+      const mainName = text(o.name as Node) ?? text(o.model as Node) ?? "(без назви)";
+      const mainDesc = "description" in o ? text(o.description as Node) : undefined;
+      // друга мова: теги name_ua / name_ru (формат Prom); якщо збігається з основною — це не переклад
+      const trName = text(o.name_ua as Node) ?? text(o.name_ru as Node);
+      const trDesc = text(o.description_ua as Node) ?? text(o.description_ru as Node);
       const categoryId = text(o.categoryId as Node);
       return {
         sdId: sdId ?? "",
-        name: text(o.name as Node) ?? text(o.model as Node) ?? "(без назви)",
+        name: mainName,
+        nameTranslate: trName && trName !== mainName ? trName : undefined,
+        descriptionTranslate: trDesc && trDesc !== mainDesc ? trDesc : undefined,
         price: firstNum(text(o.price as Node)) ?? 0,
         priceCurrency: text(o.currencyId as Node)?.toUpperCase() ?? null,
         description: "description" in o ? text(o.description as Node) : undefined,

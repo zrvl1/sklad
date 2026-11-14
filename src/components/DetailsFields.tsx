@@ -26,12 +26,14 @@ const render = (text: string, f: Record<string, string>) =>
  */
 export default function DetailsFields({
   description,
+  descriptionTranslate = null,
   params,
   templates,
   isNew,
   notLoaded,
 }: {
   description: string | null;
+  descriptionTranslate?: string | null;
   params: Param[];
   templates: ClientTemplate[];
   isNew: boolean;
@@ -39,6 +41,7 @@ export default function DetailsFields({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [desc, setDesc] = useState(description ?? "");
+  const [descTr, setDescTr] = useState(descriptionTranslate ?? "");
   const [rows, setRows] = useState<Param[]>(params);
   const [touched, setTouched] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -102,6 +105,15 @@ export default function DetailsFields({
             setTouched(true);
           }}
         />
+      </label>
+      <label>
+        <span className="row" style={{ justifyContent: "space-between" }}>
+          <span>Опис — друга мова (порожньо — піде такий самий, як основний)</span>
+          <button type="button" className="btn sm" onClick={() => setDescTr(desc)} disabled={!desc}>
+            скопіювати основний
+          </button>
+        </span>
+        <textarea name="descriptionTranslate" rows={4} value={descTr} onChange={(e) => setDescTr(e.target.value)} />
       </label>
       <div>
         <div className="toolbar" style={{ marginBottom: 6 }}>
