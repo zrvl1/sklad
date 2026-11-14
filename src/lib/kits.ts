@@ -97,3 +97,29 @@ export async function propagatePriceToKits(baseIds: number[]) {
     return e instanceof Error ? e.message : String(e);
   }
 }
+
+/**
+ * Зробити картку основним товаром групи: колишній основний і всі інші картки прив'язуються до неї.
+ * Потрібно, коли в SalesDrive фізичний товар — інша картка, ніж визначив автопошук за артикулом.
+ * Комірки колишнього основного переносяться на новий.
+ */
+export async function makeBase(kitId: number) {
+  const kit = await db.product.findUniqueOrThrow({ where: { id: kitId } });
+  if (!kit.baseProductId) throw new Error("Цей товар уже основний");
+  const oldBaseId = kit.baseProductId;
+  await db.$transaction(async (tx) => {
+    await tx.product.update({ where: { id: kitId }, data: { baseProductId: null, kitQty: 1 } });
+    await tx.product.updateMany({ where: { baseProductId: oldBaseId, id: { not: kitId } }, data: { baseProductId: kitId } });
+    await tx.product.update({ where: { id: oldBaseId }, data: { baseProductId: kitId, kitQty: 1 } });
+    // комірки — на новий основний товар
+    const cells = await tx.productCell.findMany({ where: { productId: oldBaseId } });
+    for (const c of cells) {
+      await tx.productCell.upsert({
+        where: { productId_cellId: { productId: kitId, cellId: c.cellId } },
+        update: { qty: { increment: c.qty } },
+        create: { productId: kitId, cellId: c.cellId, qty: c.qty },
+      });
+    }
+    await tx.productCell.deleteMany({ where: { productId: oldBaseId } });
+  });
+}

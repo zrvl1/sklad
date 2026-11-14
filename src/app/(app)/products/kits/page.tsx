@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { detectKits } from "@/lib/kits";
-import { applyKitLinks, unlinkKit } from "../actions";
+import { applyKitLinks, makeBaseForm, unlinkKit } from "../actions";
 
 // Основні товари та їхні картки-комплекти (вітрини під різні моделі для SEO)
-export default async function KitsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
-  const { msg } = await searchParams;
+export default async function KitsPage({ searchParams }: { searchParams: Promise<{ msg?: string; warn?: string }> }) {
+  const { msg: okMsg, warn } = await searchParams;
+  const msg = warn ?? okMsg;
   const [proposals, bases] = await Promise.all([
     detectKits(),
     db.product.findMany({
@@ -110,9 +111,14 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
               <span>
                 ↳ <Link href={`/products/${k.id}`}>{k.name}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн{k.kitQty !== 1 ? ` · ×${k.kitQty}` : ""}</span>
               </span>
-              <button className="btn sm" title="Відв'язати картку">
-                відв&apos;язати
-              </button>
+              <span className="row" style={{ gap: 6 }}>
+                <button className="btn sm" formAction={makeBaseForm} title="У SalesDrive фізичний товар — саме ця картка">
+                  зробити основним
+                </button>
+                <button className="btn sm" title="Відв'язати картку">
+                  відв&apos;язати
+                </button>
+              </span>
             </form>
           ))}
         </div>

@@ -7,7 +7,7 @@ import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
-import { addProductCell, addProductCode, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
+import { addProductCell, addProductCode, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -194,7 +194,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
           </Link>{" "}
           ({product.base.sku ?? "—"}){product.kitQty !== 1 ? `, ×${product.kitQty} шт` : ""}. Прихід, комірки, наліпки й інвентаризація ведуться на
           основному товарі; скан цієї картки в документах підставить основний.{" "}
-          <button className="btn sm">Відв&apos;язати</button>
+          <button className="btn sm">Відв&apos;язати</button>{" "}
+          <button className="btn sm" formAction={makeBaseForm} title="Якщо в SalesDrive фізичний товар — саме ця картка">
+            Зробити основним
+          </button>
         </form>
       ) : product.kits.length > 0 ? (
         <div className="panel">

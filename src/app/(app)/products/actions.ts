@@ -511,3 +511,20 @@ export async function applyKitLinks(formData: FormData) {
   await logAction(user.id, "link-kits", "products", null, { ok, errors: errors.length });
   redirect(`/products/kits?msg=${encodeURIComponent(`Прив'язано карток: ${ok}${errors.length ? `. Помилки: ${errors.slice(0, 3).join("; ")}` : ""}`)}`);
 }
+
+/** Зробити картку основним (фізичним) товаром групи комплектів */
+export async function makeBaseForm(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const kitId = Number(formData.get("kitId"));
+  const back = String(formData.get("back") ?? `/products/${kitId}`);
+  const { makeBase } = await import("@/lib/kits");
+  let msg = "Тепер це основний товар групи";
+  try {
+    await makeBase(kitId);
+    await logAction(user.id, "make-base", "product", kitId);
+  } catch (e) {
+    msg = `Помилка: ${e instanceof Error ? e.message : e}`;
+  }
+  revalidatePath("/products/kits");
+  redirect(`${back.startsWith("/") ? back : `/products/${kitId}`}?${msg.startsWith("Помилка") ? "warn" : "msg"}=${encodeURIComponent(msg)}`);
+}
