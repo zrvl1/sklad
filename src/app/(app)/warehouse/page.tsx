@@ -26,7 +26,8 @@ export default async function WarehousePage({ searchParams }: { searchParams: SP
       include: { products: { select: { qty: true } } },
       orderBy: { code: "asc" },
     }),
-    db.stockBalance.findMany({ where: { warehouseId: wh.id, qty: { gt: 0 }, product: { deletedAt: null } }, include: { product: true } }),
+    // картки-комплекти фізично не розкладаються — лише основні товари
+    db.stockBalance.findMany({ where: { warehouseId: wh.id, qty: { gt: 0 }, product: { deletedAt: null, baseProductId: null } }, include: { product: true } }),
     db.productCell.groupBy({ by: ["productId"], where: { cell: { warehouseId: wh.id } }, _sum: { qty: true } }),
   ]);
   const placedMap = new Map(placed.map((p) => [p.productId, p._sum.qty ?? 0]));
@@ -42,7 +43,7 @@ export default async function WarehousePage({ searchParams }: { searchParams: SP
     zones.set(z, [...(zones.get(z) ?? []), c]);
   }
 
-  const found = sp.q?.trim() ? await searchProducts(sp.q, 15) : [];
+  const found = sp.q?.trim() ? await searchProducts(sp.q, 15, true) : [];
   const foundCells = found.length
     ? await db.productCell.findMany({
         where: { productId: { in: found.map((f) => f.id) } },

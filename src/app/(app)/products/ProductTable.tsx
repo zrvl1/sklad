@@ -17,6 +17,8 @@ type Row = {
   stock: number;
   cells: string;
   syncError: string | null;
+  kitsCount?: number;
+  base?: { id: number; sku: string | null } | null;
 };
 
 const fmt = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -105,6 +107,12 @@ export default function ProductTable({ products }: { products: Row[] }) {
                     </span>
                   )}
                   <div className="muted small">ID {p.sdId ?? "—"}</div>
+                  {!!p.kitsCount && <span className="badge" title="Картки-комплекти на сайті">+{p.kitsCount} карток</span>}
+                  {p.base && (
+                    <span className="badge warn">
+                      картка → <Link href={`/products/${p.base.id}`}>{p.base.sku ?? "основний"}</Link>
+                    </span>
+                  )}
                 </td>
                 <td>{p.sku}</td>
                 <td>{p.barcode ?? <span className="badge warn">немає</span>}</td>

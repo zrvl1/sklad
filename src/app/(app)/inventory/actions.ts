@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
+import { linesToBase } from "@/lib/kits";
 
 export type InventoryLineInput = { productId: number; cellId: number | null; counted: number };
 
@@ -27,7 +28,7 @@ export async function saveInventory(id: number, note: string, lines: InventoryLi
   const user = await requireUser();
   const inv = await db.inventory.findUnique({ where: { id } });
   if (!inv || inv.status !== "draft") return { ok: false as const, error: "Документ уже проведено або не існує" };
-  const clean = lines.filter((l) => l.productId && l.counted >= 0);
+  const clean = await linesToBase(lines.filter((l) => l.productId && l.counted >= 0)); // картки → основний товар
   await db.$transaction([
     db.inventoryLine.deleteMany({ where: { inventoryId: id } }),
     db.inventory.update({
@@ -73,6 +74,10 @@ export async function postInventory(id: number, zeroMissing: boolean) {
   ]);
   const gone = products.filter((p) => p.deletedAt);
   if (gone.length) return { ok: false as const, error: `Товари видалено, приберіть їх із документа: ${gone.map((p) => p.name).join(", ")}` };
+  // залишок пишемо лише основним товарам: картка-комплект у документі (стара чернетка) — зупиняємось
+  const kitLines = products.filter((p) => p.baseProductId);
+  if (kitLines.length)
+    return { ok: false as const, error: `У документі є картки-комплекти (${kitLines.map((p) => p.sku ?? p.name).join(", ")}). Натисніть «Зберегти» — вони заміняться основним товаром.` };
   const system = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
   const changed = products.filter((p) => Math.abs((counted.get(p.id) ?? 0) - (system.get(p.id) ?? 0)) > 1e-9);
 

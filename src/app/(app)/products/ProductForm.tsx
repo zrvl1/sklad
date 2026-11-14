@@ -12,7 +12,9 @@ export default function ProductForm({
   categories = [],
   currencies = ["UAH"],
   showCurrency = false,
+  kitsCount = 0,
 }: {
+  kitsCount?: number;
   product?: Product | null;
   suppliers: Supplier[];
   templates?: ClientTemplate[];
@@ -143,6 +145,11 @@ export default function ProductForm({
       </div>
       <div className="toolbar" style={{ marginTop: 16, marginBottom: 0 }}>
         <button className="btn primary">Зберегти і відправити в SalesDrive</button>
+        {kitsCount > 0 && (
+          <label className="check small">
+            <input type="checkbox" name="applyKits" defaultChecked /> нову ціну — на всі картки-комплекти ({kitsCount})
+          </label>
+        )}
         <span className="muted small">Відправляються лише змінені назва, ціна, собівартість, опис і характеристики.</span>
       </div>
     </form>

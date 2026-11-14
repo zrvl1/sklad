@@ -39,7 +39,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
   if (sp.stock || sp.all) {
     const wh = await db.warehouse.findFirst({ where: { isDefault: true } });
     const rows = await db.product.findMany({
-      where: { deletedAt: null, ...(sp.category ? { categoryName: sp.category } : {}) },
+      where: { deletedAt: null, baseProductId: null, ...(sp.category ? { categoryName: sp.category } : {}) },
       select: { id: true, stocks: { where: wh ? { warehouseId: wh.id } : {}, select: { qty: true } } },
       orderBy: { name: "asc" },
     });
@@ -54,6 +54,15 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
     if (id) wanted.set(id, (wanted.get(id) ?? 0) + Math.max(1, q || 1));
   }
 
+  // картки-комплекти → наліпка основного товару (фізично на товарі одна наліпка)
+  if (wanted.size) {
+    const kits = await db.product.findMany({ where: { id: { in: [...wanted.keys()] }, baseProductId: { not: null } }, select: { id: true, baseProductId: true } });
+    for (const k of kits) {
+      const n = wanted.get(k.id) ?? 0;
+      wanted.delete(k.id);
+      wanted.set(k.baseProductId!, (wanted.get(k.baseProductId!) ?? 0) + n);
+    }
+  }
   const currency = process.env.ENABLE_CURRENCY === "true";
   const rates = currency ? await getRates() : { UAH: 1 };
   let products: Product[] = await db.product.findMany({ where: { id: { in: [...wanted.keys()] } } });

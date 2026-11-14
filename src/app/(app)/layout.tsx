@@ -18,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Link href="/">Головна</Link>
         <Link href="/warehouse">Склад і комірки</Link>
         <Link href="/products">Товари</Link>
+        <Link href="/products/kits">Комплекти (картки)</Link>
         <Link href="/receipts">Прихід товару</Link>
         <Link href="/writeoffs">Списання</Link>
         <Link href="/picking">Збирання замовлень</Link>

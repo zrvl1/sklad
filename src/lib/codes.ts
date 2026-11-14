@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { buildSearch } from "./util";
 
-const productSelect = { id: true, name: true, sku: true, barcode: true, price: true, cost: true, sdId: true } as const;
+const productSelect = { id: true, name: true, sku: true, barcode: true, price: true, cost: true, sdId: true, baseProductId: true } as const;
 
 export type FoundProduct = {
   id: number;
@@ -11,14 +11,36 @@ export type FoundProduct = {
   price: number;
   cost: number;
   sdId: string | null;
+  baseProductId?: number | null;
   matchedBy?: string;
 };
+
+/**
+ * Картки-комплекти замінюємо на їхній основний товар (для приходу, комірок, інвентаризації, списання).
+ * У matchedBy пишемо, з якої картки прийшли, щоб менеджер бачив підстановку.
+ */
+async function toBaseProducts(list: FoundProduct[]): Promise<FoundProduct[]> {
+  const baseIds = [...new Set(list.map((p) => p.baseProductId).filter((x): x is number => Boolean(x)))];
+  if (!baseIds.length) return list;
+  const bases = await db.product.findMany({ where: { id: { in: baseIds }, deletedAt: null }, select: productSelect });
+  const byId = new Map<number, FoundProduct>(bases.map((b) => [b.id, b]));
+  const seen = new Set<number>();
+  const out: FoundProduct[] = [];
+  for (const p of list) {
+    const b = p.baseProductId ? byId.get(p.baseProductId) : undefined;
+    const item = b ? { ...b, matchedBy: `картка ${p.sku ?? p.barcode ?? p.id} → основний товар` } : p;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
 
 /**
  * Точний пошук товару за будь-яким кодом: штрихкод, артикул (SKU), ID SalesDrive,
  * артикул постачальника або додатковий штрихкод.
  */
-export async function findByCode(raw: string): Promise<FoundProduct[]> {
+export async function findByCode(raw: string, toBase = false): Promise<FoundProduct[]> {
   const code = raw.trim();
   if (!code) return [];
   const direct = await db.product.findMany({
@@ -43,19 +65,20 @@ export async function findByCode(raw: string): Promise<FoundProduct[]> {
     seen.add(c.product.id);
     out.push({ ...c.product, matchedBy: c.type === "supplier" ? `арт. постачальника${c.supplier ? ` (${c.supplier.name})` : ""}` : "дод. штрихкод" });
   }
-  return out;
+  return toBase ? toBaseProducts(out) : out;
 }
 
 /** Пошук: спершу точний за кодом, інакше за частиною назви/коду */
-export async function searchProducts(q: string, take = 20): Promise<FoundProduct[]> {
-  const exact = await findByCode(q);
+export async function searchProducts(q: string, take = 20, toBase = false): Promise<FoundProduct[]> {
+  const exact = await findByCode(q, toBase);
   if (exact.length) return exact;
-  return db.product.findMany({
+  const found = await db.product.findMany({
     where: { deletedAt: null, search: { contains: q.trim().toLowerCase() } },
     select: productSelect,
     orderBy: { name: "asc" },
     take,
   });
+  return toBase ? toBaseProducts(found) : found;
 }
 
 /** Перебудувати рядок пошуку товару (після зміни кодів) */

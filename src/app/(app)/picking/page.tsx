@@ -6,6 +6,7 @@ import { dateTimeUa, getSetting } from "@/lib/util";
 import { refreshPicking, savePickStatuses } from "./actions";
 import { unpack } from "./pack/actions";
 import { pickStatusIds } from "@/lib/picking";
+import { baseMap } from "@/lib/kits";
 import PrintButton from "./PrintButton";
 
 type SP = Promise<{ o?: string | string[]; msg?: string; packed?: string }>;
@@ -39,8 +40,11 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
   // Агрегуємо товари з обраних заявок
   type Need = { productId: number | null; name: string; sku: string | null; qty: number; orders: number[] };
   const need = new Map<string, Need>();
+  // картки-комплекти збираємо як основний товар (з його комірок)
+  const toBase = await baseMap(chosen.flatMap((o) => o.lines.map((l) => l.productId)).filter((x): x is number => x !== null));
   for (const o of chosen)
-    for (const l of o.lines) {
+    for (const raw of o.lines) {
+      const l = { ...raw, productId: raw.productId ? toBase.get(raw.productId) ?? raw.productId : null };
       const k = l.productId ? `p${l.productId}` : `n${l.name}`;
       const x: Need = need.get(k) ?? { productId: l.productId, name: l.name, sku: l.sku, qty: 0, orders: [] };
       x.qty += l.qty;

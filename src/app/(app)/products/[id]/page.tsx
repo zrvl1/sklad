@@ -5,7 +5,7 @@ import { dateTimeUa, dateUa, money } from "@/lib/util";
 import { MOVE_TYPES } from "@/lib/labels";
 import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
-import { addProductCell, addProductCode, deleteProductForm, removeProductCell, removeProductCode, retryPush } from "../actions";
+import { addProductCell, addProductCode, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -15,6 +15,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const product = await db.product.findUnique({
     where: { id: Number(id) },
     include: {
+      base: true,
+      kits: { where: { deletedAt: null }, orderBy: { sku: "asc" } },
       stocks: { include: { warehouse: true } },
       cells: { include: { cell: { include: { warehouse: true } } }, orderBy: { qty: "desc" } },
       codes: { include: { supplier: true }, orderBy: { createdAt: "asc" } },
@@ -94,7 +96,42 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      <ProductForm product={product} {...ctx} />
+      {product.base ? (
+        <form action={unlinkKit} className="msg warn">
+          <input type="hidden" name="kitId" value={product.id} />
+          Це <b>картка-комплект</b> (вітрина для сайту). Фізичний товар —{" "}
+          <Link href={`/products/${product.base.id}`}>
+            <b>{product.base.name}</b>
+          </Link>{" "}
+          ({product.base.sku ?? "—"}){product.kitQty !== 1 ? `, ×${product.kitQty} шт` : ""}. Прихід, комірки, наліпки й інвентаризація ведуться на
+          основному товарі; скан цієї картки в документах підставить основний.{" "}
+          <button className="btn sm">Відв&apos;язати</button>
+        </form>
+      ) : product.kits.length > 0 ? (
+        <div className="panel">
+          <b>Картки-комплекти цього товару ({product.kits.length})</b> — продаються на сайті під різні моделі, залишок списується з цього товару:
+          {product.kits.map((k) => (
+            <div key={k.id} className="small" style={{ padding: "2px 0 2px 12px" }}>
+              ↳ <Link href={`/products/${k.id}`}>{k.name}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <details className="panel">
+          <summary className="small">Це картка-комплект іншого товару? Прив&apos;язати до основного</summary>
+          <form action={linkKitForm} className="row" style={{ marginTop: 10 }}>
+            <input type="hidden" name="kitId" value={product.id} />
+            <input name="baseCode" required placeholder="артикул, штрихкод або ID основного товару" style={{ width: 300 }} />
+            <label className="check">
+              штук основного в картці
+              <input name="kitQty" type="number" min={1} step="any" defaultValue={1} style={{ width: 70 }} />
+            </label>
+            <button className="btn sm">Прив&apos;язати</button>
+          </form>
+        </details>
+      )}
+
+      <ProductForm product={product} {...ctx} kitsCount={product.kits.length} />
 
       <div className="grid2">
         <div className="panel">

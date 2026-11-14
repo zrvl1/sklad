@@ -49,9 +49,10 @@ export async function orderForPacking(orderId: number) {
   const o = await db.sdOrder.findUnique({ where: { id: orderId }, include: { lines: true, ttns: true, pack: true } });
   if (!o) return null;
   const ids = o.lines.map((l) => l.productId).filter((x): x is number => x !== null);
+  const productInclude = { codes: { select: { code: true } }, cells: { where: { qty: { gt: 0 } }, include: { cell: true } }, kits: { select: { id: true } } } as const;
   const products = await db.product.findMany({
     where: { id: { in: ids } },
-    include: { codes: { select: { code: true } }, cells: { where: { qty: { gt: 0 } }, include: { cell: true }, orderBy: { qty: "desc" } } },
+    include: { ...productInclude, base: { include: productInclude } },
   });
   const byId = new Map<number, (typeof products)[number]>(products.map((p) => [p.id, p]));
   const merged = new Map<string, PackLine>();
@@ -63,7 +64,11 @@ export async function orderForPacking(orderId: number) {
       prev.qty += l.qty;
       continue;
     }
-    const codes = [p?.barcode, p?.sku, p?.sdId, ...(p?.codes.map((c) => c.code) ?? []), l.barcode, l.sku].filter((x): x is string => Boolean(x)).map((x) => x.trim().toUpperCase());
+    // картка-комплект: приймаємо і її коди, і наліпку основного товару; комірки — основного
+    const b = p?.base;
+    const codes = [p?.barcode, p?.sku, p?.sdId, ...(p?.codes.map((c) => c.code) ?? []), l.barcode, l.sku, b?.barcode, b?.sku, b?.sdId, ...(b?.codes.map((c) => c.code) ?? [])]
+      .filter((x): x is string => Boolean(x))
+      .map((x) => x.trim().toUpperCase());
     merged.set(key, {
       key,
       productId: l.productId,
@@ -71,7 +76,7 @@ export async function orderForPacking(orderId: number) {
       sku: p?.sku ?? l.sku,
       qty: l.qty,
       codes: [...new Set(codes)],
-      cells: p?.cells.map((c) => c.cell.code) ?? [],
+      cells: (b ?? p)?.cells.sort((x, y) => y.qty - x.qty).map((c) => c.cell.code) ?? [],
     });
   }
   const statuses = await cachedStatuses();

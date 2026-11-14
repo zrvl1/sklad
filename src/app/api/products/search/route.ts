@@ -10,7 +10,8 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const q = (params.get("q") ?? "").trim().slice(0, 100);
   if (!q) return NextResponse.json([]);
-  const found = await searchProducts(q);
+  // у документах (прихід, інвентаризація, списання) картки-комплекти завжди замінюються основним товаром
+  const found = await searchProducts(q, 20, true);
   const wh = Number(params.get("wh"));
   if (!wh || !found.length) return NextResponse.json(found);
   const stocks = await db.stockBalance.findMany({ where: { warehouseId: wh, productId: { in: found.map((f) => f.id) } } });

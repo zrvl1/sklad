@@ -64,14 +64,28 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
 
   // Що закупити: швидкість продажів за 30 днів vs залишок
   const since30 = new Date(Date.now() - 30 * 864e5);
-  const [sold30, stocks] = await Promise.all([
+  const [sold30Raw, stocks] = await Promise.all([
     db.sdOrderLine.groupBy({
       by: ["productId"],
       where: { productId: { not: null }, order: { orderTime: { gte: since30 }, ...statusFilter } },
       _sum: { qty: true },
     }),
-    db.stockBalance.groupBy({ by: ["productId"], where: { product: { deletedAt: null } }, _sum: { qty: true } }),
+    // залишок — лише фізичних (основних) товарів; картки-комплекти дублюють залишок основного
+    db.stockBalance.groupBy({ by: ["productId"], where: { product: { deletedAt: null, baseProductId: null } }, _sum: { qty: true } }),
   ]);
+  // продажі карток-комплектів зараховуємо основному товару
+  const kitRows = await db.product.findMany({
+    where: { id: { in: sold30Raw.map((x) => x.productId!) }, baseProductId: { not: null } },
+    select: { id: true, baseProductId: true, kitQty: true },
+  });
+  const kitOf = new Map<number, { baseProductId: number | null; kitQty: number }>(kitRows.map((k) => [k.id, k]));
+  const soldAgg = new Map<number, number>();
+  for (const x of sold30Raw) {
+    const k = kitOf.get(x.productId!);
+    const id = k?.baseProductId ?? x.productId!;
+    soldAgg.set(id, (soldAgg.get(id) ?? 0) + (x._sum.qty ?? 0) * (k?.kitQty || 1));
+  }
+  const sold30 = [...soldAgg.entries()].map(([productId, qty]) => ({ productId, _sum: { qty } }));
   const stockMap = new Map<number, number>(stocks.map((s) => [s.productId, s._sum.qty ?? 0]));
   const soldMap = new Map<number, number>(sold30.map((s) => [s.productId!, s._sum.qty ?? 0]));
   const buyIds = sold30

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
+import { linesToBase } from "@/lib/kits";
 
 export type WriteOffLineInput = { productId: number; qty: number; cellId: number | null };
 
@@ -27,7 +28,7 @@ export async function saveWriteOff(id: number, input: { reason: string; note: st
   const user = await requireUser();
   const w = await db.writeOff.findUnique({ where: { id } });
   if (!w || w.status !== "draft") return { ok: false as const, error: "Документ уже проведено або не існує" };
-  const lines = input.lines.filter((l) => l.productId && l.qty > 0);
+  const lines = await linesToBase(input.lines.filter((l) => l.productId && l.qty > 0)); // картки → основний товар
   const costs = new Map<number, number>(
     (await db.product.findMany({ where: { id: { in: lines.map((l) => l.productId) } }, select: { id: true, cost: true } })).map((p) => [p.id, p.cost])
   );
@@ -78,6 +79,10 @@ export async function postWriteOff(id: number) {
   ]);
   const gone = products.filter((p) => p.deletedAt);
   if (gone.length) return { ok: false as const, error: `Товари видалено, приберіть їх із документа: ${gone.map((p) => p.name).join(", ")}` };
+  // залишок пишемо лише основним товарам: картка-комплект у документі (стара чернетка) — зупиняємось
+  const kitLines = products.filter((p) => p.baseProductId);
+  if (kitLines.length)
+    return { ok: false as const, error: `У документі є картки-комплекти (${kitLines.map((p) => p.sku ?? p.name).join(", ")}). Натисніть «Зберегти» — вони заміняться основним товаром.` };
   const cur = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
   const short = products.filter((p) => (cur.get(p.id) ?? 0) < (qty.get(p.id) ?? 0) - 1e-9);
   if (short.length) {

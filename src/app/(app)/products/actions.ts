@@ -170,6 +170,12 @@ export async function saveProduct(formData: FormData) {
   warn = [warn, await duplicateWarning(productId, saved.barcode, saved.sku)].filter(Boolean).join("; ");
 
   const res = await pushProduct(productId, opts);
+  // ціна основного товару → на всі його картки-комплекти (якщо не зняли галочку)
+  if (opts.withPrice && formData.get("applyKits")) {
+    const { propagatePriceToKits } = await import("@/lib/kits");
+    const kitErr = await propagatePriceToKits([productId]);
+    if (kitErr) warn = [warn, `Ціни карток не оновлено в SalesDrive: ${kitErr}`].filter(Boolean).join("; ");
+  }
   revalidatePath("/products");
   redirect(`/products/${productId}?saved=${res.ok ? 1 : 0}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`);
 }
@@ -300,7 +306,8 @@ export async function bulkGenerate(formData: FormData) {
   const user = await requireAdmin();
   const what = String(formData.get("what")); // barcode | sku
   const products = await db.product.findMany({
-    where: { deletedAt: null, ...(what === "sku" ? { OR: [{ sku: null }, { sku: "" }] } : { OR: [{ barcode: null }, { barcode: "" }] }) },
+    // картки-комплекти не потребують своїх кодів для складу — лише основні товари
+    where: { deletedAt: null, baseProductId: null, ...(what === "sku" ? { OR: [{ sku: null }, { sku: "" }] } : { OR: [{ barcode: null }, { barcode: "" }] }) },
     select: { id: true },
   });
   for (const p of products) {
@@ -410,7 +417,8 @@ export async function replaceBarcodes(formData: FormData) {
   if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "ЗАМІНИТИ")
     redirect(`/products/codes?msg=${encodeURIComponent("Помилка: для підтвердження впишіть слово ЗАМІНИТИ")}`);
   const { isValidEan13 } = await import("@/lib/barcode");
-  const all = await db.product.findMany({ where: { deletedAt: null }, select: { id: true, barcode: true } });
+  // картки-комплекти не чіпаємо: наліпка фізично одна — основного товару
+  const all = await db.product.findMany({ where: { deletedAt: null, baseProductId: null }, select: { id: true, barcode: true } });
   const targets = all.filter((p) =>
     scope === "empty" ? !p.barcode : scope === "nonean" ? !p.barcode || !isValidEan13(p.barcode) : true
   );
@@ -446,4 +454,56 @@ export async function replaceBarcodes(formData: FormData) {
       error ? `Помилка відправки в SalesDrive: ${error}` : `Замінено штрихкодів: ${changed.length}. Старі збережено як додаткові коди.`
     )}`
   );
+}
+
+/** Прив'язати картку-комплект до основного товару (за кодом основного: артикул/штрихкод/ID) */
+export async function linkKitForm(formData: FormData) {
+  const user = await requireUser();
+  const kitId = Number(formData.get("kitId"));
+  const baseCode = String(formData.get("baseCode") ?? "").trim();
+  const qty = num(formData.get("kitQty"), 1) || 1;
+  const { findByCode } = await import("@/lib/codes");
+  const { linkKit } = await import("@/lib/kits");
+  const found = (await findByCode(baseCode)).filter((p) => p.id !== kitId);
+  let msg = "";
+  if (found.length !== 1) msg = found.length ? "Код підходить кільком товарам — уточніть" : `Товар «${baseCode}» не знайдено`;
+  else {
+    try {
+      await linkKit(kitId, found[0].id, qty);
+      await logAction(user.id, "link-kit", "product", kitId, { baseId: found[0].id, qty });
+    } catch (e) {
+      msg = e instanceof Error ? e.message : String(e);
+    }
+  }
+  revalidatePath(`/products/${kitId}`);
+  redirect(`/products/${kitId}${msg ? `?warn=${encodeURIComponent(msg)}` : ""}`);
+}
+
+export async function unlinkKit(formData: FormData) {
+  const user = await requireUser();
+  const kitId = Number(formData.get("kitId"));
+  const back = String(formData.get("back") ?? `/products/${kitId}`);
+  await db.product.update({ where: { id: kitId }, data: { baseProductId: null, kitQty: 1 } });
+  await logAction(user.id, "unlink-kit", "product", kitId);
+  revalidatePath(back);
+  redirect(back.startsWith("/") ? back : "/products");
+}
+
+/** Застосувати знайдені за артикулом зв'язки (позначені галочками) */
+export async function applyKitLinks(formData: FormData) {
+  const user = await requireUser();
+  const { linkKit } = await import("@/lib/kits");
+  let ok = 0;
+  const errors: string[] = [];
+  for (const pair of formData.getAll("pair").map(String)) {
+    const [kitId, baseId] = pair.split(":").map(Number);
+    try {
+      await linkKit(kitId, baseId, 1);
+      ok++;
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  await logAction(user.id, "link-kits", "products", null, { ok, errors: errors.length });
+  redirect(`/products/kits?msg=${encodeURIComponent(`Прив'язано карток: ${ok}${errors.length ? `. Помилки: ${errors.slice(0, 3).join("; ")}` : ""}`)}`);
 }

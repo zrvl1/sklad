@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts, type SdProductPayload } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
+import { propagatePriceToKits } from "@/lib/kits";
 import { getRates, refreshRates } from "@/lib/currency";
 
 export type ReceiptInput = {
@@ -39,7 +40,19 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
 
   if (input.lines.some((l) => !Number.isFinite(l.qty) || !Number.isFinite(l.cost) || l.cost < 0 || (l.newPrice !== null && l.newPrice < 0)))
     return { ok: false as const, error: "Кількість, закупівля і ціна мають бути додатними числами" };
-  const lines = input.lines.filter((l) => l.productId && l.qty > 0);
+  // картки-комплекти → основний товар (закупівля перераховується на одиницю основного)
+  const kitInfo = new Map<number, { baseProductId: number | null; kitQty: number }>(
+    (await db.product.findMany({ where: { id: { in: input.lines.map((l) => l.productId) }, baseProductId: { not: null } }, select: { id: true, baseProductId: true, kitQty: true } })).map(
+      (p) => [p.id, p]
+    )
+  );
+  const lines = input.lines
+    .filter((l) => l.productId && l.qty > 0)
+    .map((l) => {
+      const k = kitInfo.get(l.productId);
+      const q = k?.kitQty || 1;
+      return k?.baseProductId ? { ...l, productId: k.baseProductId, qty: l.qty * q, cost: l.cost / q } : l;
+    });
   const currency = (input.currency || "UAH").toUpperCase();
   const rate = currency === "UAH" ? 1 : (await getRates())[currency];
   if (!rate) return { ok: false as const, error: `Немає курсу для ${currency}. Перевірте валюти в SalesDrive.` };
@@ -127,6 +140,10 @@ export async function postReceipt(id: number) {
   ]);
   const gone = products.filter((p) => p.deletedAt);
   if (gone.length) return { ok: false as const, error: `Товари видалено, приберіть їх із документа: ${gone.map((p) => p.name).join(", ")}` };
+  // залишок пишемо лише основним товарам: картка-комплект у документі (стара чернетка) — зупиняємось
+  const kitLines = products.filter((p) => p.baseProductId);
+  if (kitLines.length)
+    return { ok: false as const, error: `У документі є картки-комплекти (${kitLines.map((p) => p.sku ?? p.name).join(", ")}). Натисніть «Зберегти» — вони заміняться основним товаром.` };
   const curQty = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
 
   const plan = products.map((p) => {
@@ -203,6 +220,9 @@ export async function postReceipt(id: number) {
     return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
   }
 
+  // нова ціна основного товару — на всі його картки-комплекти
+  const kitErr = await propagatePriceToKits(plan.filter((x) => x.withPrice).map((x) => x.product.id));
+  if (kitErr) warning = [warning, `Ціни карток-комплектів не оновлено в SalesDrive: ${kitErr}`].filter(Boolean).join(" ");
   await logAction(user.id, "post", "receipt", id, { products: plan.length, total: r.total });
   revalidatePath(`/receipts/${id}`);
   revalidatePath("/receipts");

@@ -80,6 +80,10 @@ model Product {
   params           String?        // характеристики: JSON [{name, type, value}]
   search           String         @default("") // нижній регістр: назва + sku + штрихкод + ID, для пошуку
   deletedAt        DateTime?      // видалено (у CRM або з додатку) — у списках не показується, історія зберігається
+  baseProductId    Int?           // картка-комплект (вітрина для SEO): посилається на основний фізичний товар
+  kitQty           Float          @default(1) // скільки штук основного товару в одній картці
+  base             Product?       @relation("KitBase", fields: [baseProductId], references: [id], onDelete: SetNull)
+  kits             Product[]      @relation("KitBase")
   syncedAt         DateTime?      // коли востаннє оновлено з SalesDrive
   syncError        String?        // остання помилка відправки в SalesDrive
   createdAt        DateTime       @default(now())
@@ -95,6 +99,7 @@ model Product {
 
   @@index([barcode])
   @@index([sku])
+  @@index([baseProductId])
 }
 
 // Копія залишку із SalesDrive по складу

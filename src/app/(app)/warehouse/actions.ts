@@ -21,7 +21,7 @@ export async function placeByCode(formData: FormData) {
   const qty = num(formData.get("qty"), 1) || 1;
   const path = `/warehouse/cells/${cellId}`;
   if (!code) return back(path, "Відскануйте товар", false);
-  const found = await findByCode(code);
+  const found = await findByCode(code, true);
   if (found.length !== 1) {
     return back(path, found.length ? `Код ${code} підходить кільком товарам — уточніть на картці товару` : `Товар із кодом ${code} не знайдено`, false);
   }
