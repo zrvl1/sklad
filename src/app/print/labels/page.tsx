@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getTemplate } from "@/lib/labels";
 import { finalPrice } from "@/lib/util";
+import { getRates, toUah } from "@/lib/currency";
 import Barcode from "@/components/Barcode";
 import PrintToolbar from "@/components/PrintToolbar";
 
@@ -30,7 +31,12 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
     if (id) wanted.set(id, (wanted.get(id) ?? 0) + Math.max(1, q || 1));
   }
 
-  const products = await db.product.findMany({ where: { id: { in: [...wanted.keys()] } } });
+  const rates = await getRates();
+  // ціни у валюті показуємо на цінниках у гривні за курсом SalesDrive
+  const products = (await db.product.findMany({ where: { id: { in: [...wanted.keys()] } } })).map((p) => ({
+    ...p,
+    price: toUah(p.price, p.priceCurrency, rates),
+  }));
   const byId = new Map(products.map((p) => [p.id, p]));
   const labels: { key: string; p: (typeof products)[number] }[] = [];
   for (const [id, q] of wanted) {

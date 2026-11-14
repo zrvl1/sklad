@@ -1,33 +1,44 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { dateUa, money } from "@/lib/util";
+import { dateTimeUa, dateUa, money } from "@/lib/util";
+import { MOVE_TYPES } from "@/lib/labels";
 import ProductForm from "../ProductForm";
-import { addProductCell, removeProductCell, retryPush } from "../actions";
+import { addProductCell, addProductCode, removeProductCell, removeProductCode, retryPush } from "../actions";
 
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
 export default async function ProductPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, warn } = await searchParams;
   const product = await db.product.findUnique({
     where: { id: Number(id) },
     include: {
       stocks: { include: { warehouse: true } },
-      cells: { include: { cell: { include: { warehouse: true } } } },
+      cells: { include: { cell: { include: { warehouse: true } } }, orderBy: { qty: "desc" } },
+      codes: { include: { supplier: true }, orderBy: { createdAt: "asc" } },
       receiptLines: {
         where: { receipt: { status: "posted" } },
         include: { receipt: { include: { supplier: true } } },
         orderBy: { id: "desc" },
         take: 20,
       },
+      moves: { include: { cell: true, user: true }, orderBy: { createdAt: "desc" }, take: 30 },
+      saleLines: { include: { order: true }, orderBy: { order: { orderTime: "desc" } }, take: 20 },
     },
   });
   if (!product) notFound();
-  const [suppliers, cells] = await Promise.all([
+  const [suppliers, cells, sold30, currencies] = await Promise.all([
     db.supplier.findMany({ orderBy: { name: "asc" } }),
     db.cell.findMany({ include: { warehouse: true }, orderBy: [{ warehouseId: "asc" }, { code: "asc" }] }),
+    db.sdOrderLine.aggregate({
+      where: { productId: product.id, order: { orderTime: { gte: new Date(Date.now() - 30 * 864e5) } } },
+      _sum: { qty: true },
+    }),
+    db.currency.findMany(),
   ]);
+  const inCells = product.cells.reduce((s, c) => s + c.qty, 0);
+  const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
 
   return (
     <>
@@ -43,6 +54,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
       </div>
 
       {saved === "1" && <div className="msg ok">Збережено і відправлено в SalesDrive.</div>}
+      {warn && <div className="msg warn">⚠ {warn}</div>}
       {product.syncError && (
         <div className="msg err">
           Не вдалося відправити в SalesDrive: {product.syncError}
@@ -53,31 +65,47 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </div>
       )}
 
-      <ProductForm product={product} suppliers={suppliers} />
+      <div className="stats">
+        <div className="stat">
+          На складі (SalesDrive)
+          <b>{stockTotal}</b>
+        </div>
+        <div className="stat">
+          Розкладено по комірках
+          <b>{inCells}</b>
+          {inCells < stockTotal && <span className="badge warn">не розкладено {stockTotal - inCells}</span>}
+        </div>
+        <div className="stat">
+          Продано за 30 днів
+          <b>{sold30._sum.qty ?? 0}</b>
+        </div>
+        <div className="stat">
+          Ціна / собівартість
+          <b>{money(product.price)}</b>
+          <span className="muted small">
+            {money(product.cost)} грн{product.costCurrency ? ` (${product.costOriginal} ${product.costCurrency})` : ""} · маржа {product.price > 0 ? Math.round(((product.price - product.cost) / product.price) * 100) : 0}%
+          </span>
+        </div>
+      </div>
+
+      <ProductForm product={product} suppliers={suppliers} currencies={currencies.map((c) => c.code)} />
 
       <div className="grid2">
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Залишки</h2>
-          {product.stocks.length === 0 && <p className="muted">Немає даних. Синхронізуйте з SalesDrive.</p>}
-          {product.stocks.map((s) => (
-            <div key={s.warehouseId} className="row" style={{ justifyContent: "space-between" }}>
-              <span>{s.warehouse.name}</span>
-              <b>{s.qty}</b>
-            </div>
-          ))}
-        </div>
-
-        <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Комірки</h2>
+          <h2 style={{ marginTop: 0 }}>Де лежить</h2>
+          {product.cells.length === 0 && <p className="muted">Ще не розміщено в жодній комірці.</p>}
           {product.cells.map((c) => (
             <form key={c.cellId} action={removeProductCell} className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
               <input type="hidden" name="productId" value={product.id} />
               <input type="hidden" name="cellId" value={c.cellId} />
               <span>
-                <b>{c.cell.code}</b> <span className="muted small">{c.cell.warehouse.name}</span>
+                <Link href={`/warehouse/cells/${c.cellId}`}>
+                  <b>{c.cell.code}</b>
+                </Link>{" "}
+                <span className="muted small">{c.cell.warehouse.name}</span>
               </span>
               <span>
-                {c.qty} шт <button className="btn sm danger">✕</button>
+                {c.qty} шт <button className="btn sm danger" title="Прибрати з комірки">✕</button>
               </span>
             </form>
           ))}
@@ -94,49 +122,142 @@ export default async function ProductPage({ params, searchParams }: Props) {
               ))}
             </select>
             <input name="qty" type="number" step="any" placeholder="К-сть" style={{ width: 80 }} />
+            <button className="btn sm">Встановити</button>
+          </form>
+        </div>
+
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Коди товару</h2>
+          <div className="small" style={{ marginBottom: 8 }}>
+            Штрихкод: <b>{product.barcode ?? "—"}</b> · Артикул: <b>{product.sku ?? "—"}</b> · ID: <b>{product.sdId ?? "—"}</b>
+          </div>
+          {product.codes.map((c) => (
+            <form key={c.id} action={removeProductCode} className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+              <input type="hidden" name="id" value={c.id} />
+              <span>
+                <b>{c.code}</b>{" "}
+                <span className="badge">{c.type === "supplier" ? `арт. постачальника${c.supplier ? ` · ${c.supplier.name}` : ""}` : "дод. штрихкод"}</span>
+              </span>
+              <button className="btn sm danger" title="Видалити код">
+                ✕
+              </button>
+            </form>
+          ))}
+          <form action={addProductCode} className="row" style={{ marginTop: 10 }}>
+            <input type="hidden" name="productId" value={product.id} />
+            <input name="code" placeholder="Код" required style={{ width: 140 }} />
+            <select name="type" defaultValue="supplier">
+              <option value="supplier">арт. постачальника</option>
+              <option value="barcode">дод. штрихкод</option>
+            </select>
+            <select name="supplierId" defaultValue="">
+              <option value="">постачальник…</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
             <button className="btn sm">Додати</button>
           </form>
-          {cells.length === 0 && (
-            <p className="muted small">
-              Комірок ще немає — створіть їх у <Link href="/settings">Налаштуваннях</Link>.
-            </p>
-          )}
+          <p className="muted small">За всіма цими кодами товар знаходиться при скануванні в приході, на складі й в інвентаризації.</p>
         </div>
       </div>
 
-      <h2>Історія приходів</h2>
+      <h2>Рух товару</h2>
       <div className="tablewrap">
-        <table>
+        <table className="small">
           <thead>
             <tr>
-              <th>Дата</th>
-              <th>Документ</th>
-              <th>Постачальник</th>
+              <th>Коли</th>
+              <th>Операція</th>
+              <th>Комірка</th>
               <th className="num">К-сть</th>
-              <th className="num">Закупівля</th>
+              <th>Хто</th>
+              <th>Примітка</th>
             </tr>
           </thead>
           <tbody>
-            {product.receiptLines.map((l) => (
-              <tr key={l.id}>
-                <td>{dateUa(l.receipt.date)}</td>
+            {product.moves.map((m) => (
+              <tr key={m.id}>
+                <td>{dateTimeUa(m.createdAt)}</td>
                 <td>
-                  <Link href={`/receipts/${l.receiptId}`}>{l.receipt.number}</Link>
+                  {m.docType === "receipt" && m.docId ? (
+                    <Link href={`/receipts/${m.docId}`}>{MOVE_TYPES[m.type] ?? m.type}</Link>
+                  ) : m.docType === "inventory" && m.docId ? (
+                    <Link href={`/inventory/${m.docId}`}>{MOVE_TYPES[m.type] ?? m.type}</Link>
+                  ) : (
+                    MOVE_TYPES[m.type] ?? m.type
+                  )}
                 </td>
-                <td>{l.receipt.supplier?.name ?? "—"}</td>
-                <td className="num">{l.qty}</td>
-                <td className="num">{money(l.cost)}</td>
+                <td>{m.cell?.code ?? "—"}</td>
+                <td className="num" style={{ color: m.qty < 0 ? "var(--err)" : "var(--ok)" }}>
+                  {m.qty > 0 ? "+" : ""}
+                  {m.qty}
+                </td>
+                <td>{m.user?.name ?? "система"}</td>
+                <td className="muted">{m.note}</td>
               </tr>
             ))}
-            {product.receiptLines.length === 0 && (
+            {product.moves.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
-                  Приходів ще не було
+                <td colSpan={6} className="muted">
+                  Руху ще не було
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="grid2" style={{ marginTop: 16 }}>
+        <div>
+          <h2 style={{ marginTop: 0 }}>Приходи</h2>
+          <div className="tablewrap">
+            <table className="small">
+              <tbody>
+                {product.receiptLines.map((l) => (
+                  <tr key={l.id}>
+                    <td>{dateUa(l.receipt.date)}</td>
+                    <td>
+                      <Link href={`/receipts/${l.receiptId}`}>{l.receipt.number}</Link>
+                    </td>
+                    <td>{l.receipt.supplier?.name ?? "—"}</td>
+                    <td className="num">{l.qty} шт</td>
+                    <td className="num">{money(l.cost)}</td>
+                  </tr>
+                ))}
+                {product.receiptLines.length === 0 && (
+                  <tr>
+                    <td className="muted">Приходів ще не було</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h2 style={{ marginTop: 0 }}>Продажі (з SalesDrive)</h2>
+          <div className="tablewrap">
+            <table className="small">
+              <tbody>
+                {product.saleLines.map((l) => (
+                  <tr key={l.id}>
+                    <td>{dateUa(l.order.orderTime)}</td>
+                    <td>заявка {l.orderId}</td>
+                    <td className="num">{l.qty} шт</td>
+                    <td className="num">{money(l.price)}</td>
+                  </tr>
+                ))}
+                {product.saleLines.length === 0 && (
+                  <tr>
+                    <td className="muted">Немає даних (див. Звіти → Продажі)</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </>
   );

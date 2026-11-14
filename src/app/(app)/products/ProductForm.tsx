@@ -2,7 +2,15 @@ import type { Product, Supplier } from "@prisma/client";
 import { dateInput } from "@/lib/util";
 import { saveProduct } from "./actions";
 
-export default function ProductForm({ product, suppliers }: { product?: Product | null; suppliers: Supplier[] }) {
+export default function ProductForm({
+  product,
+  suppliers,
+  currencies = ["UAH"],
+}: {
+  product?: Product | null;
+  suppliers: Supplier[];
+  currencies?: string[];
+}) {
   const p = product;
   return (
     <form action={saveProduct} className="panel">
@@ -21,12 +29,27 @@ export default function ProductForm({ product, suppliers }: { product?: Product 
           <input name="categoryName" defaultValue={p?.categoryName ?? ""} placeholder="як у SalesDrive" />
         </label>
         <label>
-          Ціна продажу, грн
+          Ціна продажу{p?.priceCurrency && p.priceCurrency !== "UAH" ? `, ${p.priceCurrency}` : ", грн"}
           <input name="price" inputMode="decimal" defaultValue={p?.price ?? ""} />
         </label>
         <label>
-          Собівартість, грн
-          <input name="cost" inputMode="decimal" defaultValue={p?.cost ?? ""} />
+          Собівартість
+          <span className="row" style={{ gap: 6 }}>
+            <input
+              name="cost"
+              inputMode="decimal"
+              defaultValue={p?.costCurrency && p.costCurrency !== "UAH" ? p.costOriginal ?? "" : p?.cost ?? ""}
+              style={{ width: 120 }}
+            />
+            <select name="costCurrency" defaultValue={p?.costCurrency ?? "UAH"}>
+              {[...new Set(["UAH", ...currencies])].map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            {p?.costCurrency && p.costCurrency !== "UAH" && <span className="muted small">= {p.cost} грн</span>}
+          </span>
         </label>
         <label>
           Знижка
@@ -59,7 +82,7 @@ export default function ProductForm({ product, suppliers }: { product?: Product 
           <input name="manufacturer" defaultValue={p?.manufacturer ?? ""} />
         </label>
         <label>
-          SKU
+          Артикул (SKU)
           <input name="sku" defaultValue={p?.sku ?? ""} />
         </label>
         <label>
@@ -70,9 +93,30 @@ export default function ProductForm({ product, suppliers }: { product?: Product 
           ID у SalesDrive
           <input name="sdId" defaultValue={p?.sdId ?? ""} placeholder="заповниться автоматично" readOnly={!!p?.sdId} />
         </label>
-        <label className="check" style={{ alignSelf: "end" }}>
-          <input type="checkbox" name="genBarcode" defaultChecked={!p?.barcode} />
-          Згенерувати штрихкод, якщо порожній
+        <div style={{ alignSelf: "end", display: "grid", gap: 6 }}>
+          <label className="check">
+            <input type="checkbox" name="genBarcode" defaultChecked={!p?.barcode} />
+            Згенерувати штрихкод, якщо порожній
+          </label>
+          <label className="check">
+            <input type="checkbox" name="genSku" defaultChecked={!p} />
+            Згенерувати артикул, якщо порожній
+          </label>
+        </div>
+        <label>
+          Артикул постачальника (додати)
+          <input name="supplierCode" placeholder="код із накладної постачальника" />
+        </label>
+        <label>
+          Постачальник цього артикула
+          <select name="supplierCodeSupplierId" defaultValue="">
+            <option value="">—</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       <div className="toolbar" style={{ marginTop: 16, marginBottom: 0 }}>

@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const dec = (v: number) => String(Math.round(v * 100) / 100).replace(".", ",");
 
   const rows = [
-    ["Дата", "Номер", "Статус", "Склад", "Постачальник", "Накладна", "ID товару", "Товар", "SKU", "Штрихкод", "Комірка", "К-сть", "Закупівля", "Сума", "Нова ціна"],
+    ["Дата", "Номер", "Статус", "Склад", "Постачальник", "Накладна", "ID товару", "Товар", "SKU", "Штрихкод", "Комірка", "К-сть", "Валюта", "Курс", "Закупівля у валюті", "Закупівля, грн", "Сума, грн", "Нова ціна, грн"],
   ];
   for (const r of receipts) {
     for (const l of r.lines) {
@@ -36,8 +36,11 @@ export async function GET(req: Request) {
         l.product.barcode ?? "",
         l.cell?.code ?? "",
         dec(l.qty),
+        r.currency,
+        dec(r.rate),
         dec(l.cost),
-        dec(l.qty * l.cost),
+        dec(l.cost * r.rate),
+        dec(l.qty * l.cost * r.rate),
         l.newPrice ? dec(l.newPrice) : "",
       ]);
     }

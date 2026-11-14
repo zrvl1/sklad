@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts, type SdProductPayload } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
+import { getRates, refreshRates } from "@/lib/currency";
 
 export type ReceiptInput = {
   date: string;
@@ -14,6 +15,7 @@ export type ReceiptInput = {
   supplierId: number | null;
   invoiceNo: string;
   note: string;
+  currency: string; // валюта закупівлі
   lines: { productId: number; qty: number; cost: number; newPrice: number | null; cellId: number | null }[];
 };
 
@@ -36,7 +38,12 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
   if (r.status !== "draft") return { ok: false as const, error: "Проведений документ змінювати не можна" };
 
   const lines = input.lines.filter((l) => l.productId && l.qty > 0);
-  const total = Math.round(lines.reduce((s, l) => s + l.qty * l.cost, 0) * 100) / 100;
+  const currency = (input.currency || "UAH").toUpperCase();
+  const rates = await getRates();
+  const rate = currency === "UAH" ? 1 : rates[currency];
+  if (!rate) return { ok: false as const, error: `Немає курсу для ${currency}. Перевірте валюти в SalesDrive.` };
+  const totalCurrency = Math.round(lines.reduce((s, l) => s + l.qty * l.cost, 0) * 100) / 100;
+  const total = Math.round(totalCurrency * rate * 100) / 100;
 
   await db.$transaction([
     db.receiptLine.deleteMany({ where: { receiptId: id } }),
@@ -48,7 +55,10 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
         supplierId: input.supplierId,
         invoiceNo: input.invoiceNo.trim() || null,
         note: input.note.trim() || null,
+        currency,
+        rate,
         total,
+        totalCurrency,
         lines: { create: lines.map((l) => ({ productId: l.productId, qty: l.qty, cost: l.cost, newPrice: l.newPrice, cellId: l.cellId })) },
       },
     }),
@@ -89,6 +99,17 @@ export async function postReceipt(id: number) {
     }
   }
 
+  // Свіжий курс із SalesDrive на момент проведення
+  let rate = 1;
+  if (r.currency !== "UAH") {
+    try {
+      if (sdOn) await refreshRates();
+    } catch {
+      /* використаємо курс із кешу */
+    }
+    rate = (await getRates())[r.currency] ?? r.rate;
+  }
+
   // Згортаємо однакові товари в один рядок
   const agg = new Map<number, { qty: number; cost: number; newPrice: number | null }>();
   for (const l of r.lines) {
@@ -108,7 +129,17 @@ export async function postReceipt(id: number) {
   const plan = products.map((p) => {
     const a = agg.get(p.id)!;
     return {
-      product: { ...p, cost: a.cost, price: a.newPrice ?? p.price },
+      // собівартість: у валюті приходу (SalesDrive сам перерахує в гривню) + у гривні для наших звітів
+      product: {
+        ...p,
+        cost: Math.round(a.cost * rate * 100) / 100,
+        costCurrency: r.currency === "UAH" ? null : r.currency,
+        costOriginal: r.currency === "UAH" ? null : a.cost,
+        // нова ціна продажу вводиться в гривні
+        price: a.newPrice ?? p.price,
+        priceCurrency: a.newPrice ? "UAH" : p.priceCurrency,
+      },
+      withPrice: a.newPrice !== null,
       newQty: (curQty.get(p.id) ?? 0) + a.qty,
     };
   });
@@ -117,7 +148,7 @@ export async function postReceipt(id: number) {
   if (sdOn) {
     let payloads: SdProductPayload[];
     try {
-      payloads = plan.map((x) => productToSd(x.product, { sdStockId: r.warehouse.sdStockId, qty: x.newQty }));
+      payloads = plan.map((x) => productToSd(x.product, { sdStockId: r.warehouse.sdStockId, qty: x.newQty }, { withCost: true, withPrice: x.withPrice }));
       await sdUpdateProducts(payloads);
     } catch (e) {
       return { ok: false as const, error: `SalesDrive не прийняв дані, документ не проведено: ${e instanceof Error ? e.message : e}` };
@@ -132,7 +163,7 @@ export async function postReceipt(id: number) {
     // Захист від подвійного натискання: документ переводимо в "проведено" лише якщо він ще чернетка
     const claimed = await tx.receipt.updateMany({
       where: { id, status: "draft" },
-      data: { status: "posted", postedAt: now, postedById: user.id },
+      data: { status: "posted", postedAt: now, postedById: user.id, rate, total: Math.round(r.totalCurrency * rate * 100) / 100 },
     });
     if (claimed.count === 0) throw new Error("Документ уже проведено");
     for (const x of plan) {
@@ -143,10 +174,20 @@ export async function postReceipt(id: number) {
       });
       await tx.product.update({
         where: { id: x.product.id },
-        data: { cost: x.product.cost, price: x.product.price, ...(sdOn ? { syncError: null, syncedAt: now } : {}) },
+        data: {
+          cost: x.product.cost,
+          costCurrency: x.product.costCurrency,
+          costOriginal: x.product.costOriginal,
+          price: x.product.price,
+          priceCurrency: x.product.priceCurrency,
+          ...(sdOn ? { syncError: null, syncedAt: now } : {}),
+        },
       });
     }
     for (const l of r.lines) {
+      await tx.stockMove.create({
+        data: { productId: l.productId, warehouseId: r.warehouseId, cellId: l.cellId, qty: l.qty, type: "receipt", docType: "receipt", docId: id, userId: user.id },
+      });
       if (!l.cellId) continue;
       await tx.productCell.upsert({
         where: { productId_cellId: { productId: l.productId, cellId: l.cellId } },

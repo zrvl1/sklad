@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { dateInput, dateTimeUa, dateUa, money } from "@/lib/util";
+import { getRates } from "@/lib/currency";
 import ReceiptEditor from "./ReceiptEditor";
 import { deleteReceipt } from "../actions";
 import PrintReceiptLabels from "./PrintReceiptLabels";
@@ -24,10 +25,11 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
   if (!r) notFound();
 
   if (r.status === "draft") {
-    const [warehouses, suppliers, cells] = await Promise.all([
+    const [warehouses, suppliers, cells, rates] = await Promise.all([
       db.warehouse.findMany({ orderBy: { name: "asc" } }),
       db.supplier.findMany({ orderBy: { name: "asc" } }),
       db.cell.findMany({ orderBy: { code: "asc" } }),
+      getRates(),
     ]);
     return (
       <>
@@ -48,6 +50,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
             supplierId: r.supplierId,
             invoiceNo: r.invoiceNo ?? "",
             note: r.note ?? "",
+            currency: r.currency,
             lines: r.lines.map((l) => ({
               key: String(l.id),
               productId: l.productId,
@@ -64,6 +67,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
           warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
           suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
           cells={cells.map((c) => ({ id: c.id, code: c.code, warehouseId: c.warehouseId }))}
+          rates={rates}
         />
       </>
     );
@@ -93,6 +97,10 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
           Накладна: <b>{r.invoiceNo ?? "—"}</b>
         </div>
         <div>
+          Валюта: <b>{r.currency}</b>
+          {r.currency !== "UAH" && ` · курс ${r.rate} грн`}
+        </div>
+        <div>
           Створив: {r.createdBy.name}
         </div>
         <div>
@@ -113,8 +121,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               <th>Штрихкод</th>
               <th>Комірка</th>
               <th className="num">К-сть</th>
-              <th className="num">Закупівля</th>
-              <th className="num">Сума</th>
+              <th className="num">Закупівля, {r.currency}</th>
+              <th className="num">Сума, {r.currency}</th>
               <th className="num">Нова ціна</th>
             </tr>
           </thead>
@@ -138,7 +146,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
                 <b>Разом</b>
               </td>
               <td className="num">
-                <b>{money(r.total)}</b>
+                <b>{money(r.currency === "UAH" ? r.total : r.totalCurrency)}</b>
+                {r.currency !== "UAH" && <div className="muted small">{money(r.total)} грн</div>}
               </td>
               <td />
             </tr>

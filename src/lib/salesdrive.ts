@@ -16,7 +16,9 @@ export type SdProductPayload = {
   nameTranslate?: string; // друга мова назви (при двомовності в SalesDrive)
   nameForDocuments?: string;
   costPerItem?: string;
+  currency?: string; // валюта ціни продажу
   expenses?: string;
+  currencyExpenses?: string; // валюта собівартості
   sku?: string;
   barcode?: string;
   manufacturer?: string;
@@ -49,21 +51,30 @@ function sdDate(d: Date | null) {
  * Дані товару для SalesDrive.
  * Надсилаємо ЛИШЕ заповнені поля: частини полів (собівартість, постачальник, назва для документів)
  * немає в YML, тож у нашій базі вони можуть бути порожніми — і порожнім значенням ми б затерли їх у CRM.
+ * Назву, ціну й собівартість — лише коли їх справді змінили (opts), і завжди разом із валютою,
+ * щоб не зламати товари, де ціна чи закупівля в SalesDrive задані в доларах/євро.
  */
 export function productToSd(
   p: Product,
   stock?: { sdStockId: string | null; qty: number } | null,
-  opts: { withName?: boolean } = {}
+  opts: { withName?: boolean; withPrice?: boolean; withCost?: boolean } = {}
 ): SdProductPayload {
   if (!p.sdId) throw new Error(`У товару "${p.name}" немає ID для SalesDrive`);
-  const payload: SdProductPayload = { id: p.sdId, costPerItem: String(p.price) };
-  // Назву відправляємо лише коли треба (новий товар або назву змінили), і в обидва мовні поля:
-  // інакше можна перезаписати російську назву існуючого товару українською.
+  const payload: SdProductPayload = { id: p.sdId };
   if (opts.withName) {
+    // в обидва мовні поля (UA і RU) — для нових товарів або коли назву змінили
     payload.name = p.name;
     payload.nameTranslate = p.name;
   }
-  if (p.cost > 0) payload.expenses = String(p.cost);
+  if (opts.withPrice) {
+    payload.costPerItem = String(p.price);
+    payload.currency = p.priceCurrency ?? "UAH";
+  }
+  if (opts.withCost) {
+    const inCurrency = p.costCurrency && p.costCurrency !== "UAH" && p.costOriginal !== null;
+    payload.expenses = String(inCurrency ? p.costOriginal : p.cost);
+    payload.currencyExpenses = inCurrency ? p.costCurrency! : "UAH";
+  }
   if (p.nameForDocuments) payload.nameForDocuments = p.nameForDocuments;
   if (p.sku) payload.sku = p.sku;
   if (p.barcode) payload.barcode = p.barcode;
@@ -121,6 +132,7 @@ export type YmlOffer = {
   sdId: string;
   name: string;
   price: number;
+  priceCurrency: string | null;
   cost: number | null;
   sku: string | null;
   barcode: string | null;
@@ -197,6 +209,7 @@ export function parseYml(xml: string): YmlOffer[] {
         sdId: sdId ?? "",
         name: text(o.name as Node) ?? text(o.model as Node) ?? "(без назви)",
         price: firstNum(text(o.price as Node)) ?? 0,
+        priceCurrency: text(o.currencyId as Node)?.toUpperCase() ?? null,
         cost: firstNum(
           text(o.vendorprice as Node), // так SalesDrive передає собівартість
           text(o.cost_price as Node),

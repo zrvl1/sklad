@@ -25,6 +25,8 @@ model User {
   posted       Receipt[]  @relation("ReceiptPostedBy")
   logs         ActionLog[]
   expenses     Expense[]
+  inventories  Inventory[]
+  moves        StockMove[]
 }
 
 // Склад (точка). sdStockId — ID складу в SalesDrive (Установки → ... → API).
@@ -38,6 +40,8 @@ model Warehouse {
   stocks    StockBalance[]
   receipts  Receipt[]
   expenses  Expense[]
+  inventories Inventory[]
+  moves     StockMove[]
 }
 
 model Supplier {
@@ -47,6 +51,7 @@ model Supplier {
   note      String?
   createdAt DateTime  @default(now())
   receipts  Receipt[]
+  codes     ProductCode[]
 }
 
 model Product {
@@ -57,7 +62,10 @@ model Product {
   categorySdId     String?
   categoryName     String?
   price            Float          @default(0) // ціна продажу (у SalesDrive: costPerItem)
-  cost             Float          @default(0) // собівартість (у SalesDrive: expenses)
+  priceCurrency    String?        // валюта ціни продажу (зазвичай UAH)
+  cost             Float          @default(0) // собівартість у гривні (у SalesDrive: expenses)
+  costCurrency     String?        // валюта закупівлі (USD, EUR…), якщо собівартість задана у валюті
+  costOriginal     Float?         // собівартість у валюті закупівлі
   discountValue    Float?
   discountType     String?        // percent | amount
   discountFrom     DateTime?
@@ -74,6 +82,10 @@ model Product {
   stocks           StockBalance[]
   cells            ProductCell[]
   receiptLines     ReceiptLine[]
+  codes            ProductCode[]
+  moves            StockMove[]
+  inventoryLines   InventoryLine[]
+  saleLines        SdOrderLine[]
 
   @@index([barcode])
   @@index([sku])
@@ -101,6 +113,8 @@ model Cell {
   warehouse   Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   products    ProductCell[]
   lines       ReceiptLine[]
+  inventoryLines InventoryLine[]
+  moves       StockMove[]
 
   @@unique([warehouseId, code])
 }
@@ -127,7 +141,10 @@ model Receipt {
   invoiceNo   String?       // номер накладної постачальника
   note        String?
   status      String        @default("draft") // draft | posted
-  total       Float         @default(0)
+  currency    String        @default("UAH") // валюта закупівлі
+  rate        Float         @default(1)     // курс до гривні на момент приходу (з SalesDrive)
+  total       Float         @default(0)     // сума в гривні
+  totalCurrency Float       @default(0)     // сума у валюті приходу
   createdById Int
   postedById  Int?
   postedAt    DateTime?
@@ -147,7 +164,7 @@ model ReceiptLine {
   receiptId Int
   productId Int
   qty       Float
-  cost      Float   // закупівельна ціна за одиницю
+  cost      Float   // закупівельна ціна за одиницю у валюті приходу
   newPrice  Float?  // нова ціна продажу (якщо змінюємо при приході)
   cellId    Int?
   receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
@@ -199,4 +216,107 @@ model LoginAttempt {
 
   @@index([login, createdAt])
   @@index([ip, createdAt])
+}
+
+// Додаткові коди товару: артикули постачальників і додаткові штрихкоди (напр. заводський).
+// Пошук у приході, на складі й в інвентаризації працює за всіма кодами.
+model ProductCode {
+  id         Int       @id @default(autoincrement())
+  productId  Int
+  code       String    @unique
+  type       String    // supplier | barcode
+  supplierId Int?
+  createdAt  DateTime  @default(now())
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+}
+
+// Журнал руху товару: прихід, інвентаризація, переміщення між комірками, автосписання з комірок після продажу
+model StockMove {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  warehouseId Int
+  cellId      Int?
+  qty         Float     // + надходження в комірку/на склад, - вибуття
+  type        String    // receipt | inventory | cell-move | cell-adjust | sale-auto
+  docType     String?   // receipt | inventory
+  docId       Int?
+  note        String?
+  userId      Int?
+  createdAt   DateTime  @default(now())
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  cell        Cell?     @relation(fields: [cellId], references: [id], onDelete: SetNull)
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@index([productId, createdAt])
+  @@index([cellId])
+}
+
+model Inventory {
+  id          Int             @id @default(autoincrement())
+  number      String          @unique
+  date        DateTime        @default(now())
+  warehouseId Int
+  status      String          @default("draft") // draft | posted
+  note        String?
+  createdById Int
+  postedAt    DateTime?
+  createdAt   DateTime        @default(now())
+  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id])
+  createdBy   User            @relation(fields: [createdById], references: [id])
+  lines       InventoryLine[]
+}
+
+model InventoryLine {
+  id          Int       @id @default(autoincrement())
+  inventoryId Int
+  productId   Int
+  cellId      Int?
+  counted     Float
+  systemQty   Float?    // залишок у SalesDrive на момент проведення (заповнюється при проведенні)
+  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id])
+  cell        Cell?     @relation(fields: [cellId], references: [id], onDelete: SetNull)
+}
+
+// Заявки з SalesDrive — лише те, що потрібно для звітів. Дані клієнтів НЕ зберігаємо.
+model SdOrder {
+  id          Int           @id // ID заявки в SalesDrive
+  orderTime   DateTime
+  updateAt    DateTime?
+  statusId    Int
+  amount      Float         @default(0) // сума заявки
+  costAmount  Float         @default(0) // собівартість
+  profit      Float         @default(0)
+  lines       SdOrderLine[]
+
+  @@index([orderTime])
+}
+
+model SdOrderLine {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  productId Int?     // наш товар, якщо вдалося зіставити
+  sdProductId String?
+  name      String
+  sku       String?
+  barcode   String?
+  qty       Float
+  price     Float
+  discount  Float    @default(0)
+  costPrice Float    @default(0)
+  order     SdOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+}
+
+// Курси валют із SalesDrive (кеш; оновлюється при синхронізації)
+model Currency {
+  code      String   @id
+  rate      Float    // скільки гривень за 1 одиницю валюти
+  updatedAt DateTime @updatedAt
 }

@@ -15,3 +15,12 @@ export type TemplateId = keyof typeof LABEL_TEMPLATES;
 export function getTemplate(id: string | undefined) {
   return LABEL_TEMPLATES[(id && id in LABEL_TEMPLATES ? id : "58x40") as TemplateId];
 }
+
+/** Назви операцій у журналі руху товару */
+export const MOVE_TYPES: Record<string, string> = {
+  receipt: "Прихід",
+  inventory: "Інвентаризація",
+  "cell-move": "Переміщення",
+  "cell-adjust": "Коригування комірки",
+  "sale-auto": "Продаж (автосписання з комірки)",
+};

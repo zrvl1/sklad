@@ -91,7 +91,7 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: SP 
               <th>Постачальник</th>
               <th>Накладна</th>
               <th className="num">Позицій</th>
-              <th className="num">Сума</th>
+              <th className="num">Сума, грн</th>
               <th>Статус</th>
               <th>Створив</th>
             </tr>
@@ -107,7 +107,14 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: SP 
                 <td>{r.supplier?.name ?? "—"}</td>
                 <td>{r.invoiceNo ?? ""}</td>
                 <td className="num">{r._count.lines}</td>
-                <td className="num">{money(r.total)}</td>
+                <td className="num">
+                  {money(r.total)}
+                  {r.currency !== "UAH" && (
+                    <div className="muted small">
+                      {money(r.totalCurrency)} {r.currency}
+                    </div>
+                  )}
+                </td>
                 <td>{r.status === "posted" ? <span className="badge ok">проведено</span> : <span className="badge warn">чернетка</span>}</td>
                 <td className="small">{r.createdBy.name}</td>
               </tr>

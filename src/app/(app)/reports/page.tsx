@@ -23,13 +23,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
     const s = bySupplier.get(sName) ?? { docs: new Set<number>(), qty: 0, sum: 0 };
     s.docs.add(l.receiptId);
     s.qty += l.qty;
-    s.sum += l.qty * l.cost;
+    s.sum += l.qty * l.cost * l.receipt.rate; // у гривні за курсом приходу
     bySupplier.set(sName, s);
 
-    const p = byProduct.get(l.productId) ?? { id: l.productId, name: l.product.name, qty: 0, sum: 0, lastCost: l.cost };
+    const costUah = l.cost * l.receipt.rate;
+    const p = byProduct.get(l.productId) ?? { id: l.productId, name: l.product.name, qty: 0, sum: 0, lastCost: costUah };
     p.qty += l.qty;
-    p.sum += l.qty * l.cost;
-    p.lastCost = l.cost;
+    p.sum += l.qty * costUah;
+    p.lastCost = costUah;
     byProduct.set(l.productId, p);
   }
   const suppliers = [...bySupplier.entries()].sort((a, b) => b[1].sum - a[1].sum);

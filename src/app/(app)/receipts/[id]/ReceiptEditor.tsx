@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { postReceipt, saveReceipt, type ReceiptInput } from "../actions";
-import { createProductQuick } from "../../products/actions";
+import UnknownCode from "@/components/UnknownCode";
 
 type Line = {
   key: string;
@@ -18,7 +18,7 @@ type Line = {
   cellId: number | null;
 };
 
-type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number };
+type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string };
 
 type Props = {
   receiptId: number;
@@ -26,6 +26,7 @@ type Props = {
   warehouses: { id: number; name: string }[];
   suppliers: { id: number; name: string }[];
   cells: { id: number; code: string; warehouseId: number }[];
+  rates: Record<string, number>; // курси з SalesDrive: гривень за 1 одиницю
 };
 
 const fmt = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -34,7 +35,7 @@ const n = (s: string) => {
   return Number.isFinite(v) ? v : 0;
 };
 
-export default function ReceiptEditor({ receiptId, initial, warehouses, suppliers, cells }: Props) {
+export default function ReceiptEditor({ receiptId, initial, warehouses, suppliers, cells, rates }: Props) {
   const router = useRouter();
   const [header, setHeader] = useState({
     date: initial.date,
@@ -42,19 +43,23 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
     supplierId: initial.supplierId,
     invoiceNo: initial.invoiceNo,
     note: initial.note,
+    currency: initial.currency || "UAH",
   });
+  const cur = header.currency;
+  const rate = cur === "UAH" ? 1 : rates[cur] ?? 0;
   const [lines, setLines] = useState<Line[]>(initial.lines);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Found[]>([]);
   const [msg, setMsg] = useState<{ type: "ok" | "err" | "warn"; text: string } | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [quick, setQuick] = useState<null | { name: string; barcode: string; price: string; cost: string }>(null);
+  // невідомий код (string), створення нового товару без коду (null), або нічого (undefined)
+  const [unknown, setUnknown] = useState<string | null | undefined>(undefined);
   const [activeCellId, setActiveCellId] = useState<number | null>(null);
   const [pending, start] = useTransition();
   const scanRef = useRef<HTMLInputElement>(null);
 
   const whCells = useMemo(() => cells.filter((c) => c.warehouseId === header.warehouseId), [cells, header.warehouseId]);
-  const total = lines.reduce((s, l) => s + l.qty * l.cost, 0);
+  const total = lines.reduce((s, l) => s + l.qty * l.cost, 0); // у валюті приходу
   const totalQty = lines.reduce((s, l) => s + l.qty, 0);
 
   // Попередження, якщо закривають сторінку з незбереженими змінами
@@ -115,13 +120,16 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
     }
     const res = await fetch(`/api/products/search?q=${encodeURIComponent(q.trim())}`);
     const found: Found[] = res.ok ? await res.json() : [];
-    const exact = found.filter((f) => f.barcode === q.trim() || f.sku === q.trim());
-    if (exact.length === 1) return addProduct(exact[0]);
     if (found.length === 1) return addProduct(found[0]);
     setResults(found);
     if (found.length === 0) {
-      setMsg({ type: "warn", text: `Товар «${q}» не знайдено. Можна створити новий.` });
-      setQuick({ name: /^\d+$/.test(q) ? "" : q, barcode: /^\d+$/.test(q) ? q : "", price: "", cost: "" });
+      if (/\s/.test(q.trim())) {
+        setMsg({ type: "warn", text: `За запитом «${q}» нічого не знайдено. Можна створити новий товар.` });
+      } else {
+        setMsg(null);
+        setUnknown(q.trim()); // невідомий код: прив'язати до наявного товару або створити новий
+        setQuery("");
+      }
     }
   };
 
@@ -146,7 +154,8 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
 
   const post = () => {
     if (!lines.length) return setMsg({ type: "err", text: "Додайте товари" });
-    if (!confirm(`Провести прихід: ${lines.length} позицій, ${totalQty} шт на ${fmt(total)} грн?\nЗалишки в SalesDrive буде збільшено.`)) return;
+    const sum = cur === "UAH" ? `${fmt(total)} грн` : `${fmt(total)} ${cur} (≈ ${fmt(total * rate)} грн)`;
+    if (!confirm(`Провести прихід: ${lines.length} позицій, ${totalQty} шт на ${sum}?\nЗалишки в SalesDrive буде збільшено, собівартість оновлено.`)) return;
     start(async () => {
       const s = await saveReceipt(receiptId, payload());
       if (!s.ok) return setMsg({ type: "err", text: s.error });
@@ -157,22 +166,6 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
       router.refresh();
     });
   };
-
-  const createQuick = () =>
-    start(async () => {
-      if (!quick) return;
-      const r = await createProductQuick({
-        name: quick.name,
-        barcode: quick.barcode,
-        price: n(quick.price),
-        cost: n(quick.cost),
-        genBarcode: !quick.barcode,
-      });
-      if (!r.ok) return setMsg({ type: "err", text: r.error });
-      setQuick(null);
-      setMsg(r.warning ? { type: "warn", text: r.warning } : { type: "ok", text: `Товар «${r.product.name}» створено` });
-      addProduct(r.product);
-    });
 
   return (
     <>
@@ -216,6 +209,21 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           </select>
         </label>
         <label>
+          Валюта закупівлі
+          <span className="row" style={{ gap: 6 }}>
+            <select value={cur} onChange={(e) => (setHeader({ ...header, currency: e.target.value }), touch())}>
+              {Object.keys(rates).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            {cur !== "UAH" && (
+              <span className="small muted">{rate ? `курс SalesDrive: 1 ${cur} = ${rate} грн` : "немає курсу — додайте валюту в SalesDrive"}</span>
+            )}
+          </span>
+        </label>
+        <label>
           № накладної постачальника
           <input value={header.invoiceNo} onChange={(e) => (setHeader({ ...header, invoiceNo: e.target.value }), touch())} />
         </label>
@@ -244,13 +252,13 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           <div className="results">
             {results.map((r) => (
               <button key={r.id} onClick={() => addProduct(r)}>
-                {r.name} <span className="muted small">{[r.sku, r.barcode].filter(Boolean).join(" · ")}</span>
+                {r.name} <span className="muted small">{[r.sku, r.barcode, r.matchedBy && `знайдено за: ${r.matchedBy}`].filter(Boolean).join(" · ")}</span>
               </button>
             ))}
           </div>
         )}
         <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
-          <button className="btn sm" onClick={() => setQuick({ name: "", barcode: "", price: "", cost: "" })}>
+          <button className="btn sm" onClick={() => setUnknown(null)}>
             + Новий товар
           </button>
           <span className="small muted">Комірка для нових рядків:</span>
@@ -265,31 +273,23 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           <span className="small muted">(або відскануйте етикетку комірки)</span>
         </div>
 
-        {quick && (
-          <div className="row" style={{ marginTop: 12, padding: 12, background: "#f7f8fa", borderRadius: 6 }}>
-            <label style={{ flex: 2, minWidth: 200 }}>
-              Назва
-              <input value={quick.name} onChange={(e) => setQuick({ ...quick, name: e.target.value })} autoFocus />
-            </label>
-            <label>
-              Штрихкод
-              <input value={quick.barcode} placeholder="авто" onChange={(e) => setQuick({ ...quick, barcode: e.target.value })} />
-            </label>
-            <label style={{ width: 110 }}>
-              Закупівля
-              <input inputMode="decimal" value={quick.cost} onChange={(e) => setQuick({ ...quick, cost: e.target.value })} />
-            </label>
-            <label style={{ width: 110 }}>
-              Ціна продажу
-              <input inputMode="decimal" value={quick.price} onChange={(e) => setQuick({ ...quick, price: e.target.value })} />
-            </label>
-            <button className="btn primary" disabled={pending} onClick={createQuick}>
-              Створити й додати
-            </button>
-            <button className="btn" onClick={() => setQuick(null)}>
-              Скасувати
-            </button>
-          </div>
+        {unknown !== undefined && (
+          <UnknownCode
+            key={unknown ?? "new"}
+            code={unknown}
+            supplierId={header.supplierId}
+            suppliers={suppliers}
+            currency={cur}
+            onCancel={() => {
+              setUnknown(undefined);
+              scanRef.current?.focus();
+            }}
+            onDone={(p, note) => {
+              setUnknown(undefined);
+              setMsg(note ? { type: "ok", text: note } : null);
+              addProduct(p);
+            }}
+          />
         )}
       </div>
 
@@ -299,9 +299,9 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             <tr>
               <th>Товар</th>
               <th style={{ width: 90 }}>К-сть</th>
-              <th style={{ width: 110 }}>Закупівля</th>
-              <th className="num">Сума</th>
-              <th style={{ width: 110 }}>Нова ціна</th>
+              <th style={{ width: 110 }}>Закупівля, {cur}</th>
+              <th className="num">Сума, {cur}</th>
+              <th style={{ width: 110 }}>Нова ціна, грн</th>
               <th style={{ width: 130 }}>Комірка</th>
               <th style={{ width: 40 }} />
             </tr>
@@ -321,7 +321,10 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                 <td>
                   <input inputMode="decimal" defaultValue={l.cost} onChange={(e) => update(l.key, { cost: n(e.target.value) })} />
                 </td>
-                <td className="num">{fmt(l.qty * l.cost)}</td>
+                <td className="num">
+                  {fmt(l.qty * l.cost)}
+                  {cur !== "UAH" && rate > 0 && <div className="muted small">{fmt(l.cost * rate)} грн/шт</div>}
+                </td>
                 <td>
                   <input
                     inputMode="decimal"
@@ -367,7 +370,11 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
 
       <div className="toolbar" style={{ marginTop: 14 }}>
         <span>
-          Позицій: <b>{lines.length}</b> · Штук: <b>{totalQty}</b> · Сума: <b>{fmt(total)} грн</b>
+          Позицій: <b>{lines.length}</b> · Штук: <b>{totalQty}</b> · Сума:{" "}
+          <b>
+            {fmt(total)} {cur === "UAH" ? "грн" : cur}
+          </b>
+          {cur !== "UAH" && rate > 0 && <span className="muted"> ≈ {fmt(total * rate)} грн</span>}
         </span>
         <span className="spacer" />
         <button className="btn" disabled={pending} onClick={save}>

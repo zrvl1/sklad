@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { syncFromYml } from "@/lib/sync";
 import { db } from "@/lib/db";
+import { ordersEnabled, syncOrders } from "@/lib/orders";
 import { logAction } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,9 @@ export async function GET(req: Request) {
     const r = await syncFromYml();
     // прибираємо старі записи спроб входу (старші за 90 днів)
     await db.loginAttempt.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 90 * 864e5) } } });
-    await logAction(null, "auto-sync", "products", null, r);
-    return Response.json({ ok: true, ...r });
+    const orders = ordersEnabled() ? await syncOrders() : null; // продажі для звітів
+    await logAction(null, "auto-sync", "products", null, { ...r, orders });
+    return Response.json({ ok: true, ...r, orders });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     await logAction(null, "auto-sync-error", "products", null, error);
