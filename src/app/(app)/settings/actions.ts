@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { MIN_PASSWORD, checkPassword, createSession, hashPassword, requireAdmin, requireUser } from "@/lib/auth";
+import { MIN_PASSWORD, checkPassword, createSession, hashPassword, requireUser, requirePerm } from "@/lib/auth";
 import { syncFromYml } from "@/lib/sync";
 import { logAction, str } from "@/lib/util";
 
@@ -13,7 +13,7 @@ const done = (msg: string) => {
 };
 
 export async function syncNow() {
-  const user = await requireUser();
+  const user = await requirePerm("sync");
   let message: string;
   try {
     const r = await syncFromYml();
@@ -26,7 +26,7 @@ export async function syncNow() {
 }
 
 export async function saveWarehouse(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("settings");
   const id = Number(formData.get("id")) || null;
   const name = str(formData.get("name"));
   if (!name) return done("Вкажіть назву складу");
@@ -38,7 +38,7 @@ export async function saveWarehouse(formData: FormData) {
 }
 
 export async function saveSupplier(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("receipts");
   const name = str(formData.get("name"));
   if (!name) return done("Вкажіть назву постачальника");
   const s = await db.supplier.upsert({
@@ -52,7 +52,7 @@ export async function saveSupplier(formData: FormData) {
 
 /** Масове створення комірок: префікс-стелаж-полиця, напр. A-01-1 … A-05-4 */
 export async function generateCells(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const warehouseId = Number(formData.get("warehouseId"));
   const prefix = (str(formData.get("prefix")) ?? "A").toUpperCase();
   const racks = Math.min(200, Math.max(1, Number(formData.get("racks")) || 1));
@@ -71,7 +71,7 @@ export async function generateCells(formData: FormData) {
 }
 
 export async function addCell(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const warehouseId = Number(formData.get("warehouseId"));
   const code = str(formData.get("code"))?.toUpperCase();
   if (!code) return done("Вкажіть код комірки");
@@ -85,7 +85,7 @@ export async function addCell(formData: FormData) {
 }
 
 export async function deleteCell(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("settings");
   const id = Number(formData.get("id"));
   await db.cell.delete({ where: { id } });
   await logAction(user.id, "delete", "cell", id);
@@ -93,14 +93,19 @@ export async function deleteCell(formData: FormData) {
 }
 
 export async function addUser(formData: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requirePerm("settings");
   const login = str(formData.get("login"));
   const name = str(formData.get("name"));
   const password = String(formData.get("password") ?? "");
   if (!login || !name || password.length < MIN_PASSWORD) return done(`Логін, ім'я і пароль (${MIN_PASSWORD}+ символів) обов'язкові`);
   if (await db.user.findUnique({ where: { login } })) return done("Такий логін уже є");
   const u = await db.user.create({
-    data: { login, name, role: String(formData.get("role") ?? "manager"), passwordHash: hashPassword(password) },
+    data: {
+      login,
+      name,
+      role: ["admin", "storekeeper", "manager"].includes(String(formData.get("role"))) ? String(formData.get("role")) : "manager",
+      passwordHash: hashPassword(password),
+    },
   });
   await logAction(admin.id, "create", "user", u.id);
   done(`Користувача ${name} створено`);
@@ -122,7 +127,7 @@ export async function changeOwnPassword(formData: FormData) {
 
 /** Адмін: заблокувати / розблокувати користувача або задати йому новий пароль */
 export async function manageUser(formData: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requirePerm("settings");
   const id = Number(formData.get("id"));
   const action = String(formData.get("action"));
   if (id === admin.id && action === "disable") return done("Помилка: не можна заблокувати самого себе");

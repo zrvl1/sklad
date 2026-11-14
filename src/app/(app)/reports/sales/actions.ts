@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { fetchStatuses, syncOrders } from "@/lib/orders";
 import { logAction, setSetting } from "@/lib/util";
 
 export async function refreshSales() {
-  const user = await requireUser();
+  const user = await requirePerm("reports");
   let msg: string;
   try {
     await fetchStatuses();
@@ -23,7 +23,7 @@ export async function refreshSales() {
 
 /** Які статуси заявок вважати продажем (напр. «Виконано», «Відправлено») */
 export async function saveSaleStatuses(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("settings");
   const ids = formData.getAll("status").map(Number).filter(Boolean);
   await setSetting("saleStatuses", JSON.stringify(ids));
   await logAction(user.id, "sale-statuses", "settings", null, ids);

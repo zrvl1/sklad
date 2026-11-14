@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, parseParams, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { applyTemplate } from "@/lib/templates";
 import { getSetting, logAction, str } from "@/lib/util";
@@ -14,7 +14,7 @@ const back = (msg: string) => {
 };
 
 export async function saveTemplate(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const id = Number(formData.get("id")) || null;
   const data = {
     name: str(formData.get("name")) ?? "Шаблон",
@@ -34,7 +34,7 @@ export async function saveTemplate(formData: FormData) {
 }
 
 export async function deleteTemplate(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const id = Number(formData.get("id"));
   await db.productTemplate.delete({ where: { id } });
   await logAction(user.id, "delete", "template", id);
@@ -46,7 +46,7 @@ export async function deleteTemplate(formData: FormData) {
  * і відправити зміни в SalesDrive. Лише коли YML віддає опис/характеристики (інакше не знаємо, що там уже є).
  */
 export async function applyToExisting(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const t = await db.productTemplate.findUniqueOrThrow({ where: { id: Number(formData.get("id")) } });
   if ((await getSetting("ymlHasDetails")) !== "1")
     return back("Помилка: спершу увімкніть у YML-експорті «Експортувати опис, фото та характеристики» і синхронізуйтесь");

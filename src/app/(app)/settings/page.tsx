@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
 import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, saveSupplier, saveWarehouse, syncNow } from "./actions";
@@ -24,6 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <h1>Налаштування</h1>
       {msg && <div className={`msg ${msg.startsWith("Помилка") ? "err" : "ok"}`}>{msg}</div>}
 
+      {can(user, "sync") && (
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>SalesDrive</h2>
         <p className="small">
@@ -41,7 +42,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </button>
         </form>
       </div>
+      )}
 
+      {isAdmin && (
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Склади</h2>
         <p className="small muted">
@@ -70,7 +73,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </form>
         )}
       </div>
+      )}
 
+      {can(user, "cells.edit") && (
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Комірки</h2>
         <form action={generateCells} className="row" style={{ marginBottom: 12 }}>
@@ -130,7 +135,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         ))}
       </div>
+      )}
 
+      {can(user, "receipts") && (
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Постачальники</h2>
         <div style={{ marginBottom: 10 }}>
@@ -147,6 +154,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <button className="btn sm">Додати</button>
         </form>
       </div>
+      )}
 
       {isAdmin && (
         <div className="panel">
@@ -154,7 +162,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {users.map((u) => (
             <div key={u.id} className="row small" style={{ marginBottom: 6 }}>
               <span style={{ minWidth: 220 }}>
-                {u.name} — {u.login} <span className="badge">{u.role}</span>{" "}
+                {u.name} — {u.login} <span className="badge">{ROLE_LABELS[u.role] ?? u.role}</span>{" "}
                 {!u.active && <span className="badge err">заблоковано</span>}
               </span>
               <form action={manageUser}>
@@ -175,9 +183,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <input name="login" placeholder="Логін" />
             <input name="password" type="password" placeholder="Пароль" />
             <select name="role" defaultValue="manager">
-              <option value="manager">менеджер</option>
-              <option value="storekeeper">комірник</option>
-              <option value="admin">адміністратор</option>
+              <option value="manager">менеджер (заявки й пакування)</option>
+              <option value="storekeeper">комірник (склад)</option>
+              <option value="admin">адміністратор (усе)</option>
             </select>
             <button className="btn sm">Додати</button>
           </form>
@@ -214,6 +222,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </div>
       )}
 
+      {isAdmin && (
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Журнал дій (останні 30)</h2>
         <div className="tablewrap">
@@ -232,6 +241,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </table>
         </div>
       </div>
+      )}
     </>
   );
 }

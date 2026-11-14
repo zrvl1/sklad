@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { can, requireUser, requirePerm } from "@/lib/auth";
 import { internalEan13 } from "@/lib/barcode";
 import { addCode, codeOwner, refreshSearch } from "@/lib/codes";
 import { isSalesDriveConfigured, parseParams, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
@@ -79,7 +79,7 @@ async function duplicateWarning(productId: number, barcode: string | null, sku: 
 }
 
 export async function saveProduct(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const id = Number(formData.get("id")) || null;
   const name = str(formData.get("name"));
   if (!name) throw new Error("Вкажіть назву товару");
@@ -193,7 +193,7 @@ export async function createProductQuick(input: {
   genBarcode?: boolean;
   genSku?: boolean;
 }) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   if (!input.name.trim()) return { ok: false as const, error: "Вкажіть назву" };
   const barcode = input.barcode?.trim() || null;
   const { barcodeProblem } = await import("@/lib/validate");
@@ -234,6 +234,9 @@ export async function createProductQuick(input: {
 /** Прив'язати відсканований невідомий код до існуючого товару (з приходу/інвентаризації) */
 export async function linkCode(input: { productId: number; code: string; type: "supplier" | "barcode"; supplierId: number | null }) {
   const user = await requireUser();
+  // прив'язувати коди може той, хто робить прихід/інвентаризацію/списання або редагує товари
+  if (!(["products.edit", "receipts", "inventory", "writeoffs"] as const).some((p) => can(user, p)))
+    return { ok: false as const, error: "Немає прав прив'язувати коди" };
   try {
     await addCode(input.productId, input.code, input.type, input.supplierId);
     await logAction(user.id, "add-code", "product", input.productId, input);
@@ -244,7 +247,7 @@ export async function linkCode(input: { productId: number; code: string; type: "
 }
 
 export async function addProductCode(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const productId = Number(formData.get("productId"));
   const code = String(formData.get("code") ?? "");
   const type = formData.get("type") === "barcode" ? "barcode" : "supplier";
@@ -260,7 +263,7 @@ export async function addProductCode(formData: FormData) {
 }
 
 export async function removeProductCode(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const id = Number(formData.get("id"));
   const c = await db.productCode.delete({ where: { id } });
   await refreshSearch(c.productId);
@@ -269,7 +272,7 @@ export async function removeProductCode(formData: FormData) {
 }
 
 export async function retryPush(formData: FormData) {
-  await requireUser();
+  await requirePerm("products.edit");
   const id = Number(formData.get("id"));
   const p = await db.product.findUniqueOrThrow({ where: { id }, select: { sdId: true } });
   // повтор для товару, створеного в нашому додатку (ID на W…), — з назвою; для товарів із CRM — без
@@ -279,7 +282,7 @@ export async function retryPush(formData: FormData) {
 }
 
 export async function addProductCell(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const productId = Number(formData.get("productId"));
   const cellId = Number(formData.get("cellId"));
   if (!cellId) return;
@@ -289,7 +292,7 @@ export async function addProductCell(formData: FormData) {
 }
 
 export async function removeProductCell(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const productId = Number(formData.get("productId"));
   const cellId = Number(formData.get("cellId"));
   await setCellQty({ productId, cellId, qty: 0, userId: user.id });
@@ -303,7 +306,7 @@ export async function removeProductCell(formData: FormData) {
  * і відправити в SalesDrive пачками по 100. Лише для адміністратора.
  */
 export async function bulkGenerate(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("products.edit");
   const what = String(formData.get("what")); // barcode | sku
   const products = await db.product.findMany({
     // картки-комплекти не потребують своїх кодів для складу — лише основні товари
@@ -333,7 +336,7 @@ export async function bulkGenerate(formData: FormData) {
 }
 
 export async function saveSkuSettings(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("products.edit");
   const { setSetting } = await import("@/lib/util");
   const prefix = (str(formData.get("prefix")) ?? "ART").toUpperCase().replace(/[^A-ZА-ЯІЇЄҐ0-9-]/g, "");
   const digits = Math.min(8, Math.max(3, Number(formData.get("digits")) || 4));
@@ -349,7 +352,7 @@ export async function saveSkuSettings(formData: FormData) {
  * Кожен видалений товар потрапляє в журнал «Видалені товари» із завданнями для сайтів (Prom, Horoshop…).
  */
 export async function deleteProducts(ids: number[], reason: string, force = false) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   if (user.role === "storekeeper") return { ok: false as const, error: "Видаляти товари може лише менеджер або адміністратор" };
   const products = await db.product.findMany({ where: { id: { in: ids }, deletedAt: null }, include: { stocks: true } });
   if (!products.length) return { ok: false as const, error: "Товари не знайдено" };
@@ -394,7 +397,7 @@ export async function deleteProductForm(formData: FormData) {
 
 /** Відновити помилково видалений товар: знову створюється в SalesDrive з усіма даними */
 export async function restoreProduct(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("products.edit");
   const deletedId = Number(formData.get("deletedId"));
   const d = await db.deletedProduct.findUniqueOrThrow({ where: { id: deletedId } });
   if (!d.productId) redirect(`/products/deleted?msg=${encodeURIComponent("Помилка: немає даних товару для відновлення")}`);
@@ -412,7 +415,7 @@ export async function restoreProduct(formData: FormData) {
  * scope: all — усім; nonean — лише тим, у кого штрихкод не є правильним EAN-13; empty — лише без штрихкоду.
  */
 export async function replaceBarcodes(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("products.edit");
   const scope = String(formData.get("scope"));
   if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "ЗАМІНИТИ")
     redirect(`/products/codes?msg=${encodeURIComponent("Помилка: для підтвердження впишіть слово ЗАМІНИТИ")}`);
@@ -458,7 +461,7 @@ export async function replaceBarcodes(formData: FormData) {
 
 /** Прив'язати картку-комплект до основного товару (за кодом основного: артикул/штрихкод/ID) */
 export async function linkKitForm(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const kitId = Number(formData.get("kitId"));
   const baseCode = String(formData.get("baseCode") ?? "").trim();
   const qty = num(formData.get("kitQty"), 1) || 1;
@@ -480,7 +483,7 @@ export async function linkKitForm(formData: FormData) {
 }
 
 export async function unlinkKit(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const kitId = Number(formData.get("kitId"));
   const back = String(formData.get("back") ?? `/products/${kitId}`);
   await db.product.update({ where: { id: kitId }, data: { baseProductId: null, kitQty: 1 } });
@@ -491,7 +494,7 @@ export async function unlinkKit(formData: FormData) {
 
 /** Застосувати знайдені за артикулом зв'язки (позначені галочками) */
 export async function applyKitLinks(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("products.edit");
   const { linkKit } = await import("@/lib/kits");
   let ok = 0;
   const errors: string[] = [];
@@ -506,4 +509,63 @@ export async function applyKitLinks(formData: FormData) {
   }
   await logAction(user.id, "link-kits", "products", null, { ok, errors: errors.length });
   redirect(`/products/kits?msg=${encodeURIComponent(`Прив'язано карток: ${ok}${errors.length ? `. Помилки: ${errors.slice(0, 3).join("; ")}` : ""}`)}`);
+}
+
+/**
+ * Створити картку для сайту (комплект) з основного товару: інша назва під модель/бренд, свій артикул і ціна.
+ * Опис, характеристики, категорія й виробник копіюються з основного — далі їх можна змінити в картці.
+ * У SalesDrive картка створюється як комплект із 1 шт основного товару (поле set).
+ */
+export async function createKitCard(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const baseId = Number(formData.get("baseId"));
+  const base = await db.product.findUniqueOrThrow({ where: { id: baseId } });
+  if (base.baseProductId) redirect(`/products/${baseId}?warn=${encodeURIComponent("Це сама картка-комплект — створюйте картки з основного товару")}`);
+  if (!base.sdId) redirect(`/products/${baseId}?warn=${encodeURIComponent("Основний товар ще не в SalesDrive")}`);
+  const name = str(formData.get("name"));
+  if (!name || name.length < 2) redirect(`/products/${baseId}?warn=${encodeURIComponent("Вкажіть назву картки")}`);
+
+  // артикул: вказаний або наступний вільний «ОСНОВНИЙ-N»
+  let sku = str(formData.get("sku"));
+  if (!sku && base.sku) {
+    for (let n = 1; n < 100; n++) {
+      if (!(await codeOwner(`${base.sku}-${n}`))) {
+        sku = `${base.sku}-${n}`;
+        break;
+      }
+    }
+  }
+  const errors = await validateCodes({ sku });
+  if (errors.length) redirect(`/products/${baseId}?warn=${encodeURIComponent(errors.join("; "))}`);
+  const price = num(formData.get("price"), base.price) || base.price;
+
+  const data = {
+    name,
+    sku,
+    price,
+    priceCurrency: base.priceCurrency,
+    cost: base.cost,
+    categoryName: base.categoryName,
+    categorySdId: base.categorySdId,
+    manufacturer: base.manufacturer,
+    supplierName: base.supplierName,
+    description: base.description,
+    params: base.params,
+    baseProductId: base.id,
+    kitQty: 1,
+  };
+  const created = await db.product.create({ data: { ...data, search: buildSearch(data) } });
+  const card = await finalizeNewProduct(created.id, { genBarcode: false, genSku: false });
+  let warn = "";
+  if (isSalesDriveConfigured()) {
+    try {
+      await sdUpdateProducts([productToSd(card, null, { withName: true, withPrice: true, withDetails: true, set: [{ id: base.sdId!, quantity: 1 }] })]);
+      await db.product.update({ where: { id: card.id }, data: { syncError: null, syncedAt: new Date() } });
+    } catch (e) {
+      warn = `Картку збережено в додатку, але SalesDrive не прийняв її: ${e instanceof Error ? e.message : e}`;
+      await db.product.update({ where: { id: card.id }, data: { syncError: warn } });
+    }
+  }
+  await logAction(user.id, "create-kit-card", "product", card.id, { baseId, name, sku });
+  redirect(`/products/${card.id}?saved=${warn ? 0 : 1}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`);
 }

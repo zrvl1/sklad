@@ -1,8 +1,53 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { dateTimeUa, getSetting, money } from "@/lib/util";
+import { can, requireUser } from "@/lib/auth";
+import { pickStatusIds } from "@/lib/picking";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
+  const { denied } = await searchParams;
+  const user = await requireUser();
+  const deniedMsg = denied ? <div className="msg warn">Цей розділ недоступний для вашої ролі.</div> : null;
+
+  // Менеджер заявок: лише робочі кнопки й черга на пакування, без сум і закупівель
+  if (!can(user, "costs")) {
+    const pick = await pickStatusIds();
+    const [toPack, packedToday] = await Promise.all([
+      pick.ids.length ? db.sdOrder.count({ where: { statusId: { in: pick.ids }, pack: null } }) : Promise.resolve(0),
+      db.orderPack.count({ where: { packedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
+    ]);
+    return (
+      <>
+        <h1>Привіт, {user.name}</h1>
+        {deniedMsg}
+        <div className="stats">
+          <div className="stat">
+            Чекають на пакування
+            <b>{toPack}</b>
+          </div>
+          <div className="stat">
+            Запаковано сьогодні
+            <b>{packedToday}</b>
+          </div>
+        </div>
+        <div className="toolbar">
+          <Link className="btn primary" href="/picking/pack">
+            📦 Пакування (скан ТТН)
+          </Link>
+          <Link className="btn" href="/picking">
+            Збирання замовлень
+          </Link>
+          <Link className="btn" href="/warehouse">
+            Де лежить товар
+          </Link>
+          <Link className="btn" href="/products">
+            Товари
+          </Link>
+        </div>
+      </>
+    );
+  }
+
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const [products, noBarcode, drafts, monthReceipts, syncErrors, lastSyncRaw, syncWarning, pendingDeleted] = await Promise.all([
     db.product.count({ where: { deletedAt: null } }),
@@ -19,6 +64,7 @@ export default async function Home() {
   return (
     <>
       <h1>Головна</h1>
+      {deniedMsg}
       {syncWarning && <div className="msg warn small">⚠ {syncWarning}</div>}
       {pendingDeleted > 0 && (
         <div className="msg warn">

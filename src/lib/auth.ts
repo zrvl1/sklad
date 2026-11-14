@@ -103,3 +103,49 @@ export async function requireAdmin() {
   if (user.role !== "admin") redirect("/");
   return user;
 }
+
+/**
+ * Права ролей.
+ * admin — усе.
+ * storekeeper (комірник) — склад: прихід, інвентаризація, списання, комірки, наліпки, збирання й пакування; без звітів,
+ *   налаштувань, створення/видалення товарів.
+ * manager (менеджер заявок) — збирання й пакування, пошук товару, комірки й опис для дзвінків; без закупівель,
+ *   собівартості, звітів і змін товарів.
+ */
+export type Perm =
+  | "products.edit" // створення, редагування, видалення товарів, коди, шаблони, комплекти, масові операції
+  | "costs" // бачити собівартість, закупівлі, маржу
+  | "receipts"
+  | "inventory"
+  | "writeoffs"
+  | "cells.edit"
+  | "labels"
+  | "picking"
+  | "packing"
+  | "reports"
+  | "sync"
+  | "settings";
+
+const ROLE_PERMS: Record<string, Perm[]> = {
+  admin: ["products.edit", "costs", "receipts", "inventory", "writeoffs", "cells.edit", "labels", "picking", "packing", "reports", "sync", "settings"],
+  storekeeper: ["costs", "receipts", "inventory", "writeoffs", "cells.edit", "labels", "picking", "packing", "sync"],
+  manager: ["labels", "picking", "packing"],
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  admin: "адміністратор",
+  storekeeper: "комірник (склад)",
+  manager: "менеджер (заявки й пакування)",
+};
+
+export function can(user: { role: string } | null | undefined, perm: Perm) {
+  if (!user) return false;
+  return (ROLE_PERMS[user.role] ?? []).includes(perm);
+}
+
+/** Для сторінок і серверних дій: немає права — на головну */
+export async function requirePerm(perm: Perm) {
+  const user = await requireUser();
+  if (!can(user, perm)) redirect("/?denied=1");
+  return user;
+}

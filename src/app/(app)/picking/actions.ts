@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { fetchStatuses, syncOrders } from "@/lib/orders";
 import { logAction, setSetting } from "@/lib/util";
 
 export async function refreshPicking() {
-  const user = await requireUser();
+  const user = await requirePerm("picking");
   let msg = "Заявки оновлено";
   try {
     await fetchStatuses();
@@ -22,7 +22,7 @@ export async function refreshPicking() {
 
 /** Статуси заявок, які треба збирати (напр. «Нове», «Підтверджено») */
 export async function savePickStatuses(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requirePerm("settings");
   const ids = formData.getAll("status").map(Number).filter(Boolean);
   await setSetting("pickStatuses", JSON.stringify(ids));
   await logAction(user.id, "pick-statuses", "settings", null, ids);

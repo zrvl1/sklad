@@ -23,7 +23,7 @@ type Row = {
 
 const fmt = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function ProductTable({ products }: { products: Row[] }) {
+export default function ProductTable({ products, canEdit = true, showCost = true }: { products: Row[]; canEdit?: boolean; showCost?: boolean }) {
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [tpl, setTpl] = useTemplate();
   const count = Object.keys(selected).length;
@@ -71,9 +71,11 @@ export default function ProductTable({ products }: { products: Row[] }) {
           🖨 Друкувати цінники ({Object.values(selected).reduce((a, b) => a + b, 0)})
         </button>
         <span className="spacer" />
-        <button className="btn danger" disabled={!count || pending} onClick={remove}>
-          Видалити вибрані ({count})
-        </button>
+        {canEdit && (
+          <button className="btn danger" disabled={!count || pending} onClick={remove}>
+            Видалити вибрані ({count})
+          </button>
+        )}
       </div>
       {err && <div className="msg err">{err}</div>}
       <div className="tablewrap">
@@ -88,7 +90,7 @@ export default function ProductTable({ products }: { products: Row[] }) {
               <th>Штрихкод</th>
               <th>Комірки</th>
               <th className="num">Залишок</th>
-              <th className="num">Собівартість</th>
+              {showCost && <th className="num">Собівартість</th>}
               <th className="num">Ціна</th>
               <th style={{ width: 90 }}>Цінників</th>
             </tr>
@@ -118,7 +120,7 @@ export default function ProductTable({ products }: { products: Row[] }) {
                 <td>{p.barcode ?? <span className="badge warn">немає</span>}</td>
                 <td>{p.cells || <span className="muted">—</span>}</td>
                 <td className="num">{p.stock}</td>
-                <td className="num">{fmt(p.cost)}</td>
+                {showCost && <td className="num">{fmt(p.cost)}</td>}
                 <td className="num">
                   <b>{fmt(p.price)}</b>
                 </td>

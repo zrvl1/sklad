@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { dateInput, dateTimeUa, dateUa, money } from "@/lib/util";
 import { getRates } from "@/lib/currency";
 import { listCategories } from "@/lib/templates";
+import { can, requireUser } from "@/lib/auth";
 import ReceiptEditor from "./ReceiptEditor";
 import { deleteReceipt } from "../actions";
 import PrintReceiptLabels from "./PrintReceiptLabels";
@@ -74,6 +75,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
           rates={rates}
           showCurrency={showCurrency}
           categories={categories}
+          canCreate={can(await requireUser(), "products.edit")}
         />
       </>
     );

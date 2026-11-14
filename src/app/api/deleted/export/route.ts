@@ -1,9 +1,11 @@
 import { db } from "@/lib/db";
-import { getUser } from "@/lib/auth";
+import { can, getUser } from "@/lib/auth";
 
 // CSV зі списком товарів, які треба прибрати на конкретному сайті (відкривається в Excel)
 export async function GET(req: Request) {
-  if (!(await getUser())) return new Response("unauthorized", { status: 401 });
+  const user = await getUser();
+  if (!user) return new Response("unauthorized", { status: 401 });
+  if (!can(user, "products.edit")) return new Response("forbidden", { status: 403 });
   const site = (new URL(req.url).searchParams.get("site") ?? "").slice(0, 50);
   const rows = await db.deletedProductSite.findMany({
     where: { site, status: "todo" },

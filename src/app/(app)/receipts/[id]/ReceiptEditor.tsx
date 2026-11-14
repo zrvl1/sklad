@@ -44,6 +44,7 @@ type Props = {
   rates: Record<string, number>; // курси з SalesDrive: гривень за 1 одиницю
   showCurrency: boolean;
   categories: string[];
+  canCreate: boolean;
 };
 
 const fmt = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -52,7 +53,7 @@ const n = (s: string) => {
   return Number.isFinite(v) ? v : 0;
 };
 
-export default function ReceiptEditor({ receiptId, initial, warehouses, suppliers, cells, rates, showCurrency, categories }: Props) {
+export default function ReceiptEditor({ receiptId, initial, warehouses, suppliers, cells, rates, showCurrency, categories, canCreate }: Props) {
   const router = useRouter();
   const [header, setHeader] = useState({
     date: initial.date,
@@ -280,9 +281,11 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           </div>
         )}
         <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
-          <button className="btn sm" onClick={() => setUnknown(null)}>
-            + Новий товар
-          </button>
+          {canCreate && (
+            <button className="btn sm" onClick={() => setUnknown(null)}>
+              + Новий товар
+            </button>
+          )}
           <span className="small muted">Комірка для нових рядків:</span>
           <select value={activeCellId ?? ""} onChange={(e) => setActiveCellId(e.target.value ? Number(e.target.value) : null)}>
             <option value="">—</option>
@@ -303,6 +306,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             suppliers={suppliers}
             currency={cur}
             categories={categories}
+            canCreate={canCreate}
             onCancel={() => {
               setUnknown(undefined);
               scanRef.current?.focus();

@@ -3,12 +3,14 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { searchProducts } from "@/lib/codes";
 import { placeProduct } from "./actions";
+import { can, requireUser } from "@/lib/auth";
 
 type SP = Promise<{ wh?: string; q?: string; msg?: string; err?: string }>;
 
 // Карта складу: де що лежить, пошук, нерозкладений товар
 export default async function WarehousePage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
+  const edit = can(await requireUser(), "cells.edit");
   const warehouses = await db.warehouse.findMany({ orderBy: { name: "asc" } });
   const wh = warehouses.find((w) => w.id === Number(sp.wh)) ?? warehouses.find((w) => w.isDefault) ?? warehouses[0];
   if (!wh) return <p>Спершу створіть склад у Налаштуваннях.</p>;
@@ -159,6 +161,7 @@ export default async function WarehousePage({ searchParams }: { searchParams: SP
                 <td className="num">{x.stock}</td>
                 <td className="num">{x.placed}</td>
                 <td>
+                  {edit ? (
                   <form action={placeProduct} className="row" style={{ gap: 6 }}>
                     <input type="hidden" name="productId" value={x.product.id} />
                     <select name="cellId" required defaultValue="">
@@ -174,6 +177,7 @@ export default async function WarehousePage({ searchParams }: { searchParams: SP
                     <input name="qty" type="number" step="any" defaultValue={x.stock - x.placed} style={{ width: 70 }} />
                     <button className="btn sm">OK</button>
                   </form>
+                  ) : null}
                 </td>
               </tr>
             ))}

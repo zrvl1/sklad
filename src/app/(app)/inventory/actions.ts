@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
@@ -12,7 +12,7 @@ import { linesToBase } from "@/lib/kits";
 export type InventoryLineInput = { productId: number; cellId: number | null; counted: number };
 
 export async function createInventory(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("inventory");
   const warehouseId =
     Number(formData.get("warehouseId")) || (await db.warehouse.findFirst({ where: { isDefault: true } }))?.id || (await db.warehouse.findFirst())?.id;
   if (!warehouseId) throw new Error("Спершу створіть склад");
@@ -25,7 +25,7 @@ export async function createInventory(formData: FormData) {
 }
 
 export async function saveInventory(id: number, note: string, lines: InventoryLineInput[]) {
-  const user = await requireUser();
+  const user = await requirePerm("inventory");
   const inv = await db.inventory.findUnique({ where: { id } });
   if (!inv || inv.status !== "draft") return { ok: false as const, error: "Документ уже проведено або не існує" };
   const clean = await linesToBase(lines.filter((l) => l.productId && l.counted >= 0)); // картки → основний товар
@@ -48,7 +48,7 @@ export async function saveInventory(id: number, note: string, lines: InventoryLi
  * zeroMissing — у перерахованих комірках обнулити товари, яких не відскановано (лише комірки, не залишок у CRM).
  */
 export async function postInventory(id: number, zeroMissing: boolean) {
-  const user = await requireUser();
+  const user = await requirePerm("inventory");
   const inv = await db.inventory.findUnique({ where: { id }, include: { lines: true, warehouse: true } });
   if (!inv) return { ok: false as const, error: "Документ не знайдено" };
   if (inv.status !== "draft") return { ok: false as const, error: "Документ уже проведено" };
@@ -167,7 +167,7 @@ export async function postInventory(id: number, zeroMissing: boolean) {
 }
 
 export async function deleteInventory(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("inventory");
   const id = Number(formData.get("id"));
   const inv = await db.inventory.findUnique({ where: { id } });
   if (inv?.status === "draft") {

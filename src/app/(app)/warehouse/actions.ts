@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { findByCode } from "@/lib/codes";
 import { moveBetweenCells, setCellQty } from "@/lib/stock";
 import { logAction, num } from "@/lib/util";
@@ -15,7 +15,7 @@ const back = (path: string, msg: string, ok = true) => {
 
 /** Сканування товару в комірку: +кількість */
 export async function placeByCode(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const cellId = Number(formData.get("cellId"));
   const code = String(formData.get("code") ?? "").trim();
   const qty = num(formData.get("qty"), 1) || 1;
@@ -36,7 +36,7 @@ export async function placeByCode(formData: FormData) {
 
 /** Розмістити нерозкладений товар (зі сторінки складу) */
 export async function placeProduct(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const productId = Number(formData.get("productId"));
   const cellId = Number(formData.get("cellId"));
   const qty = num(formData.get("qty"));
@@ -47,7 +47,7 @@ export async function placeProduct(formData: FormData) {
 }
 
 export async function moveProduct(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const productId = Number(formData.get("productId"));
   const fromCellId = Number(formData.get("fromCellId"));
   const toCellId = Number(formData.get("toCellId"));
@@ -64,7 +64,7 @@ export async function moveProduct(formData: FormData) {
 }
 
 export async function setQtyInCell(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("cells.edit");
   const productId = Number(formData.get("productId"));
   const cellId = Number(formData.get("cellId"));
   const qty = Math.max(0, num(formData.get("qty")));

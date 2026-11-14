@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { after } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { maybeAutoSync } from "@/lib/autosync";
 import { logout } from "../login/actions";
@@ -18,27 +18,33 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Link href="/">Головна</Link>
         <Link href="/warehouse">Склад і комірки</Link>
         <Link href="/products">Товари</Link>
-        <Link href="/products/kits">Комплекти (картки)</Link>
-        <Link href="/receipts">Прихід товару</Link>
-        <Link href="/writeoffs">Списання</Link>
-        <Link href="/picking">Збирання замовлень</Link>
-        <Link href="/inventory">Інвентаризація</Link>
-        <Link href="/products?print=1">Друк цінників</Link>
-        <Link href="/products/codes">Штрихкоди й артикули</Link>
-        <Link href="/products/templates">Шаблони опису</Link>
-        <Link href="/products/deleted">
-          Видалені товари{" "}
-          {pendingSites > 0 && (
-            <span className="badge warn" title="Треба прибрати на сайтах">
-              {pendingSites}
-            </span>
-          )}
-        </Link>
-        <Link href="/reports/sales">Звіт: продажі</Link>
-        <Link href="/reports">Звіт: приходи</Link>
-        <Link href="/settings">Налаштування</Link>
+        {can(user, "products.edit") && <Link href="/products/kits">Комплекти (картки)</Link>}
+        {can(user, "receipts") && <Link href="/receipts">Прихід товару</Link>}
+        {can(user, "writeoffs") && <Link href="/writeoffs">Списання</Link>}
+        {can(user, "picking") && <Link href="/picking">Збирання замовлень</Link>}
+        {can(user, "packing") && <Link href="/picking/pack">Пакування</Link>}
+        {can(user, "inventory") && <Link href="/inventory">Інвентаризація</Link>}
+        {can(user, "labels") && <Link href="/products?print=1">Друк цінників</Link>}
+        {can(user, "products.edit") && <Link href="/products/codes">Штрихкоди й артикули</Link>}
+        {can(user, "products.edit") && <Link href="/products/templates">Шаблони опису</Link>}
+        {can(user, "products.edit") && (
+          <Link href="/products/deleted">
+            Видалені товари{" "}
+            {pendingSites > 0 && (
+              <span className="badge warn" title="Треба прибрати на сайтах">
+                {pendingSites}
+              </span>
+            )}
+          </Link>
+        )}
+        {can(user, "reports") && <Link href="/reports/sales">Звіт: продажі</Link>}
+        {can(user, "reports") && <Link href="/reports">Звіт: приходи</Link>}
+        <Link href="/settings">{can(user, "settings") ? "Налаштування" : "Мій профіль"}</Link>
         <div className="bottom">
           <div>{user.name}</div>
+          <div className="small" style={{ opacity: 0.7 }}>
+            {ROLE_LABELS[user.role] ?? user.role}
+          </div>
           <form action={logout}>
             <button className="btn sm" style={{ marginTop: 6 }}>
               Вийти

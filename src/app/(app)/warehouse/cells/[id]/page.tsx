@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { dateTimeUa } from "@/lib/util";
 import { MOVE_TYPES } from "@/lib/labels";
 import { moveProduct, placeByCode, setQtyInCell } from "../../actions";
+import { can, requireUser } from "@/lib/auth";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ msg?: string; err?: string }> };
 
@@ -11,6 +12,7 @@ type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ msg?: st
 export default async function CellPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = await searchParams;
+  const edit = can(await requireUser(), "cells.edit");
   const cell = await db.cell.findUnique({
     where: { id: Number(id) },
     include: {
@@ -46,6 +48,7 @@ export default async function CellPage({ params, searchParams }: Props) {
       {sp.msg && <div className="msg ok">{sp.msg}</div>}
       {sp.err && <div className="msg err">{sp.err}</div>}
 
+      {edit ? (
       <form action={placeByCode} className="panel row">
         <input type="hidden" name="cellId" value={cell.id} />
         <label style={{ flex: 1, minWidth: 240 }}>
@@ -58,6 +61,7 @@ export default async function CellPage({ params, searchParams }: Props) {
         </label>
         <button className="btn primary">Додати</button>
       </form>
+      ) : null}
 
       <p className="small muted">
         Позицій: <b>{items.filter((x) => x.qty > 0).length}</b> · Штук: <b>{total}</b>
@@ -81,6 +85,7 @@ export default async function CellPage({ params, searchParams }: Props) {
                   <div className="muted small">{[x.product.sku, x.product.barcode].filter(Boolean).join(" · ")}</div>
                 </td>
                 <td>
+                  {edit ? (
                   <form action={setQtyInCell} className="row" style={{ gap: 6 }}>
                     <input type="hidden" name="productId" value={x.productId} />
                     <input type="hidden" name="cellId" value={cell.id} />
@@ -89,9 +94,12 @@ export default async function CellPage({ params, searchParams }: Props) {
                       ✓
                     </button>
                   </form>
+                  ) : (
+                    <b>{x.qty}</b>
+                  )}
                 </td>
                 <td>
-                  {x.qty > 0 && (
+                  {x.qty > 0 && edit && (
                     <form action={moveProduct} className="row" style={{ gap: 6 }}>
                       <input type="hidden" name="productId" value={x.productId} />
                       <input type="hidden" name="fromCellId" value={cell.id} />

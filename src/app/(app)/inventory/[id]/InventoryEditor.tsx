@@ -16,6 +16,7 @@ type Props = {
   cells: { id: number; code: string }[];
   suppliers: { id: number; name: string }[];
   categories: string[];
+  canCreate: boolean;
 };
 
 const keyOf = (productId: number, cellId: number | null) => `${productId}:${cellId ?? 0}`;
@@ -188,6 +189,7 @@ export default function InventoryEditor(props: Props) {
             supplierId={null}
             suppliers={props.suppliers}
             categories={props.categories}
+            canCreate={props.canCreate}
             onCancel={() => setUnknown(undefined)}
             onDone={(p, note) => {
               setUnknown(undefined);

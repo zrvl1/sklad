@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
@@ -12,7 +12,7 @@ import { linesToBase } from "@/lib/kits";
 export type WriteOffLineInput = { productId: number; qty: number; cellId: number | null };
 
 export async function createWriteOff(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("writeoffs");
   const warehouseId =
     Number(formData.get("warehouseId")) || (await db.warehouse.findFirst({ where: { isDefault: true } }))?.id || (await db.warehouse.findFirst())?.id;
   if (!warehouseId) throw new Error("Спершу створіть склад");
@@ -25,7 +25,7 @@ export async function createWriteOff(formData: FormData) {
 }
 
 export async function saveWriteOff(id: number, input: { reason: string; note: string; lines: WriteOffLineInput[] }) {
-  const user = await requireUser();
+  const user = await requirePerm("writeoffs");
   const w = await db.writeOff.findUnique({ where: { id } });
   if (!w || w.status !== "draft") return { ok: false as const, error: "Документ уже проведено або не існує" };
   const lines = await linesToBase(input.lines.filter((l) => l.productId && l.qty > 0)); // картки → основний товар
@@ -54,7 +54,7 @@ export async function saveWriteOff(id: number, input: { reason: string; note: st
  * відправка в SalesDrive → зменшення в комірках (вказаній або там, де лежить) → журнал руху.
  */
 export async function postWriteOff(id: number) {
-  const user = await requireUser();
+  const user = await requirePerm("writeoffs");
   const w = await db.writeOff.findUnique({ where: { id }, include: { lines: true, warehouse: true } });
   if (!w) return { ok: false as const, error: "Документ не знайдено" };
   if (w.status !== "draft") return { ok: false as const, error: "Документ уже проведено" };
@@ -148,7 +148,7 @@ export async function postWriteOff(id: number) {
 }
 
 export async function deleteWriteOff(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("writeoffs");
   const id = Number(formData.get("id"));
   const w = await db.writeOff.findUnique({ where: { id } });
   if (w?.status === "draft") {

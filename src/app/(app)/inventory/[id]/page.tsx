@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { dateTimeUa, money } from "@/lib/util";
 import InventoryEditor from "./InventoryEditor";
 import { listCategories } from "@/lib/templates";
+import { can, requireUser } from "@/lib/auth";
 import { deleteInventory } from "../actions";
 
 export default async function InventoryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -51,6 +52,7 @@ export default async function InventoryPage({ params }: { params: Promise<{ id: 
           cells={cells.map((c) => ({ id: c.id, code: c.code }))}
           suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
           categories={categories}
+          canCreate={can(await requireUser(), "products.edit")}
         />
       </>
     );

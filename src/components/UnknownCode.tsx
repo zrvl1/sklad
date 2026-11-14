@@ -24,11 +24,13 @@ export default function UnknownCode({
   suppliers,
   currency = "UAH",
   categories = [],
+  canCreate = true,
   onDone,
   onCancel,
 }: {
   currency?: string; // валюта закупівлі документа
   categories?: string[];
+  canCreate?: boolean; // створювати нові товари може лише адміністратор
   code: string | null;
   supplierId: number | null;
   suppliers: { id: number; name: string }[];
@@ -102,9 +104,13 @@ export default function UnknownCode({
             <button className={`btn sm ${mode === "link" ? "primary" : ""}`} onClick={() => setMode("link")}>
               Прив'язати до наявного товару
             </button>
-            <button className={`btn sm ${mode === "create" ? "primary" : ""}`} onClick={() => setMode("create")}>
-              Створити новий товар
-            </button>
+            {canCreate ? (
+              <button className={`btn sm ${mode === "create" ? "primary" : ""}`} onClick={() => setMode("create")}>
+                Створити новий товар
+              </button>
+            ) : (
+              <span className="muted small">Новий товар створює адміністратор — якщо це аналог наявного товару, прив&apos;яжіть код до нього</span>
+            )}
           </>
         )}
         <span className="spacer" />
@@ -147,7 +153,7 @@ export default function UnknownCode({
         </>
       )}
 
-      {mode === "create" && (
+      {mode === "create" && canCreate && (
         <div className="row">
           <datalist id="uc-categories">
             {categories.map((c) => (

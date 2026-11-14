@@ -31,6 +31,7 @@ export type SdProductPayload = {
   descriptionTranslate?: string;
   params?: ProductParam[];
   paramsMode?: "add" | "replace";
+  set?: { id: string; quantity: number }[]; // склад комплекту: ID товарів SalesDrive і кількість
 };
 
 export type ProductParam = { name: string; type: string; value: string };
@@ -73,10 +74,18 @@ function sdDate(d: Date | null) {
 export function productToSd(
   p: Product,
   stock?: { sdStockId: string | null; qty: number } | null,
-  opts: { withName?: boolean; withPrice?: boolean; withCost?: boolean; withDetails?: boolean; paramsMode?: "add" | "replace" } = {}
+  opts: {
+    withName?: boolean;
+    withPrice?: boolean;
+    withCost?: boolean;
+    withDetails?: boolean;
+    paramsMode?: "add" | "replace";
+    set?: { id: string; quantity: number }[];
+  } = {}
 ): SdProductPayload {
   if (!p.sdId) throw new Error(`У товару "${p.name}" немає ID для SalesDrive`);
   const payload: SdProductPayload = { id: p.sdId };
+  if (opts.set?.length) payload.set = opts.set;
   if (opts.withName) {
     // в обидва мовні поля (UA і RU) — для нових товарів або коли назву змінили
     payload.name = p.name;

@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { findOrderByScan, orderForPacking } from "@/lib/picking";
 import { ordersEnabled, syncOrders } from "@/lib/orders";
 import { logAction } from "@/lib/util";
 
 /** Скан ТТН (або номер заявки) → заявка з товарами для пакування */
 export async function loadOrderByScan(code: string) {
-  await requireUser();
+  await requirePerm("packing");
   let id = await findOrderByScan(code);
   // ТТН щойно створили в CRM, а ми ще не синхронізувались — пробуємо оновити заявки й шукаємо ще раз
   if (!id && ordersEnabled()) {
@@ -28,7 +28,7 @@ export async function loadOrderByScan(code: string) {
 
 /** Позначити заявку запакованою (лише в додатку) */
 export async function markPacked(orderId: number, scanned: Record<string, number>, checked: boolean) {
-  const user = await requireUser();
+  const user = await requirePerm("packing");
   await db.orderPack.upsert({
     where: { orderId },
     update: { packedAt: new Date(), packedBy: user.name, checked, scanned: JSON.stringify(scanned) },
@@ -41,7 +41,7 @@ export async function markPacked(orderId: number, scanned: Record<string, number
 
 /** Скасувати позначку «запаковано» (напр. перепакувати) */
 export async function unpack(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("packing");
   const orderId = Number(formData.get("orderId"));
   await db.orderPack.deleteMany({ where: { orderId } });
   await logAction(user.id, "unpack", "order", orderId);

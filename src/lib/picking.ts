@@ -42,6 +42,7 @@ export type PackLine = {
   qty: number;
   codes: string[]; // усі коди товару: штрихкод, артикул, додаткові — для перевірки сканером
   cells: string[];
+  physical: string | null; // для картки-комплекту: який фізичний товар брати (назва й артикул основного)
 };
 
 /** Заявка для екрана пакування: товари з усіма кодами й комірками */
@@ -77,6 +78,7 @@ export async function orderForPacking(orderId: number) {
       qty: l.qty,
       codes: [...new Set(codes)],
       cells: (b ?? p)?.cells.sort((x, y) => y.qty - x.qty).map((c) => c.cell.code) ?? [],
+      physical: b ? `${b.name} (${b.sku ?? b.barcode ?? "основний"})` : null,
     });
   }
   const statuses = await cachedStatuses();

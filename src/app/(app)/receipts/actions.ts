@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts, type SdProductPayload } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
 import { logAction } from "@/lib/util";
@@ -21,7 +21,7 @@ export type ReceiptInput = {
 };
 
 export async function createReceipt() {
-  const user = await requireUser();
+  const user = await requirePerm("receipts");
   const wh = (await db.warehouse.findFirst({ where: { isDefault: true } })) ?? (await db.warehouse.findFirst());
   if (!wh) throw new Error("Спочатку створіть склад у Налаштуваннях");
   const r = await db.receipt.create({
@@ -33,7 +33,7 @@ export async function createReceipt() {
 }
 
 export async function saveReceipt(id: number, input: ReceiptInput) {
-  const user = await requireUser();
+  const user = await requirePerm("receipts");
   const r = await db.receipt.findUnique({ where: { id } });
   if (!r) return { ok: false as const, error: "Документ не знайдено" };
   if (r.status !== "draft") return { ok: false as const, error: "Проведений документ змінювати не можна" };
@@ -90,7 +90,7 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
  * 4) лише після успіху фіксуємо у нашій базі (залишки, комірки, статус документа).
  */
 export async function postReceipt(id: number) {
-  const user = await requireUser();
+  const user = await requirePerm("receipts");
   const r = await db.receipt.findUnique({ where: { id }, include: { lines: true, warehouse: true } });
   if (!r) return { ok: false as const, error: "Документ не знайдено" };
   if (r.status !== "draft") return { ok: false as const, error: "Документ уже проведено" };
@@ -230,7 +230,7 @@ export async function postReceipt(id: number) {
 }
 
 export async function deleteReceipt(formData: FormData) {
-  const user = await requireUser();
+  const user = await requirePerm("receipts");
   const id = Number(formData.get("id"));
   const r = await db.receipt.findUnique({ where: { id } });
   if (r?.status === "draft") {

@@ -118,7 +118,8 @@ export default function PackStation() {
     beep(true);
     setScanned((s) => ({ ...s, [line.key]: have + 1 }));
     setFlash(line.key);
-    setMsg(null);
+    // картка-комплект: підтверджуємо, що наліпка основного товару — це правильний товар
+    setMsg(line.physical ? { type: "ok", text: `✓ Правильний товар: «${line.name}» — це ${line.physical}` } : null);
   };
 
   const totalNeed = order?.lines.reduce((s, l) => s + l.qty, 0) ?? 0;
@@ -195,6 +196,11 @@ export default function PackStation() {
                       {ok ? "✅ " : ""}
                       {l.name}
                       <div className="muted small">{l.sku ?? ""}</div>
+                      {l.physical && (
+                        <div className="small" style={{ color: "var(--accent)" }}>
+                          Фізично: {l.physical} — скануйте його наліпку
+                        </div>
+                      )}
                       {!l.productId && <div className="small" style={{ color: "var(--warn)" }}>⚠ товар не зіставлено — підтвердіть вручну</div>}
                     </td>
                     <td>{l.cells.join(", ") || "—"}</td>
