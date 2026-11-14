@@ -16,7 +16,10 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   const to = sp.to ? new Date(`${sp.to}T23:59:59`) : now;
   const enabled = ordersEnabled();
   const [statuses, saleStatusesRaw, lastSync] = await Promise.all([cachedStatuses(), getSetting("saleStatuses"), getSetting("lastOrderSync")]);
-  const saleStatuses: number[] = saleStatusesRaw ? JSON.parse(saleStatusesRaw) : [];
+  const savedSale: number[] = saleStatusesRaw ? JSON.parse(saleStatusesRaw) : [];
+  // якщо не налаштовано — рахуємо продажем статус «Продано» (поки посилку не отримали, це ще не продаж)
+  const autoSale = savedSale.length ? [] : statuses.filter((s) => /продан/i.test(s.name)).map((s) => s.id);
+  const saleStatuses: number[] = savedSale.length ? savedSale : autoSale;
   const statusFilter = saleStatuses.length ? { statusId: { in: saleStatuses } } : {};
 
   const [orders, lines] = await Promise.all([
@@ -257,7 +260,11 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
       {user.role === "admin" && statuses.length > 0 && (
         <form action={saveSaleStatuses} className="panel" style={{ marginTop: 16 }}>
           <h2 style={{ marginTop: 0 }}>Які статуси вважати продажем</h2>
-          <p className="muted small">Не позначено нічого — рахуються всі заявки, крім видалених.</p>
+          <p className="muted small">
+            {autoSale.length
+              ? "Зараз автоматично рахується статус «Продано». Можна обрати інші."
+              : "Не позначено нічого — рахуються всі заявки, крім видалених."}
+          </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
             {statuses.map((s) => (
               <label key={s.id} className="check">

@@ -1,0 +1,86 @@
+import { db } from "./db";
+import { cachedStatuses, normTtn } from "./orders";
+import { getSetting } from "./util";
+
+/**
+ * Статуси, у яких заявку треба збирати й пакувати.
+ * Якщо в Налаштуваннях збирання нічого не обрано — шукаємо статус «На відправку».
+ */
+export async function pickStatusIds(): Promise<{ ids: number[]; auto: boolean }> {
+  const raw = await getSetting("pickStatuses");
+  const saved: number[] = raw ? JSON.parse(raw) : [];
+  if (saved.length) return { ids: saved, auto: false };
+  const st = await cachedStatuses();
+  const auto = st.filter((s) => /на\s*відправ/i.test(s.name)).map((s) => s.id);
+  return { ids: auto, auto: true };
+}
+
+/** Знайти заявку за відсканованою ТТН або номером заявки */
+export async function findOrderByScan(raw: string) {
+  const code = normTtn(raw);
+  if (!code) return null;
+  const byTtn = await db.orderTtn.findUnique({ where: { ttn: code } });
+  if (byTtn) return byTtn.orderId;
+  // деякі сканери додають префікс/суфікс — шукаємо ТТН, що міститься в коді
+  if (code.length >= 10) {
+    const partial = await db.orderTtn.findFirst({ where: { OR: [{ ttn: { contains: code } }] } });
+    if (partial) return partial.orderId;
+  }
+  const n = Number(code);
+  if (Number.isInteger(n) && n > 0 && n < 2_000_000_000) {
+    const o = await db.sdOrder.findUnique({ where: { id: n }, select: { id: true } });
+    if (o) return o.id;
+  }
+  return null;
+}
+
+export type PackLine = {
+  key: string;
+  productId: number | null;
+  name: string;
+  sku: string | null;
+  qty: number;
+  codes: string[]; // усі коди товару: штрихкод, артикул, додаткові — для перевірки сканером
+  cells: string[];
+};
+
+/** Заявка для екрана пакування: товари з усіма кодами й комірками */
+export async function orderForPacking(orderId: number) {
+  const o = await db.sdOrder.findUnique({ where: { id: orderId }, include: { lines: true, ttns: true, pack: true } });
+  if (!o) return null;
+  const ids = o.lines.map((l) => l.productId).filter((x): x is number => x !== null);
+  const products = await db.product.findMany({
+    where: { id: { in: ids } },
+    include: { codes: { select: { code: true } }, cells: { where: { qty: { gt: 0 } }, include: { cell: true }, orderBy: { qty: "desc" } } },
+  });
+  const byId = new Map<number, (typeof products)[number]>(products.map((p) => [p.id, p]));
+  const merged = new Map<string, PackLine>();
+  for (const l of o.lines) {
+    const p = l.productId ? byId.get(l.productId) : undefined;
+    const key = l.productId ? `p${l.productId}` : `n${l.name}`;
+    const prev = merged.get(key);
+    if (prev) {
+      prev.qty += l.qty;
+      continue;
+    }
+    const codes = [p?.barcode, p?.sku, p?.sdId, ...(p?.codes.map((c) => c.code) ?? []), l.barcode, l.sku].filter((x): x is string => Boolean(x)).map((x) => x.trim().toUpperCase());
+    merged.set(key, {
+      key,
+      productId: l.productId,
+      name: p?.name ?? l.name,
+      sku: p?.sku ?? l.sku,
+      qty: l.qty,
+      codes: [...new Set(codes)],
+      cells: p?.cells.map((c) => c.cell.code) ?? [],
+    });
+  }
+  const statuses = await cachedStatuses();
+  return {
+    id: o.id,
+    status: statuses.find((s) => s.id === o.statusId)?.name ?? String(o.statusId),
+    ttns: o.ttns.map((t) => t.ttn),
+    amount: o.amount,
+    packed: o.pack ? { at: o.pack.packedAt.toISOString(), by: o.pack.packedBy, checked: o.pack.checked } : null,
+    lines: [...merged.values()],
+  };
+}

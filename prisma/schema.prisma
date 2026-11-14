@@ -299,6 +299,8 @@ model SdOrder {
   costAmount  Float         @default(0) // собівартість
   profit      Float         @default(0)
   lines       SdOrderLine[]
+  ttns        OrderTtn[]
+  pack        OrderPack?
 
   @@index([orderTime])
 }
@@ -400,4 +402,23 @@ model WriteOffLine {
   writeOff   WriteOff @relation(fields: [writeOffId], references: [id], onDelete: Cascade)
   product    Product  @relation(fields: [productId], references: [id])
   cell       Cell?    @relation(fields: [cellId], references: [id], onDelete: SetNull)
+}
+
+// Номери ТТН заявки (Нова пошта, Укрпошта…) — щоб знаходити замовлення скануванням наклейки
+model OrderTtn {
+  ttn     String  @id // нормалізований: без пробілів, великими літерами
+  orderId Int
+  order   SdOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// Пакування в додатку (у SalesDrive нічого не змінюється)
+model OrderPack {
+  orderId    Int      @id
+  packedAt   DateTime @default(now())
+  packedBy   String?
+  checked    Boolean  @default(true) // true — усі товари перевірено сканером; false — запаковано без перевірки
+  scanned    String?  // JSON: що й скільки відскановано
+  order      SdOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }

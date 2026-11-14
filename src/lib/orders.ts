@@ -22,6 +22,11 @@ async function sdGet(path: string, params: Record<string, string> = {}) {
   return JSON.parse(text);
 }
 
+/** Нормалізація номера ТТН: без пробілів і дефісів, великими літерами (NP: 14 цифр, Укрпошта: цифри або RR…UA) */
+export function normTtn(v: string) {
+  return v.replace(/[\s-]/g, "").toUpperCase();
+}
+
 export type SdStatus = { id: number; name: string; type: number };
 
 export async function fetchStatuses(): Promise<SdStatus[]> {
@@ -54,6 +59,16 @@ type RawProduct = { productId?: unknown; text?: unknown; sku?: unknown; barcode?
  */
 export async function syncOrders(initialDays = 90) {
   if (!ordersEnabled()) throw new Error("Не налаштовано SALESDRIVE_ORDERS_KEY");
+  // статуси потрібні для збирання і звітів — підтягуємо раз на добу або якщо їх ще немає
+  const stAt = await getSetting("sdStatusesAt");
+  if (!stAt || Date.now() - Number(stAt) > 864e5) {
+    try {
+      await fetchStatuses();
+      await setSetting("sdStatusesAt", String(Date.now()));
+    } catch {
+      /* немає права на статуси — не заважає */
+    }
+  }
   const last = await getSetting("lastOrderSync");
   const started = new Date();
   const filter: Record<string, string> = { "filter[statusId]": "__NOTDELETED__" };
@@ -102,10 +117,21 @@ export async function syncOrders(initialDays = 90) {
         costAmount: numOr0(o.costPriceAmount),
         profit: numOr0(o.profitAmount),
       };
+      // ТТН із даних доставки (номер відправлення — не персональні дані клієнта)
+      const ttns = [
+        ...new Set(
+          ((o.ord_delivery_data ?? []) as Record<string, unknown>[])
+            .flatMap((d) => [d.trackingNumber, d.parentTrackingNumber])
+            .filter((t): t is string | number => t !== null && t !== undefined && String(t).trim() !== "")
+            .map((t) => normTtn(String(t)))
+        ),
+      ];
       await db.$transaction([
         db.sdOrderLine.deleteMany({ where: { orderId: id } }),
         db.sdOrder.upsert({ where: { id }, update: data, create: { id, ...data } }),
         db.sdOrderLine.createMany({ data: lines.map((l) => ({ ...l, orderId: id })) }),
+        db.orderTtn.deleteMany({ where: { OR: [{ orderId: id }, { ttn: { in: ttns } }] } }),
+        db.orderTtn.createMany({ data: ttns.map((ttn) => ({ ttn, orderId: id })), skipDuplicates: true }),
       ]);
       saved++;
     }

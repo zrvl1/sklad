@@ -4,9 +4,11 @@ import { requireUser } from "@/lib/auth";
 import { cachedStatuses, ordersEnabled } from "@/lib/orders";
 import { dateTimeUa, getSetting } from "@/lib/util";
 import { refreshPicking, savePickStatuses } from "./actions";
+import { unpack } from "./pack/actions";
+import { pickStatusIds } from "@/lib/picking";
 import PrintButton from "./PrintButton";
 
-type SP = Promise<{ o?: string | string[]; msg?: string }>;
+type SP = Promise<{ o?: string | string[]; msg?: string; packed?: string }>;
 
 /**
  * Лист збирання: товари із заявок SalesDrive, згруповані за комірками й відсортовані маршрутом по складу.
@@ -16,19 +18,22 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
   const sp = await searchParams;
   const user = await requireUser();
   const enabled = ordersEnabled();
-  const [statuses, pickRaw, lastSync] = await Promise.all([cachedStatuses(), getSetting("pickStatuses"), getSetting("lastOrderSync")]);
-  const pick: number[] = pickRaw ? JSON.parse(pickRaw) : [];
+  const [statuses, pickSt, lastSync] = await Promise.all([cachedStatuses(), pickStatusIds(), getSetting("lastOrderSync")]);
+  const pick = pickSt.ids;
+  const showPacked = sp.packed === "1";
   const statusName = new Map(statuses.map((s) => [s.id, s.name]));
 
   const orders = pick.length
     ? await db.sdOrder.findMany({
-        where: { statusId: { in: pick }, orderTime: { gte: new Date(Date.now() - 30 * 864e5) } },
-        include: { lines: true },
+        // запаковані в додатку не показуємо (вони вже чекають на пошту)
+        where: { statusId: { in: pick }, orderTime: { gte: new Date(Date.now() - 30 * 864e5) }, ...(showPacked ? {} : { pack: null }) },
+        include: { lines: true, ttns: true, pack: true },
         orderBy: { orderTime: "asc" },
         take: 300,
       })
     : [];
-  const selected = sp.o ? ([] as string[]).concat(sp.o).map(Number).filter(Boolean) : orders.map((o) => o.id);
+  const packedCount = pick.length ? await db.sdOrder.count({ where: { statusId: { in: pick }, pack: { isNot: null } } }) : 0;
+  const selected = sp.o ? ([] as string[]).concat(sp.o).map(Number).filter(Boolean) : orders.filter((o) => !o.pack).map((o) => o.id);
   const chosen = orders.filter((o) => selected.includes(o.id));
 
   // Агрегуємо товари з обраних заявок
@@ -62,7 +67,7 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
   return (
     <>
       <div className="toolbar no-print">
-        <h1 style={{ margin: 0 }}>Лист збирання</h1>
+        <h1 style={{ margin: 0 }}>Збирання замовлень</h1>
         <span className="spacer" />
         <span className="muted small">Заявки оновлено: {lastSync ? dateTimeUa(new Date(lastSync)) : "ще ні"}</span>
         <form action={refreshPicking}>
@@ -70,6 +75,9 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
             ⟳ Оновити з SalesDrive
           </button>
         </form>
+        <Link className="btn primary" href="/picking/pack">
+          📦 Пакування (скан ТТН)
+        </Link>
         <PrintButton />
       </div>
       {sp.msg && <div className={`msg no-print ${sp.msg.startsWith("Помилка") ? "err" : "ok"}`}>{sp.msg}</div>}
@@ -78,7 +86,12 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
           Потрібен ключ SalesDrive для читання заявок (SALESDRIVE_ORDERS_KEY), як для звіту по продажах. Дані клієнтів додаток не зберігає.
         </div>
       )}
-      {enabled && !pick.length && <div className="msg warn">Оберіть унизу, які статуси заявок потрібно збирати.</div>}
+      {enabled && !pick.length && <div className="msg warn">Оберіть унизу, які статуси заявок потрібно збирати (напр. «На відправку»).</div>}
+      {pickSt.auto && pick.length > 0 && <p className="muted small no-print">Статус для збирання визначено автоматично: «На відправку». Змінити можна внизу.</p>}
+      <p className="small no-print">
+        Запаковано й чекає на пошту: <b>{packedCount}</b>{" "}
+        <Link href={showPacked ? "/picking" : "/picking?packed=1"}>{showPacked ? "сховати запаковані" : "показати запаковані"}</Link>
+      </p>
 
       {orders.length > 0 && (
         <form className="panel no-print">
@@ -87,12 +100,25 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px" }}>
             {orders.map((o) => (
-              <label key={o.id} className="check small">
-                <input type="checkbox" name="o" value={o.id} defaultChecked={selected.includes(o.id)} />№{o.id} · {statusName.get(o.statusId) ?? o.statusId} ·{" "}
-                {o.lines.reduce((s, l) => s + l.qty, 0)} шт
-              </label>
+              <span key={o.id} className="check small" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                <label className="check small">
+                  <input type="checkbox" name="o" value={o.id} defaultChecked={selected.includes(o.id)} />№{o.id} · {statusName.get(o.statusId) ?? o.statusId} ·{" "}
+                  {o.lines.reduce((s, l) => s + l.qty, 0)} шт{o.ttns.length ? ` · ТТН ${o.ttns[0]}` : " · без ТТН"}
+                </label>
+                {o.pack && (
+                  <>
+                    <span className="badge ok" title={`${o.pack.packedBy ?? ""} ${dateTimeUa(o.pack.packedAt)}`}>
+                      запаковано{o.pack.checked ? "" : " без перевірки"}
+                    </span>
+                    <button className="btn sm" formAction={unpack} name="orderId" value={o.id} title="Скасувати позначку">
+                      ↺
+                    </button>
+                  </>
+                )}
+              </span>
             ))}
           </div>
+          {showPacked && <input type="hidden" name="packed" value="1" />}
           <button className="btn sm" style={{ marginTop: 8 }} title="Сформувати лист лише для позначених заявок">
             Сформувати для позначених
           </button>
