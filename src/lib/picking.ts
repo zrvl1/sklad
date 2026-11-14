@@ -73,12 +73,12 @@ export async function orderForPacking(orderId: number) {
     merged.set(key, {
       key,
       productId: l.productId,
-      name: p?.name ?? l.name,
+      name: (p?.name ?? l.name) + (!b && p?.manufacturer ? ` [${p.manufacturer}]` : ""),
       sku: p?.sku ?? l.sku,
       qty: l.qty,
       codes: [...new Set(codes)],
       cells: (b ?? p)?.cells.sort((x, y) => y.qty - x.qty).map((c) => c.cell.code) ?? [],
-      physical: b ? `${b.name} (${b.sku ?? b.barcode ?? "основний"})` : null,
+      physical: b ? `${b.name}${b.manufacturer ? ` [${b.manufacturer}]` : ""} (${b.sku ?? b.barcode ?? "основний"})` : null,
     });
   }
   const statuses = await cachedStatuses();
