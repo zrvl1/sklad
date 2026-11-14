@@ -10,18 +10,18 @@ export default async function CodesPage({ searchParams }: { searchParams: Promis
   const user = await requireUser();
   const isAdmin = user.role === "admin";
   const [noBarcode, noSku, prefix, digits, dupBarcodes, dupSkus, supplierCodes] = await Promise.all([
-    db.product.count({ where: { OR: [{ barcode: null }, { barcode: "" }] } }),
-    db.product.count({ where: { OR: [{ sku: null }, { sku: "" }] } }),
+    db.product.count({ where: { deletedAt: null, OR: [{ barcode: null }, { barcode: "" }] } }),
+    db.product.count({ where: { deletedAt: null, OR: [{ sku: null }, { sku: "" }] } }),
     getSetting("skuPrefix"),
     getSetting("skuDigits"),
-    db.product.groupBy({ by: ["barcode"], where: { barcode: { not: null } }, _count: { _all: true }, having: { barcode: { _count: { gt: 1 } } } }),
-    db.product.groupBy({ by: ["sku"], where: { sku: { not: null } }, _count: { _all: true }, having: { sku: { _count: { gt: 1 } } } }),
+    db.product.groupBy({ by: ["barcode"], where: { barcode: { not: null }, deletedAt: null }, _count: { _all: true }, having: { barcode: { _count: { gt: 1 } } } }),
+    db.product.groupBy({ by: ["sku"], where: { sku: { not: null }, deletedAt: null }, _count: { _all: true }, having: { sku: { _count: { gt: 1 } } } }),
     db.productCode.count({ where: { type: "supplier" } }),
   ]);
   const dupCodes = [...dupBarcodes.map((d) => d.barcode!), ...dupSkus.map((d) => d.sku!)].filter(Boolean);
   const dupProducts = dupCodes.length
     ? await db.product.findMany({
-        where: { OR: [{ barcode: { in: dupCodes } }, { sku: { in: dupCodes } }] },
+        where: { deletedAt: null, OR: [{ barcode: { in: dupCodes } }, { sku: { in: dupCodes } }] },
         select: { id: true, name: true, sku: true, barcode: true },
         orderBy: { name: "asc" },
       })

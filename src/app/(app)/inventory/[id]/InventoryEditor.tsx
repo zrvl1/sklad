@@ -15,6 +15,7 @@ type Props = {
   stock: Record<number, number>; // залишок за обліком на момент відкриття
   cells: { id: number; code: string }[];
   suppliers: { id: number; name: string }[];
+  categories: string[];
 };
 
 const keyOf = (productId: number, cellId: number | null) => `${productId}:${cellId ?? 0}`;
@@ -178,6 +179,7 @@ export default function InventoryEditor(props: Props) {
             code={unknown}
             supplierId={null}
             suppliers={props.suppliers}
+            categories={props.categories}
             onCancel={() => setUnknown(undefined)}
             onDone={(p, note) => {
               setUnknown(undefined);

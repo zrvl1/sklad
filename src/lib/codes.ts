@@ -22,12 +22,12 @@ export async function findByCode(raw: string): Promise<FoundProduct[]> {
   const code = raw.trim();
   if (!code) return [];
   const direct = await db.product.findMany({
-    where: { OR: [{ barcode: code }, { sku: code }, { sdId: code }] },
+    where: { deletedAt: null, OR: [{ barcode: code }, { sku: code }, { sdId: code }] },
     select: productSelect,
     take: 5,
   });
   const viaCodes = await db.productCode.findMany({
-    where: { code },
+    where: { code, product: { deletedAt: null } },
     include: { product: { select: productSelect }, supplier: { select: { name: true } } },
     take: 5,
   });
@@ -51,7 +51,7 @@ export async function searchProducts(q: string, take = 20): Promise<FoundProduct
   const exact = await findByCode(q);
   if (exact.length) return exact;
   return db.product.findMany({
-    where: { search: { contains: q.trim().toLowerCase() } },
+    where: { deletedAt: null, search: { contains: q.trim().toLowerCase() } },
     select: productSelect,
     orderBy: { name: "asc" },
     take,

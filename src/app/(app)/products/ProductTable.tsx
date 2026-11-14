@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { deleteProducts } from "./actions";
 import TemplateSelect, { useTemplate } from "@/components/TemplateSelect";
 
 type Row = {
@@ -23,6 +25,22 @@ export default function ProductTable({ products }: { products: Row[] }) {
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [tpl, setTpl] = useTemplate();
   const count = Object.keys(selected).length;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  const remove = () => {
+    const ids = Object.keys(selected).map(Number);
+    const reason = prompt(`Видалити ${ids.length} товар(и) у SalesDrive і в додатку?\nВкажіть причину (необов'язково) і натисніть OK.`);
+    if (reason === null) return;
+    start(async () => {
+      const r = await deleteProducts(ids, reason);
+      if (!r.ok) return setErr(r.error);
+      setSelected({});
+      setErr(null);
+      router.refresh();
+    });
+  };
 
   const toggle = (id: number) =>
     setSelected((s) => {
@@ -49,7 +67,12 @@ export default function ProductTable({ products }: { products: Row[] }) {
         <button className="btn primary" disabled={!count} onClick={print}>
           🖨 Друкувати цінники ({Object.values(selected).reduce((a, b) => a + b, 0)})
         </button>
+        <span className="spacer" />
+        <button className="btn danger" disabled={!count || pending} onClick={remove}>
+          Видалити вибрані ({count})
+        </button>
       </div>
+      {err && <div className="msg err">{err}</div>}
       <div className="tablewrap">
         <table>
           <thead>

@@ -39,8 +39,7 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
 
   const lines = input.lines.filter((l) => l.productId && l.qty > 0);
   const currency = (input.currency || "UAH").toUpperCase();
-  const rates = await getRates();
-  const rate = currency === "UAH" ? 1 : rates[currency];
+  const rate = currency === "UAH" ? 1 : (await getRates())[currency];
   if (!rate) return { ok: false as const, error: `Немає курсу для ${currency}. Перевірте валюти в SalesDrive.` };
   const totalCurrency = Math.round(lines.reduce((s, l) => s + l.qty * l.cost, 0) * 100) / 100;
   const total = Math.round(totalCurrency * rate * 100) / 100;

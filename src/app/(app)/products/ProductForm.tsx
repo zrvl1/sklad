@@ -1,17 +1,26 @@
 import type { Product, Supplier } from "@prisma/client";
 import { dateInput } from "@/lib/util";
+import { parseParams } from "@/lib/salesdrive";
+import DetailsFields, { type ClientTemplate } from "@/components/DetailsFields";
 import { saveProduct } from "./actions";
 
 export default function ProductForm({
   product,
   suppliers,
+  templates = [],
+  categories = [],
   currencies = ["UAH"],
+  showCurrency = false,
 }: {
   product?: Product | null;
   suppliers: Supplier[];
+  templates?: ClientTemplate[];
+  categories?: string[];
   currencies?: string[];
+  showCurrency?: boolean;
 }) {
   const p = product;
+  const foreignCost = showCurrency && p?.costCurrency && p.costCurrency !== "UAH";
   return (
     <form action={saveProduct} className="panel">
       {p && <input type="hidden" name="id" value={p.id} />}
@@ -21,34 +30,38 @@ export default function ProductForm({
           <input name="name" defaultValue={p?.name} required autoFocus={!p} />
         </label>
         <label>
+          Категорія
+          <input name="categoryName" list="categories" defaultValue={p?.categoryName ?? ""} placeholder="оберіть або впишіть" autoComplete="off" />
+          <datalist id="categories">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        </label>
+        <label>
           Назва для документів
           <input name="nameForDocuments" defaultValue={p?.nameForDocuments ?? ""} />
         </label>
         <label>
-          Категорія
-          <input name="categoryName" defaultValue={p?.categoryName ?? ""} placeholder="як у SalesDrive" />
-        </label>
-        <label>
-          Ціна продажу{p?.priceCurrency && p.priceCurrency !== "UAH" ? `, ${p.priceCurrency}` : ", грн"}
+          Ціна продажу, грн
           <input name="price" inputMode="decimal" defaultValue={p?.price ?? ""} />
         </label>
         <label>
-          Собівартість
+          Собівартість{showCurrency ? "" : ", грн"}
           <span className="row" style={{ gap: 6 }}>
-            <input
-              name="cost"
-              inputMode="decimal"
-              defaultValue={p?.costCurrency && p.costCurrency !== "UAH" ? p.costOriginal ?? "" : p?.cost ?? ""}
-              style={{ width: 120 }}
-            />
-            <select name="costCurrency" defaultValue={p?.costCurrency ?? "UAH"}>
-              {[...new Set(["UAH", ...currencies])].map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            {p?.costCurrency && p.costCurrency !== "UAH" && <span className="muted small">= {p.cost} грн</span>}
+            <input name="cost" inputMode="decimal" defaultValue={foreignCost ? p?.costOriginal ?? "" : p?.cost ?? ""} style={{ width: 140 }} />
+            {showCurrency ? (
+              <select name="costCurrency" defaultValue={p?.costCurrency ?? "UAH"}>
+                {[...new Set(["UAH", ...currencies])].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input type="hidden" name="costCurrency" value="UAH" />
+            )}
+            {foreignCost && <span className="muted small">= {p?.cost} грн</span>}
           </span>
         </label>
         <label>
@@ -70,7 +83,7 @@ export default function ProductForm({
         </label>
         <label>
           Постачальник
-          <input name="supplierName" list="suppliers" defaultValue={p?.supplierName ?? ""} />
+          <input name="supplierName" list="suppliers" defaultValue={p?.supplierName ?? ""} autoComplete="off" />
           <datalist id="suppliers">
             {suppliers.map((s) => (
               <option key={s.id} value={s.name} />
@@ -83,7 +96,7 @@ export default function ProductForm({
         </label>
         <label>
           Артикул (SKU)
-          <input name="sku" defaultValue={p?.sku ?? ""} />
+          <input name="sku" defaultValue={p?.sku ?? ""} placeholder="свій або залиште порожнім" />
         </label>
         <label>
           Штрихкод
@@ -118,9 +131,18 @@ export default function ProductForm({
             ))}
           </select>
         </label>
+
+        <DetailsFields
+          description={p?.description ?? null}
+          params={parseParams(p?.params)}
+          templates={templates}
+          isNew={!p}
+          notLoaded={Boolean(p && p.description === null && p.params === null && p.sdId && !p.sdId.startsWith("W"))}
+        />
       </div>
       <div className="toolbar" style={{ marginTop: 16, marginBottom: 0 }}>
         <button className="btn primary">Зберегти і відправити в SalesDrive</button>
+        <span className="muted small">Відправляються лише змінені назва, ціна, собівартість, опис і характеристики.</span>
       </div>
     </form>
   );

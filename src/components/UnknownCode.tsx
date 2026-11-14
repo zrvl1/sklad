@@ -23,10 +23,12 @@ export default function UnknownCode({
   supplierId,
   suppliers,
   currency = "UAH",
+  categories = [],
   onDone,
   onCancel,
 }: {
   currency?: string; // валюта закупівлі документа
+  categories?: string[];
   code: string | null;
   supplierId: number | null;
   suppliers: { id: number; name: string }[];
@@ -38,7 +40,7 @@ export default function UnknownCode({
   const [found, setFound] = useState<Found[]>([]);
   const [type, setType] = useState<"supplier" | "barcode">(code && looksLikeBarcode(code) ? "barcode" : "supplier");
   const [sup, setSup] = useState<number | null>(supplierId);
-  const [form, setForm] = useState({ name: "", price: "", cost: "" });
+  const [form, setForm] = useState({ name: "", price: "", cost: "", category: "" });
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -63,6 +65,7 @@ export default function UnknownCode({
         price: n(form.price),
         cost: n(form.cost),
         costCurrency: currency,
+        categoryName: form.category,
         barcode: code && type === "barcode" ? code : undefined,
         supplierCode: code && type === "supplier" ? code : undefined,
         supplierId: sup,
@@ -146,9 +149,18 @@ export default function UnknownCode({
 
       {mode === "create" && (
         <div className="row">
+          <datalist id="uc-categories">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
           <label style={{ flex: 2, minWidth: 200 }}>
             Назва
             <input value={form.name} autoFocus onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <label style={{ width: 170 }}>
+            Категорія
+            <input list="uc-categories" value={form.category} placeholder="для шаблону опису" onChange={(e) => setForm({ ...form, category: e.target.value })} />
           </label>
           <label style={{ width: 110 }}>
             Закупівля, {currency}
@@ -163,7 +175,8 @@ export default function UnknownCode({
             Створити й додати
           </button>
           <span className="muted small" style={{ width: "100%" }}>
-            Артикул і штрихкод (якщо не вказано) згенеруються автоматично, товар одразу з'явиться в SalesDrive.
+            Артикул і штрихкод (якщо не вказано) згенеруються автоматично, опис і характеристики підставляться з шаблону категорії, товар одразу
+            з'явиться в SalesDrive.
           </span>
         </div>
       )}

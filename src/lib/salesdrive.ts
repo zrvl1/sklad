@@ -27,7 +27,23 @@ export type SdProductPayload = {
   stockBalance?: string;
   stockBalanceByStock?: Record<string, string>;
   category?: { id?: string; name?: string };
+  description?: string;
+  descriptionTranslate?: string;
+  params?: ProductParam[];
+  paramsMode?: "add" | "replace";
 };
+
+export type ProductParam = { name: string; type: string; value: string };
+
+export function parseParams(json: string | null | undefined): ProductParam[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? v.filter((x) => x && x.name).map((x) => ({ name: String(x.name), type: String(x.type || "text"), value: String(x.value ?? "") })) : [];
+  } catch {
+    return [];
+  }
+}
 
 function config() {
   const url = process.env.SALESDRIVE_URL?.replace(/\/+$/, "");
@@ -57,7 +73,7 @@ function sdDate(d: Date | null) {
 export function productToSd(
   p: Product,
   stock?: { sdStockId: string | null; qty: number } | null,
-  opts: { withName?: boolean; withPrice?: boolean; withCost?: boolean } = {}
+  opts: { withName?: boolean; withPrice?: boolean; withCost?: boolean; withDetails?: boolean; paramsMode?: "add" | "replace" } = {}
 ): SdProductPayload {
   if (!p.sdId) throw new Error(`У товару "${p.name}" немає ID для SalesDrive`);
   const payload: SdProductPayload = { id: p.sdId };
@@ -65,6 +81,20 @@ export function productToSd(
     // в обидва мовні поля (UA і RU) — для нових товарів або коли назву змінили
     payload.name = p.name;
     payload.nameTranslate = p.name;
+  }
+  if (opts.withDetails) {
+    // опис — в обидва мовні поля (як і назва); характеристики — повним списком із заміною
+    if (p.description !== null) {
+      payload.description = p.description;
+      payload.descriptionTranslate = p.description;
+    }
+    const params = parseParams(p.params).filter((x) => x.value.trim());
+    if (params.length) {
+      // порожній список не шлемо ніколи — щоб випадково не стерти характеристики в CRM
+      payload.params = params;
+      // replace — коли ми знаємо всі характеристики товару (прочитані з YML); add — коли не знаємо, щоб не стерти чужі
+      payload.paramsMode = opts.paramsMode ?? "replace";
+    }
   }
   if (opts.withPrice) {
     payload.costPerItem = String(p.price);
@@ -126,6 +156,26 @@ export async function sdUpdateProducts(products: SdProductPayload[]) {
   }
 }
 
+/** Видалити товари в SalesDrive (потрібне право «Товари: видалення») */
+export async function sdDeleteProducts(ids: string[]) {
+  const { url, key } = config();
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await fetch(`${url}/product-handler/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": key },
+      body: JSON.stringify({ form: key, action: "delete", product: ids.slice(i, i + 100).map((id) => ({ id })) }),
+      cache: "no-store",
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`SalesDrive відповів ${res.status}: ${text.slice(0, 300)}`);
+    let d: { success?: boolean; status?: string; error?: unknown; message?: string } | null = null;
+    try {
+      d = JSON.parse(text);
+    } catch {}
+    if (d && (d.success === false || d.status === "error" || d.error)) throw new Error(`SalesDrive: ${d.message ?? JSON.stringify(d.error ?? d).slice(0, 300)}`);
+  }
+}
+
 // ---------- Читання YML ----------
 
 export type YmlOffer = {
@@ -133,6 +183,8 @@ export type YmlOffer = {
   name: string;
   price: number;
   priceCurrency: string | null;
+  description: string | null | undefined; // undefined — у YML немає опису (вимкнено в експорті)
+  params: ProductParam[] | undefined;
   cost: number | null;
   sku: string | null;
   barcode: string | null;
@@ -163,6 +215,9 @@ function firstNum(...vals: (string | null)[]) {
   }
   return null;
 }
+
+// Службові «характеристики», які ми читаємо як окремі поля товару
+const SERVICE_PARAMS = new Set(["собівартість", "себестоимость", "sku", "артикул", "штрихкод", "штрих-код", "barcode", "виробник", "производитель"]);
 
 export const ymlParser = new XMLParser({
   ignoreAttributes: false,
@@ -199,6 +254,7 @@ export function parseYml(xml: string): YmlOffer[] {
     .map((o) => {
       const params = ((o.param ?? []) as Record<string, unknown>[]).map((p) => ({
         name: (text(p["@_name"] as Node) ?? "").toLowerCase(),
+        original: text(p["@_name"] as Node) ?? "",
         value: text(p as Node),
       }));
       const param = (...names: string[]) => params.find((p) => names.includes(p.name))?.value ?? null;
@@ -210,6 +266,8 @@ export function parseYml(xml: string): YmlOffer[] {
         name: text(o.name as Node) ?? text(o.model as Node) ?? "(без назви)",
         price: firstNum(text(o.price as Node)) ?? 0,
         priceCurrency: text(o.currencyId as Node)?.toUpperCase() ?? null,
+        description: "description" in o ? text(o.description as Node) : undefined,
+        params: "param" in o ? params.filter((p) => !SERVICE_PARAMS.has(p.name)).map((p) => ({ name: p.original, type: "text", value: p.value ?? "" })) : undefined,
         cost: firstNum(
           text(o.vendorprice as Node), // так SalesDrive передає собівартість
           text(o.cost_price as Node),

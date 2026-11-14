@@ -26,7 +26,7 @@ export default async function WarehousePage({ searchParams }: { searchParams: SP
       include: { products: { select: { qty: true } } },
       orderBy: { code: "asc" },
     }),
-    db.stockBalance.findMany({ where: { warehouseId: wh.id, qty: { gt: 0 } }, include: { product: true } }),
+    db.stockBalance.findMany({ where: { warehouseId: wh.id, qty: { gt: 0 }, product: { deletedAt: null } }, include: { product: true } }),
     db.productCell.groupBy({ by: ["productId"], where: { cell: { warehouseId: wh.id } }, _sum: { qty: true } }),
   ]);
   const placedMap = new Map(placed.map((p) => [p.productId, p._sum.qty ?? 0]));

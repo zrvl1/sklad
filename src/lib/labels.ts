@@ -23,4 +23,7 @@ export const MOVE_TYPES: Record<string, string> = {
   "cell-move": "Переміщення",
   "cell-adjust": "Коригування комірки",
   "sale-auto": "Продаж (автосписання з комірки)",
+  writeoff: "Списання",
 };
+
+export const WRITE_OFF_REASONS = ["Брак", "Втрата / нестача", "Пересорт", "Власні потреби", "Повернення постачальнику", "Подарунок / акція", "Інше"];

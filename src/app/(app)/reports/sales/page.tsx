@@ -67,7 +67,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
       where: { productId: { not: null }, order: { orderTime: { gte: since30 }, ...statusFilter } },
       _sum: { qty: true },
     }),
-    db.stockBalance.groupBy({ by: ["productId"], _sum: { qty: true } }),
+    db.stockBalance.groupBy({ by: ["productId"], where: { product: { deletedAt: null } }, _sum: { qty: true } }),
   ]);
   const stockMap = new Map<number, number>(stocks.map((s) => [s.productId, s._sum.qty ?? 0]));
   const soldMap = new Map<number, number>(sold30.map((s) => [s.productId!, s._sum.qty ?? 0]));

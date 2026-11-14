@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { dateTimeUa, dateUa, money } from "@/lib/util";
 import { MOVE_TYPES } from "@/lib/labels";
 import ProductForm from "../ProductForm";
-import { addProductCell, addProductCode, removeProductCell, removeProductCode, retryPush } from "../actions";
+import { productFormContext } from "@/lib/templates";
+import { addProductCell, addProductCode, deleteProductForm, removeProductCell, removeProductCode, retryPush } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -28,15 +29,15 @@ export default async function ProductPage({ params, searchParams }: Props) {
     },
   });
   if (!product) notFound();
-  const [suppliers, cells, sold30, currencies] = await Promise.all([
-    db.supplier.findMany({ orderBy: { name: "asc" } }),
+  const [ctx, cells, sold30] = await Promise.all([
+    productFormContext(),
     db.cell.findMany({ include: { warehouse: true }, orderBy: [{ warehouseId: "asc" }, { code: "asc" }] }),
     db.sdOrderLine.aggregate({
       where: { productId: product.id, order: { orderTime: { gte: new Date(Date.now() - 30 * 864e5) } } },
       _sum: { qty: true },
     }),
-    db.currency.findMany(),
   ]);
+  const suppliers = ctx.suppliers;
   const inCells = product.cells.reduce((s, c) => s + c.qty, 0);
   const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
 
@@ -53,6 +54,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </Link>
       </div>
 
+      {product.deletedAt && (
+        <div className="msg err">
+          Товар видалено {dateUa(product.deletedAt)}. <Link href="/products/deleted?show=all">Журнал видалених</Link>
+        </div>
+      )}
       {saved === "1" && <div className="msg ok">Збережено і відправлено в SalesDrive.</div>}
       {warn && <div className="msg warn">⚠ {warn}</div>}
       {product.syncError && (
@@ -88,7 +94,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      <ProductForm product={product} suppliers={suppliers} currencies={currencies.map((c) => c.code)} />
+      <ProductForm product={product} {...ctx} />
 
       <div className="grid2">
         <div className="panel">
@@ -184,6 +190,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
                 <td>
                   {m.docType === "receipt" && m.docId ? (
                     <Link href={`/receipts/${m.docId}`}>{MOVE_TYPES[m.type] ?? m.type}</Link>
+                  ) : m.docType === "writeoff" && m.docId ? (
+                    <Link href={`/writeoffs/${m.docId}`}>{MOVE_TYPES[m.type] ?? m.type}</Link>
                   ) : m.docType === "inventory" && m.docId ? (
                     <Link href={`/inventory/${m.docId}`}>{MOVE_TYPES[m.type] ?? m.type}</Link>
                   ) : (
@@ -259,6 +267,21 @@ export default async function ProductPage({ params, searchParams }: Props) {
           </div>
         </div>
       </div>
+      {!product.deletedAt && (
+        <form action={deleteProductForm} className="panel row" style={{ marginTop: 24, borderColor: "#f3c4c4" }}>
+          <input type="hidden" name="id" value={product.id} />
+          <b style={{ color: "var(--err)" }}>Видалити товар</b>
+          <input name="reason" placeholder="Причина (необов'язково)" style={{ flex: 1, minWidth: 200 }} />
+          <label className="check">
+            <input type="checkbox" required /> так, видалити і в SalesDrive
+          </label>
+          <button className="btn danger">Видалити</button>
+          <span className="muted small" style={{ width: "100%" }}>
+            Товар зникне з SalesDrive і з усіх списків. Історія зберігається, а в «Видалених товарах» з'явиться нагадування прибрати його на Prom і
+            Horoshop.
+          </span>
+        </form>
+      )}
     </>
   );
 }

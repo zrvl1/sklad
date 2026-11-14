@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { dateInput, dateTimeUa, dateUa, money } from "@/lib/util";
 import { getRates } from "@/lib/currency";
+import { listCategories } from "@/lib/templates";
 import ReceiptEditor from "./ReceiptEditor";
 import { deleteReceipt } from "../actions";
 import PrintReceiptLabels from "./PrintReceiptLabels";
@@ -25,11 +26,13 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
   if (!r) notFound();
 
   if (r.status === "draft") {
-    const [warehouses, suppliers, cells, rates] = await Promise.all([
+    const showCurrency = process.env.ENABLE_CURRENCY === "true";
+    const [warehouses, suppliers, cells, rates, categories] = await Promise.all([
       db.warehouse.findMany({ orderBy: { name: "asc" } }),
       db.supplier.findMany({ orderBy: { name: "asc" } }),
       db.cell.findMany({ orderBy: { code: "asc" } }),
-      getRates(),
+      showCurrency ? getRates() : Promise.resolve({ UAH: 1 } as Record<string, number>),
+      listCategories(),
     ]);
     return (
       <>
@@ -68,6 +71,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
           suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
           cells={cells.map((c) => ({ id: c.id, code: c.code, warehouseId: c.warehouseId }))}
           rates={rates}
+          showCurrency={showCurrency}
+          categories={categories}
         />
       </>
     );
@@ -96,10 +101,11 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
         <div>
           Накладна: <b>{r.invoiceNo ?? "—"}</b>
         </div>
-        <div>
-          Валюта: <b>{r.currency}</b>
-          {r.currency !== "UAH" && ` · курс ${r.rate} грн`}
-        </div>
+        {r.currency !== "UAH" && (
+          <div>
+            Валюта: <b>{r.currency}</b> · курс {r.rate} грн
+          </div>
+        )}
         <div>
           Створив: {r.createdBy.name}
         </div>
@@ -121,8 +127,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               <th>Штрихкод</th>
               <th>Комірка</th>
               <th className="num">К-сть</th>
-              <th className="num">Закупівля, {r.currency}</th>
-              <th className="num">Сума, {r.currency}</th>
+              <th className="num">Закупівля, {r.currency === "UAH" ? "грн" : r.currency}</th>
+              <th className="num">Сума, {r.currency === "UAH" ? "грн" : r.currency}</th>
               <th className="num">Нова ціна</th>
             </tr>
           </thead>

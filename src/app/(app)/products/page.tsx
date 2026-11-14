@@ -12,7 +12,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
   const q = (sp.q ?? "").trim().toLowerCase();
   const page = Math.max(1, Number(sp.page) || 1);
 
-  const where: Prisma.ProductWhereInput = {};
+  const where: Prisma.ProductWhereInput = { deletedAt: null };
   if (q) where.OR = [{ search: { contains: q } }, { barcode: q }];
   if (sp.nobarcode) where.AND = [{ OR: [{ barcode: null }, { barcode: "" }] }];
   if (sp.errors) where.syncError = { not: null };

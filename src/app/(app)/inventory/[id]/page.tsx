@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { dateTimeUa, money } from "@/lib/util";
 import InventoryEditor from "./InventoryEditor";
+import { listCategories } from "@/lib/templates";
 import { deleteInventory } from "../actions";
 
 export default async function InventoryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,10 +16,11 @@ export default async function InventoryPage({ params }: { params: Promise<{ id: 
 
   if (inv.status === "draft") {
     const ids = [...new Set(inv.lines.map((l) => l.productId))];
-    const [cells, stocks, suppliers] = await Promise.all([
+    const [cells, stocks, suppliers, categories] = await Promise.all([
       db.cell.findMany({ where: { warehouseId: inv.warehouseId }, orderBy: { code: "asc" } }),
       db.stockBalance.findMany({ where: { warehouseId: inv.warehouseId, productId: { in: ids } } }),
       db.supplier.findMany({ orderBy: { name: "asc" } }),
+      listCategories(),
     ]);
     return (
       <>
@@ -48,6 +50,7 @@ export default async function InventoryPage({ params }: { params: Promise<{ id: 
           stock={Object.fromEntries(stocks.map((s) => [s.productId, s.qty]))}
           cells={cells.map((c) => ({ id: c.id, code: c.code }))}
           suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+          categories={categories}
         />
       </>
     );

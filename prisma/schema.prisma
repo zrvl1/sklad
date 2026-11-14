@@ -27,6 +27,7 @@ model User {
   expenses     Expense[]
   inventories  Inventory[]
   moves        StockMove[]
+  writeOffs    WriteOff[]
 }
 
 // Склад (точка). sdStockId — ID складу в SalesDrive (Установки → ... → API).
@@ -42,6 +43,7 @@ model Warehouse {
   expenses  Expense[]
   inventories Inventory[]
   moves     StockMove[]
+  writeOffs WriteOff[]
 }
 
 model Supplier {
@@ -74,7 +76,10 @@ model Product {
   barcode          String?
   manufacturer     String?
   supplierName     String?
+  description      String?        // опис (HTML або текст), іде в SalesDrive
+  params           String?        // характеристики: JSON [{name, type, value}]
   search           String         @default("") // нижній регістр: назва + sku + штрихкод + ID, для пошуку
+  deletedAt        DateTime?      // видалено (у CRM або з додатку) — у списках не показується, історія зберігається
   syncedAt         DateTime?      // коли востаннє оновлено з SalesDrive
   syncError        String?        // остання помилка відправки в SalesDrive
   createdAt        DateTime       @default(now())
@@ -86,6 +91,7 @@ model Product {
   moves            StockMove[]
   inventoryLines   InventoryLine[]
   saleLines        SdOrderLine[]
+  writeOffLines    WriteOffLine[]
 
   @@index([barcode])
   @@index([sku])
@@ -115,6 +121,7 @@ model Cell {
   lines       ReceiptLine[]
   inventoryLines InventoryLine[]
   moves       StockMove[]
+  writeOffLines WriteOffLine[]
 
   @@unique([warehouseId, code])
 }
@@ -319,4 +326,78 @@ model Currency {
   code      String   @id
   rate      Float    // скільки гривень за 1 одиницю валюти
   updatedAt DateTime @updatedAt
+}
+
+// Шаблон заповнення нового товару: опис і характеристики за категорією (categoryName = null — для всіх)
+model ProductTemplate {
+  id           Int      @id @default(autoincrement())
+  name         String
+  categoryName String?  @unique
+  description  String?  // можна використовувати {name}, {sku}, {manufacturer}, {category}, {supplier}
+  params       String?  // JSON [{name, type, value}]
+  manufacturer String?
+  supplierName String?
+  updatedAt    DateTime @updatedAt
+}
+
+// Журнал видалених товарів: щоб не забути прибрати їх на Prom, Horoshop та інших сайтах
+model DeletedProduct {
+  id          Int                  @id @default(autoincrement())
+  productId   Int?
+  sdId        String?
+  name        String
+  sku         String?
+  barcode     String?
+  categoryName String?
+  price       Float    @default(0)
+  source      String               // app — видалено в додатку; crm — зник із SalesDrive
+  reason      String?
+  deletedById Int?
+  deletedAt   DateTime             @default(now())
+  sites       DeletedProductSite[]
+
+  @@index([deletedAt])
+}
+
+model DeletedProductSite {
+  id         Int            @id @default(autoincrement())
+  deletedId  Int
+  site       String         // назва сайту з Налаштувань (Prom, Horoshop…)
+  status     String         @default("todo") // todo — треба видалити | done — видалено | skip — не було на сайті
+  doneAt     DateTime?
+  doneBy     String?
+  deleted    DeletedProduct @relation(fields: [deletedId], references: [id], onDelete: Cascade)
+
+  @@unique([deletedId, site])
+  @@index([site, status])
+}
+
+// Списання: брак, втрата, пересорт, власні потреби, повернення постачальнику
+model WriteOff {
+  id          Int            @id @default(autoincrement())
+  number      String         @unique
+  date        DateTime       @default(now())
+  warehouseId Int
+  reason      String         @default("Брак")
+  note        String?
+  status      String         @default("draft") // draft | posted
+  total       Float          @default(0) // за собівартістю
+  createdById Int
+  postedAt    DateTime?
+  createdAt   DateTime       @default(now())
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  lines       WriteOffLine[]
+}
+
+model WriteOffLine {
+  id         Int      @id @default(autoincrement())
+  writeOffId Int
+  productId  Int
+  qty        Float
+  cost       Float    @default(0) // собівартість за одиницю на момент списання
+  cellId     Int?
+  writeOff   WriteOff @relation(fields: [writeOffId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+  cell       Cell?    @relation(fields: [cellId], references: [id], onDelete: SetNull)
 }

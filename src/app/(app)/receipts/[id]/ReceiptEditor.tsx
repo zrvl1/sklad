@@ -27,6 +27,8 @@ type Props = {
   suppliers: { id: number; name: string }[];
   cells: { id: number; code: string; warehouseId: number }[];
   rates: Record<string, number>; // курси з SalesDrive: гривень за 1 одиницю
+  showCurrency: boolean;
+  categories: string[];
 };
 
 const fmt = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -35,7 +37,7 @@ const n = (s: string) => {
   return Number.isFinite(v) ? v : 0;
 };
 
-export default function ReceiptEditor({ receiptId, initial, warehouses, suppliers, cells, rates }: Props) {
+export default function ReceiptEditor({ receiptId, initial, warehouses, suppliers, cells, rates, showCurrency, categories }: Props) {
   const router = useRouter();
   const [header, setHeader] = useState({
     date: initial.date,
@@ -208,6 +210,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             ))}
           </select>
         </label>
+        {showCurrency && (
         <label>
           Валюта закупівлі
           <span className="row" style={{ gap: 6 }}>
@@ -223,6 +226,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             )}
           </span>
         </label>
+        )}
         <label>
           № накладної постачальника
           <input value={header.invoiceNo} onChange={(e) => (setHeader({ ...header, invoiceNo: e.target.value }), touch())} />
@@ -280,6 +284,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             supplierId={header.supplierId}
             suppliers={suppliers}
             currency={cur}
+            categories={categories}
             onCancel={() => {
               setUnknown(undefined);
               scanRef.current?.focus();
@@ -299,8 +304,8 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             <tr>
               <th>Товар</th>
               <th style={{ width: 90 }}>К-сть</th>
-              <th style={{ width: 110 }}>Закупівля, {cur}</th>
-              <th className="num">Сума, {cur}</th>
+              <th style={{ width: 110 }}>Закупівля, {cur === "UAH" ? "грн" : cur}</th>
+              <th className="num">Сума, {cur === "UAH" ? "грн" : cur}</th>
               <th style={{ width: 110 }}>Нова ціна, грн</th>
               <th style={{ width: 130 }}>Комірка</th>
               <th style={{ width: 40 }} />
