@@ -22,11 +22,12 @@ export function dateInput(d: Date | null | undefined) {
 }
 
 export function dateUa(d: Date | null | undefined) {
-  return d ? d.toLocaleDateString("uk-UA") : "";
+  return d ? d.toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv" }) : "";
 }
 
 export function dateTimeUa(d: Date | null | undefined) {
-  return d ? d.toLocaleString("uk-UA", { dateStyle: "short", timeStyle: "short" }) : "";
+  // сервер працює в UTC — показуємо київський час
+  return d ? d.toLocaleString("uk-UA", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Kyiv" }) : "";
 }
 
 /** Рядок для пошуку: нижній регістр, щоб працював і для кирилиці */
