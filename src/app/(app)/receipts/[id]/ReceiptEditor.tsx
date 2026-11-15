@@ -339,7 +339,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                 <td>
                   {l.name}
                   <div className="muted small">
-                    {[l.sku, l.barcode].filter(Boolean).join(" · ")} · ціна зараз {fmt(l.price)}
+                    {[l.sku, l.barcode].filter(Boolean).join(" · ")}
                   </div>
                   {lineWarnings(l, rate || 1).map((w) => (
                     <div key={w} className="small" style={{ color: "var(--warn)" }}>
@@ -352,6 +352,9 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                 </td>
                 <td>
                   <input inputMode="decimal" defaultValue={l.cost} onChange={(e) => update(l.key, { cost: n(e.target.value) })} />
+                  <div className="muted small" title="Поточна собівартість товару">
+                    зараз {l.prevCost > 0 ? fmt(l.prevCost) : "—"}
+                  </div>
                 </td>
                 <td className="num">
                   {fmt(l.qty * l.cost)}
@@ -364,6 +367,21 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                     defaultValue={l.newPrice ?? ""}
                     onChange={(e) => update(l.key, { newPrice: e.target.value.trim() ? n(e.target.value) : null })}
                   />
+                  <div className="muted small" title="Поточна ціна продажу">
+                    зараз {fmt(l.price)}
+                  </div>
+                  {(() => {
+                    // націнка з новою закупівлею: на нову ціну (якщо вписали) або на поточну
+                    const sale = l.newPrice ?? l.price;
+                    const c = l.cost * (rate || 1);
+                    if (!(sale > 0) || !(c > 0)) return null;
+                    const m = Math.round(((sale - c) / sale) * 100);
+                    return (
+                      <div className="small" style={{ color: m < 15 ? "var(--err)" : m < 30 ? "var(--warn)" : "var(--ok)" }} title="Маржа: (ціна − закупівля) / ціна">
+                        маржа {m}% · {fmt(sale - c)} грн
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td>
                   <select value={l.cellId ?? ""} onChange={(e) => update(l.key, { cellId: e.target.value ? Number(e.target.value) : null })}>
