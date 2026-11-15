@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { setKitStocks } from "@/lib/kits";
 import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
@@ -112,6 +113,7 @@ export async function postWriteOff(id: number) {
             update: { qty: (cur.get(p.id) ?? 0) - (qty.get(p.id) ?? 0) },
             create: { productId: p.id, warehouseId: w.warehouseId, qty: 0 },
           });
+          await setKitStocks(tx, p.id, w.warehouseId, (cur.get(p.id) ?? 0) - (qty.get(p.id) ?? 0));
         }
         for (const l of w.lines) {
           // з якої комірки списуємо: вказаної, інакше — з тих, де лежить (спершу з найменших залишків)

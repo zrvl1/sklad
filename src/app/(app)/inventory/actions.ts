@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { setKitStocks } from "@/lib/kits";
 import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
@@ -111,6 +112,7 @@ export async function postInventory(id: number, zeroMissing: boolean) {
             update: { qty: newQty },
             create: { productId: p.id, warehouseId: inv.warehouseId, qty: newQty },
           });
+          await setKitStocks(tx, p.id, inv.warehouseId, newQty);
           if (Math.abs(diff) > 1e-9) {
             await tx.stockMove.create({
               data: { productId: p.id, warehouseId: inv.warehouseId, qty: diff, type: "inventory", docType: "inventory", docId: id, userId: user.id, note: "залишок у CRM" },

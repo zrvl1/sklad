@@ -167,3 +167,22 @@ export async function nextKitSkus(baseSku: string, count: number) {
   }
   return out;
 }
+
+type Tx = Pick<typeof db, "product" | "stockBalance">;
+
+/**
+ * Після зміни залишку основного товару (прихід, списання, інвентаризація) одразу перераховуємо залишок його карток
+ * у нашій базі так, як це робить SalesDrive: залишок основного / к-сть у картці. Інакше до наступної синхронізації
+ * картки показували б старе число.
+ */
+export async function setKitStocks(tx: Tx, baseId: number, warehouseId: number, baseQty: number) {
+  const kits = await tx.product.findMany({ where: { baseProductId: baseId, deletedAt: null }, select: { id: true, kitQty: true } });
+  for (const k of kits) {
+    const qty = Math.max(0, Math.floor(baseQty / (k.kitQty || 1)));
+    await tx.stockBalance.upsert({
+      where: { productId_warehouseId: { productId: k.id, warehouseId } },
+      update: { qty },
+      create: { productId: k.id, warehouseId, qty },
+    });
+  }
+}

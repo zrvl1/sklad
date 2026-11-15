@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { setKitStocks } from "@/lib/kits";
 import { requirePerm } from "@/lib/auth";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts, type SdProductPayload } from "@/lib/salesdrive";
 import { syncFromYml } from "@/lib/sync";
@@ -201,6 +202,7 @@ export async function postReceipt(id: number) {
         update: { qty: x.newQty },
         create: { productId: x.product.id, warehouseId: r.warehouseId, qty: x.newQty },
       });
+      await setKitStocks(tx, x.product.id, r.warehouseId, x.newQty);
       await tx.product.update({
         where: { id: x.product.id },
         data: {
