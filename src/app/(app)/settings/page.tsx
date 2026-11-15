@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
   const { msg } = await searchParams;
@@ -17,6 +18,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     isAdmin ? db.loginAttempt.findMany({ orderBy: { createdAt: "desc" }, take: 20 }) : Promise.resolve([]),
   ]);
   const costMethod = (await getSetting("costMethod")) ?? "avg";
+  const [promOnRaw, promLastRaw, promDryRaw, promLogRaw] = isAdmin
+    ? await Promise.all([getSetting("promEnabled"), getSetting("promLast"), getSetting("promDry"), getSetting("promLog")])
+    : [null, null, null, null];
+  const promOn = promOnRaw === "1";
+  type PromRes = { at: string; prom: number; matched: number; unmatched: number; changes: number; sent: number; errors: string[]; guard: boolean };
+  const promLast = promLastRaw ? (JSON.parse(promLastRaw) as PromRes) : null;
+  const promDry = promDryRaw
+    ? (JSON.parse(promDryRaw) as PromRes & { sample: { name: string | null; from: string; to: string }[]; unmatchedSample: string[] })
+    : null;
+  const promLog = promLogRaw ? (JSON.parse(promLogRaw) as { at: string; name: string | null; from: string; to: string }[]) : [];
   const sdDebugRaw = isAdmin ? await getSetting("lastSdResponse") : null;
   const sdDebug = sdDebugRaw ? (JSON.parse(sdDebugRaw) as { at: string; status: number; sent: string; response: string }) : null;
   const lastSync = lastSyncRaw ? (JSON.parse(lastSyncRaw) as { at: string; total: number; created: number; updated: number }) : null;
@@ -45,6 +56,76 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </button>
         </form>
       </div>
+      )}
+
+      {isAdmin && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Prom: швидке оновлення наявності</h2>
+          <p className="small muted">
+            Кожні 5 хвилин додаток бере залишки з SalesDrive і через API Prom змінює наявність і кількість лише тих товарів, де вона змінилась. Товари зі
+            статусом «під замовлення» / «очікується» не чіпаються. Імпорт YML на Prom працює як раніше. Запобіжник: якщо раптом багато товарів стає «немає
+            в наявності» — нічого не відправляється.
+          </p>
+          {!promConfigured() ? (
+            <div className="msg warn small">
+              Додайте у Vercel змінну <b>PROM_API_TOKEN</b> (токен Prom лише з доступом до товарів) і зробіть Redeploy.
+            </div>
+          ) : (
+            <>
+              <div className="toolbar">
+                <span>
+                  Стан: {promOn ? <span className="badge ok">увімкнено, кожні 5 хв</span> : <span className="badge">вимкнено</span>}
+                </span>
+                <form action={promTest}>
+                  <button className="btn sm">1. Перевірити (без відправки)</button>
+                </form>
+                <form action={promRunNow}>
+                  <button className="btn sm">2. Відправити зміни зараз</button>
+                </form>
+                <form action={promToggle}>
+                  <input type="hidden" name="on" value={promOn ? "0" : "1"} />
+                  <button className={`btn sm ${promOn ? "" : "primary"}`}>{promOn ? "Вимкнути автооновлення" : "3. Увімкнути автооновлення"}</button>
+                </form>
+              </div>
+              {promLast && (
+                <p className="small">
+                  Остання відправка: {dateTimeUa(new Date(promLast.at))} · зіставлено {promLast.matched} з {promLast.prom} · змін {promLast.changes} ·
+                  відправлено {promLast.sent}
+                  {promLast.guard && <span className="badge err"> спрацював запобіжник</span>}
+                  {promLast.errors.length > 0 && <span style={{ color: "var(--err)" }}> · помилки: {promLast.errors.slice(0, 3).join("; ")}</span>}
+                </p>
+              )}
+              {promDry && (
+                <details className="small">
+                  <summary>
+                    Перевірка {dateTimeUa(new Date(promDry.at))}: змінилося б {promDry.changes}, не зіставлено {promDry.unmatched}
+                  </summary>
+                  {promDry.sample.map((c, i) => (
+                    <div key={i}>
+                      {c.name}: {c.from} → <b>{c.to}</b>
+                    </div>
+                  ))}
+                  {promDry.unmatchedSample.length > 0 && (
+                    <p className="muted">
+                      Не знайдено в SalesDrive (за ID імпорту чи артикулом): {promDry.unmatchedSample.join("; ")}
+                      {promDry.unmatched > promDry.unmatchedSample.length ? "…" : ""}
+                    </p>
+                  )}
+                </details>
+              )}
+              {promLog.length > 0 && (
+                <details className="small">
+                  <summary>Останні зміни на Prom ({promLog.length})</summary>
+                  {promLog.map((c, i) => (
+                    <div key={i}>
+                      {dateTimeUa(new Date(c.at))} · {c.name}: {c.from} → {c.to}
+                    </div>
+                  ))}
+                </details>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {isAdmin && (

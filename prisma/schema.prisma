@@ -430,3 +430,18 @@ model OrderPack {
   scanned    String?  // JSON: що й скільки відскановано
   order      SdOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+
+// Товари на Prom (з API) і що там зараз стоїть — щоб відправляти лише зміни наявності
+model PromLink {
+  promId     String    @id // ID товару на Prom
+  externalId String?   // ID з файлу імпорту (= ID товару в SalesDrive)
+  sku        String?
+  name       String?
+  presence   String?   // available | not_available | order | waiting | service
+  qty        Int?      // quantity_in_stock на Prom
+  pushedAt   DateTime? // коли додаток востаннє змінив наявність
+  updatedAt  DateTime  @updatedAt
+
+  @@index([externalId])
+  @@index([sku])
+}

@@ -153,3 +153,47 @@ export async function saveCostMethod(formData: FormData) {
   await logAction(user.id, "cost-method", "settings", null, { costMethod: v });
   done(v === "avg" ? "Собівартість: середньозважена" : "Собівартість: ціна останньої закупівлі");
 }
+
+/** Prom: перевірка без відправки — що змінилося б */
+export async function promTest() {
+  const user = await requirePerm("settings");
+  const { promStockSync } = await import("@/lib/prom");
+  const { setSetting } = await import("@/lib/util");
+  let msg: string;
+  try {
+    const r = await promStockSync({ dryRun: true });
+    await setSetting("promDry", JSON.stringify(r));
+    msg = `Prom: товарів ${r.prom}, зіставлено ${r.matched}, не зіставлено ${r.unmatched}, змінилося б ${r.changes}${r.guard ? " — ⚠ запобіжник: забагато «немає в наявності»" : ""}`;
+  } catch (e) {
+    msg = `Помилка Prom: ${e instanceof Error ? e.message : e}`;
+  }
+  await logAction(user.id, "prom-test", "settings", null, msg);
+  done(msg);
+}
+
+/** Prom: відправити зміни зараз */
+export async function promRunNow() {
+  const user = await requirePerm("settings");
+  const { promStockSync } = await import("@/lib/prom");
+  let msg: string;
+  try {
+    const r = await promStockSync();
+    msg = r.guard
+      ? `⚠ Не відправлено: ${r.changes} змін, з них забагато «немає в наявності» — схоже на збій. Перевірте YML.`
+      : `Prom: відправлено ${r.sent} з ${r.changes}${r.errors.length ? `, помилок ${r.errors.length}` : ""}`;
+  } catch (e) {
+    msg = `Помилка Prom: ${e instanceof Error ? e.message : e}`;
+  }
+  await logAction(user.id, "prom-run", "settings", null, msg);
+  done(msg);
+}
+
+/** Prom: увімкнути/вимкнути автоматичне оновлення кожні 5 хвилин */
+export async function promToggle(formData: FormData) {
+  const user = await requirePerm("settings");
+  const { setSetting } = await import("@/lib/util");
+  const on = formData.get("on") === "1";
+  await setSetting("promEnabled", on ? "1" : "0");
+  await logAction(user.id, on ? "prom-on" : "prom-off", "settings", null);
+  done(on ? "Автооновлення наявності на Prom увімкнено (кожні 5 хв)" : "Автооновлення Prom вимкнено");
+}
