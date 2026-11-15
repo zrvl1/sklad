@@ -24,6 +24,7 @@ export const MOVE_TYPES: Record<string, string> = {
   "cell-move": "Переміщення",
   "cell-adjust": "Коригування комірки",
   "sale-auto": "Продаж (автосписання з комірки)",
+  "return-auto": "Відмова / повернення (назад у комірку)",
   writeoff: "Списання",
 };
 

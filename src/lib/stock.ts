@@ -55,7 +55,74 @@ export async function reconcileCells(warehouseId: number) {
       ])
     );
   }
-  return changes.length;
+  return changes.length + (await restoreCells(warehouseId, stock));
+}
+
+/**
+ * Залишок у SalesDrive знову зріс після автосписання з комірки (заявку-дубль поставили у «Відмову»,
+ * посилка повернулась і її поставили в «Повернення») — повертаємо кількість у ту саму комірку, звідки списали.
+ * Беремо лише автосписання за останні 30 днів і не більше, ніж тоді списали.
+ */
+async function restoreCells(warehouseId: number, stock: Map<number, number>) {
+  const since = new Date(Date.now() - 30 * 864e5);
+  type Mv = { productId: number; cellId: number | null; qty: number; type: string };
+  const moves: Mv[] = await db.stockMove.findMany({
+    where: { warehouseId, type: { in: ["sale-auto", "return-auto"] }, createdAt: { gte: since }, cellId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { productId: true, cellId: true, qty: true, type: true },
+  });
+  if (!moves.length) return 0;
+  const ids = [...new Set<number>(moves.map((m) => m.productId))].filter((id) => stock.has(id));
+  const cells: { productId: number; qty: number }[] = await db.productCell.findMany({
+    where: { productId: { in: ids }, cell: { warehouseId } },
+    select: { productId: true, qty: true },
+  });
+  const inCells = new Map<number, number>();
+  for (const c of cells) inCells.set(c.productId, (inCells.get(c.productId) ?? 0) + Math.max(0, c.qty));
+
+  const plan: { productId: number; cellId: number; qty: number }[] = [];
+  for (const productId of ids) {
+    let deficit = (stock.get(productId) ?? 0) - (inCells.get(productId) ?? 0);
+    if (deficit <= 1e-9) continue;
+    // скільки з кожної комірки автосписано і ще не повернуто
+    const own = moves.filter((m) => m.productId === productId);
+    const returned = new Map<number, number>();
+    for (const m of own) if (m.type === "return-auto") returned.set(m.cellId!, (returned.get(m.cellId!) ?? 0) + m.qty);
+    const open = new Map<number, number>();
+    for (const m of own) {
+      if (m.type !== "sale-auto") continue;
+      open.set(m.cellId!, (open.get(m.cellId!) ?? 0) - m.qty);
+    }
+    for (const [cellId, taken] of open) {
+      const can = taken - (returned.get(cellId) ?? 0);
+      if (can <= 1e-9 || deficit <= 1e-9) continue;
+      const qty = Math.min(can, deficit);
+      plan.push({ productId, cellId, qty });
+      deficit -= qty;
+    }
+  }
+  for (let i = 0; i < plan.length; i += 100) {
+    await db.$transaction(
+      plan.slice(i, i + 100).flatMap((x) => [
+        db.productCell.upsert({
+          where: { productId_cellId: { productId: x.productId, cellId: x.cellId } },
+          update: { qty: { increment: x.qty } },
+          create: { productId: x.productId, cellId: x.cellId, qty: x.qty },
+        }),
+        db.stockMove.create({
+          data: {
+            productId: x.productId,
+            warehouseId,
+            cellId: x.cellId,
+            qty: x.qty,
+            type: "return-auto",
+            note: "Залишок у SalesDrive зріс (відмова від заявки або повернення) — повернуто в комірку, звідки списали",
+          },
+        }),
+      ])
+    );
+  }
+  return plan.length;
 }
 
 /** Перемістити товар між комірками одного складу */
