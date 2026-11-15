@@ -22,7 +22,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   const saleStatuses: number[] = savedSale.length ? savedSale : autoSale;
   const statusFilter = saleStatuses.length ? { statusId: { in: saleStatuses } } : {};
 
-  const [orders, lines] = await Promise.all([
+  const [orders, lines, expenses] = await Promise.all([
     db.sdOrder.aggregate({
       where: { orderTime: { gte: from, lte: to }, ...statusFilter },
       _sum: { amount: true, costAmount: true, profit: true },
@@ -36,7 +36,11 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
         },
       },
     }),
+    db.expense.groupBy({ by: ["category"], where: { date: { gte: from, lte: to } }, _sum: { amount: true } }),
   ]);
+  const expTotal = expenses.reduce((s, e) => s + (e._sum.amount ?? 0), 0);
+  const gross = orders._sum.profit ?? 0;
+  const net = gross - expTotal;
 
   // По товарах: продажі карток-комплектів зводимо на основний (фізичний) товар, у штуках основного
   const byProduct = new Map<string, { id: number | null; name: string; category: string; qty: number; revenue: number; cost: number; cards: number }>();
@@ -162,6 +166,62 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
             {orders._sum.amount ? Math.round(((orders._sum.profit ?? 0) / orders._sum.amount) * 100) : 0}% від виручки
           </span>
         </div>
+      </div>
+
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Чистий прибуток за період</h2>
+        <table className="small" style={{ maxWidth: 520 }}>
+          <tbody>
+            <tr>
+              <td>Виручка</td>
+              <td className="num">{money(orders._sum.amount)}</td>
+            </tr>
+            <tr>
+              <td>− Собівартість проданого</td>
+              <td className="num">{money(orders._sum.costAmount)}</td>
+            </tr>
+            <tr>
+              <td>
+                <b>= Валовий прибуток</b>
+              </td>
+              <td className="num">
+                <b>{money(gross)}</b>
+              </td>
+            </tr>
+            {expenses
+              .sort((a, b) => (b._sum.amount ?? 0) - (a._sum.amount ?? 0))
+              .map((e) => (
+                <tr key={e.category}>
+                  <td>− {e.category}</td>
+                  <td className="num">{money(e._sum.amount)}</td>
+                </tr>
+              ))}
+            {expenses.length === 0 && (
+              <tr>
+                <td colSpan={2} className="muted">
+                  − Витрат за період не внесено. <Link href="/reports/expenses">Внести рекламу й інші витрати</Link>
+                </td>
+              </tr>
+            )}
+            <tr>
+              <td>
+                <b>= Чистий прибуток</b>
+              </td>
+              <td className="num">
+                <b style={{ color: net < 0 ? "#b91c1c" : undefined }}>{money(net)}</b>
+              </td>
+            </tr>
+            {orders._count > 0 && expTotal > 0 && (
+              <tr>
+                <td className="muted">Витрати на 1 продаж</td>
+                <td className="num muted">{money(expTotal / orders._count)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <p className="muted small" style={{ marginBottom: 0 }}>
+          Закупівлі сюди не входять: товар стає витратою, коли проданий (собівартість у заявці). Скільки грошей пішло на закупівлі — «Звіт: приходи».
+        </p>
       </div>
 
       <h2>Топ товарів</h2>

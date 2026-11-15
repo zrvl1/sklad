@@ -144,3 +144,12 @@ export async function manageUser(formData: FormData) {
     return done("Пароль користувача змінено");
   }
 }
+
+/** Метод собівартості при проведенні приходу */
+export async function saveCostMethod(formData: FormData) {
+  const user = await requirePerm("costs");
+  const v = formData.get("costMethod") === "last" ? "last" : "avg";
+  await db.setting.upsert({ where: { key: "costMethod" }, update: { value: v }, create: { key: "costMethod", value: v } });
+  await logAction(user.id, "cost-method", "settings", null, { costMethod: v });
+  done(v === "avg" ? "Собівартість: середньозважена" : "Собівартість: ціна останньої закупівлі");
+}

@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
   const { msg } = await searchParams;
@@ -16,6 +16,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     db.actionLog.findMany({ orderBy: { createdAt: "desc" }, take: 30, include: { user: true } }),
     isAdmin ? db.loginAttempt.findMany({ orderBy: { createdAt: "desc" }, take: 20 }) : Promise.resolve([]),
   ]);
+  const costMethod = (await getSetting("costMethod")) ?? "avg";
   const sdDebugRaw = isAdmin ? await getSetting("lastSdResponse") : null;
   const sdDebug = sdDebugRaw ? (JSON.parse(sdDebugRaw) as { at: string; status: number; sent: string; response: string }) : null;
   const lastSync = lastSyncRaw ? (JSON.parse(lastSyncRaw) as { at: string; total: number; created: number; updated: number }) : null;
@@ -137,6 +138,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         ))}
       </div>
+      )}
+
+      {can(user, "costs") && (
+        <form action={saveCostMethod} className="panel">
+          <h2 style={{ marginTop: 0 }}>Собівартість при приході</h2>
+          <label className="check">
+            <input type="radio" name="costMethod" value="avg" defaultChecked={costMethod !== "last"} /> <b>Середньозважена</b> (рекомендовано): залишок за
+            старою ціною + новий прихід за новою. 2 шт по 100 + 3 шт по 150 → 130 грн
+          </label>
+          <label className="check">
+            <input type="radio" name="costMethod" value="last" defaultChecked={costMethod === "last"} /> Ціна останньої закупівлі: усі штуки → 150 грн
+          </label>
+          <p className="small muted">
+            Собівартість іде в SalesDrive, а він записує її в кожну заявку на момент продажу — з неї рахується маржа в CRM і в «Звіт: продажі».
+          </p>
+          <button className="btn sm">Зберегти</button>
+        </form>
       )}
 
       {can(user, "receipts") && (

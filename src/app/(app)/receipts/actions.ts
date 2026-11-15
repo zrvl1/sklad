@@ -125,11 +125,12 @@ export async function postReceipt(id: number) {
   }
 
   // Згортаємо однакові товари в один рядок
+  // (ціна закупівлі одного товару в кількох рядках — середньозважена)
   const agg = new Map<number, { qty: number; cost: number; newPrice: number | null }>();
   for (const l of r.lines) {
     const a = agg.get(l.productId) ?? { qty: 0, cost: l.cost, newPrice: null };
+    a.cost = a.qty + l.qty > 0 ? (a.cost * a.qty + l.cost * l.qty) / (a.qty + l.qty) : l.cost;
     a.qty += l.qty;
-    a.cost = l.cost;
     if (l.newPrice !== null && l.newPrice > 0) a.newPrice = l.newPrice;
     agg.set(l.productId, a);
   }
@@ -145,9 +146,17 @@ export async function postReceipt(id: number) {
   if (kitLines.length)
     return { ok: false as const, error: `У документі є картки-комплекти (${kitLines.map((p) => p.sku ?? p.name).join(", ")}). Натисніть «Зберегти» — вони заміняться основним товаром.` };
   const curQty = new Map<number, number>(stocks.map((s) => [s.productId, s.qty]));
+  // Метод собівартості: avg — середньозважена (старий залишок за старою ціною + новий за новою), last — ціна останньої закупівлі
+  const costMethod = ((await db.setting.findUnique({ where: { key: "costMethod" } }))?.value ?? "avg") as "avg" | "last";
 
   const plan = products.map((p) => {
     const a = agg.get(p.id)!;
+    const old = Math.max(0, curQty.get(p.id) ?? 0);
+    // у валюті документа: старий залишок рахуємо у валюті лише якщо собівартість товару вже в цій валюті
+    const oldCost = r.currency === "UAH" ? p.cost : p.costCurrency === r.currency ? p.costOriginal : null;
+    const unit =
+      costMethod === "avg" && old > 0 && oldCost !== null && oldCost > 0 ? (old * oldCost + a.qty * a.cost) / (old + a.qty) : a.cost;
+    a.cost = Math.round(unit * 100) / 100;
     return {
       // собівартість: у валюті приходу (SalesDrive сам перерахує в гривню) + у гривні для наших звітів
       product: {
