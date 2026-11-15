@@ -12,7 +12,9 @@ export default function CodeInput({
   defaultValue,
   productId,
   placeholder,
+  generate = false,
 }: {
+  generate?: boolean; // кнопка «створити» — підставляє наступний вільний код (артикул за шаблоном або штрихкод 200…)
   name: string;
   kind: "barcode" | "sku";
   defaultValue?: string | null;
@@ -41,9 +43,27 @@ export default function CodeInput({
     return () => clearTimeout(t);
   }, [value, kind, productId, defaultValue]);
 
+  const [busy, setBusy] = useState(false);
+  const gen = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/products/next-code?kind=${kind}`);
+      if (res.ok) setValue((await res.json()).code ?? "");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
-      <input ref={ref} name={name} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoComplete="off" />
+      <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+        <input ref={ref} name={name} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoComplete="off" style={{ flex: 1, minWidth: 0 }} />
+        {generate && (
+          <button type="button" className="btn sm" onClick={gen} disabled={busy} title={kind === "sku" ? "Наступний вільний артикул за шаблоном" : "Новий внутрішній штрихкод 200…"}>
+            {kind === "sku" ? "↻ наступний" : "＋ створити"}
+          </button>
+        )}
+      </span>
       {state?.owner && (
         <span style={{ color: "var(--err)", fontSize: 12 }}>
           ⛔ Уже є в товару{" "}

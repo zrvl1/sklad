@@ -12,6 +12,7 @@ import { moneyProblem, validateCodes } from "@/lib/validate";
 import { setCellQty } from "@/lib/stock";
 import { buildSearch, getSetting, logAction, num, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
+import { nextSku } from "@/lib/nextcodes";
 
 /** Характеристики як стабільний JSON (для порівняння "чи змінилося") */
 function normParams(json: string) {
@@ -33,22 +34,6 @@ export async function pushProduct(productId: number, opts: PushOpts) {
     const error = e instanceof Error ? e.message : String(e);
     await db.product.update({ where: { id: p.id }, data: { syncError: error } });
     return { ok: false as const, error };
-  }
-}
-
-/** Наступний вільний артикул за префіксом із Налаштувань, напр. CM0471 */
-async function nextSku() {
-  const prefix = (await getSetting("skuPrefix")) ?? "ART";
-  const digits = Number(await getSetting("skuDigits")) || 4;
-  const rows = await db.product.findMany({ where: { sku: { startsWith: prefix } }, select: { sku: true } });
-  let max = 0;
-  for (const r of rows) {
-    const n = Number(r.sku!.slice(prefix.length));
-    if (Number.isInteger(n) && n > max) max = n;
-  }
-  for (let n = max + 1; ; n++) {
-    const sku = prefix + String(n).padStart(digits, "0");
-    if (!(await codeOwner(sku))) return sku;
   }
 }
 

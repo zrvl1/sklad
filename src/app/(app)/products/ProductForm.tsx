@@ -13,7 +13,9 @@ export default function ProductForm({
   currencies = ["UAH"],
   showCurrency = false,
   kitsCount = 0,
+  suggestedSku = null,
 }: {
+  suggestedSku?: string | null;
   kitsCount?: number;
   product?: Product | null;
   suppliers: Supplier[];
@@ -103,11 +105,11 @@ export default function ProductForm({
         </label>
         <label>
           Артикул (SKU)
-          <CodeInput name="sku" kind="sku" defaultValue={p?.sku} productId={p?.id} placeholder="свій або залиште порожнім" />
+          <CodeInput name="sku" kind="sku" defaultValue={p ? p.sku : suggestedSku} productId={p?.id} placeholder="свій або «наступний»" generate />
         </label>
         <label>
           Штрихкод
-          <CodeInput name="barcode" kind="barcode" defaultValue={p?.barcode} productId={p?.id} placeholder="відскануйте або залиште порожнім" />
+          <CodeInput name="barcode" kind="barcode" defaultValue={p?.barcode} productId={p?.id} placeholder="штрихкод постачальника або «створити»" generate />
         </label>
         <label>
           ID у SalesDrive
