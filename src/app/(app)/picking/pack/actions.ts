@@ -47,3 +47,14 @@ export async function unpack(formData: FormData) {
   await logAction(user.id, "unpack", "order", orderId);
   revalidatePath("/picking");
 }
+
+/** Що за код відскановано під час пакування (його немає серед товарів поточної заявки): інша ТТН чи чужий товар */
+export async function identifyCode(code: string) {
+  await requirePerm("packing");
+  const orderId = await findOrderByScan(code);
+  if (orderId) return { kind: "order" as const, orderId };
+  const { findByCode } = await import("@/lib/codes");
+  const [p] = await findByCode(code);
+  if (p) return { kind: "product" as const, name: p.name, sku: p.sku };
+  return { kind: "unknown" as const };
+}

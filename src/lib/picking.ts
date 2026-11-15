@@ -21,10 +21,17 @@ export async function findOrderByScan(raw: string) {
   if (!code) return null;
   const byTtn = await db.orderTtn.findUnique({ where: { ttn: code } });
   if (byTtn) return byTtn.orderId;
-  // деякі сканери додають префікс/суфікс — шукаємо ТТН, що міститься в коді
-  if (code.length >= 10) {
-    const partial = await db.orderTtn.findFirst({ where: { OR: [{ ttn: { contains: code } }] } });
-    if (partial) return partial.orderId;
+  // штрихкод наліпки може містити ТТН разом з іншими символами: шукаємо в ньому номер Нової пошти (14 цифр)
+  // чи Укрпошти (13 цифр або RR123456789UA)
+  const inside = [...(code.match(/\d{14}/g) ?? []), ...(code.match(/\d{13}/g) ?? []), ...(code.match(/[A-Z]{2}\d{9}[A-Z]{2}/g) ?? [])];
+  for (const c of inside) {
+    const t = await db.orderTtn.findUnique({ where: { ttn: c } });
+    if (t) return t.orderId;
+  }
+  // введено частину номера вручну (останні цифри ТТН)
+  if (code.length >= 8 && /^\d+$/.test(code)) {
+    const partial = await db.orderTtn.findMany({ where: { ttn: { endsWith: code } }, take: 2 });
+    if (partial.length === 1) return partial[0].orderId;
   }
   const n = Number(code);
   if (Number.isInteger(n) && n > 0 && n < 2_000_000_000) {
@@ -43,6 +50,7 @@ export type PackLine = {
   codes: string[]; // усі коди товару: штрихкод, артикул, додаткові — для перевірки сканером
   cells: string[];
   physical: string | null; // для картки-комплекту: який фізичний товар брати (назва й артикул основного)
+  labelId: number | null; // товар, наліпку якого друкувати (основний для картки-комплекту)
 };
 
 /** Заявка для екрана пакування: товари з усіма кодами й комірками */
@@ -78,6 +86,7 @@ export async function orderForPacking(orderId: number) {
       qty: l.qty,
       codes: [...new Set(codes)],
       cells: (b ?? p)?.cells.sort((x, y) => y.qty - x.qty).map((c) => c.cell.code) ?? [],
+      labelId: (b ?? p)?.id ?? null,
       physical: b ? `${b.name}${b.manufacturer ? ` [${b.manufacturer}]` : ""} (${b.sku ?? b.barcode ?? "основний"})` : null,
     });
   }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { PackLine } from "@/lib/picking";
-import { loadOrderByScan, markPacked } from "./actions";
+import { identifyCode, loadOrderByScan, markPacked } from "./actions";
 
 type Order = {
   id: number;
@@ -99,14 +99,25 @@ export default function PackStation() {
     if (order.ttns.some((t) => t === code)) return setMsg({ type: "warn", text: "Це ТТН поточної заявки — скануйте товари" });
     const line = order.lines.find((l) => l.codes.includes(code));
     if (!line) {
-      // можливо, це ТТН наступної заявки
-      if (/^\d{11,20}$/.test(code) || /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(code)) {
-        if (!complete && !confirm("Поточну заявку ще не зібрано повністю. Перейти до іншої ТТН?")) return;
-        return openOrder(code);
-      }
-      beep(false);
-      setFlash(null);
-      setMsg({ type: "err", text: `⛔ Товару з кодом ${code} немає в цій заявці!` });
+      // чужий товар чи ТТН наступної заявки — питаємо сервер
+      start(async () => {
+        const r = await identifyCode(code);
+        if (r.kind === "order" && r.orderId !== order.id) {
+          if (!complete && !confirm("Поточну заявку ще не зібрано повністю. Перейти до іншої ТТН?")) return;
+          return openOrder(code);
+        }
+        beep(false);
+        setFlash(null);
+        setMsg({
+          type: "err",
+          text:
+            r.kind === "product"
+              ? `⛔ Не той товар: «${r.name}»${r.sku ? ` (${r.sku})` : ""} — його немає в цій заявці!`
+              : r.kind === "order"
+                ? "Це ТТН поточної заявки — скануйте товари"
+                : `⛔ Код ${code} не знайдено ні серед товарів, ні серед ТТН`,
+        });
+      });
       return;
     }
     const have = scanned[line.key] ?? 0;
@@ -212,13 +223,20 @@ export default function PackStation() {
                     </td>
                     <td>
                       {!ok && (
-                        <button
-                          className="btn sm"
-                          title="Додати вручну (якщо штрихкод не читається)"
-                          onClick={() => setScanned((s) => ({ ...s, [l.key]: (s[l.key] ?? 0) + 1 }))}
-                        >
-                          +1
-                        </button>
+                        <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                          <button
+                            className="btn sm"
+                            title="Додати вручну (якщо немає наліпки або штрихкод не читається)"
+                            onClick={() => setScanned((s) => ({ ...s, [l.key]: (s[l.key] ?? 0) + 1 }))}
+                          >
+                            +1
+                          </button>
+                          {l.labelId && (
+                            <a className="btn sm" href={`/print/labels?items=${l.labelId}:${l.qty - have}`} target="_blank" title="Немає наліпки — надрукувати й наклеїти">
+                              🖨
+                            </a>
+                          )}
+                        </span>
                       )}
                     </td>
                   </tr>
