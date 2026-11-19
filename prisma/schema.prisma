@@ -355,6 +355,10 @@ model ProductTemplate {
   name         String
   categoryName String?  @unique
   description  String?  // можна використовувати {name}, {sku}, {manufacturer}, {category}, {supplier}
+  descriptionTranslate String? // опис українською
+  keywords     String?  // пошукові запити RU (з підстановками)
+  keywordsUa   String?  // пошукові запити UA (порожньо — перекладаються з RU)
+  country      String?  // країна виробник за замовчуванням
   params       String?  // JSON [{name, type, value}]
   manufacturer String?
   supplierName String?

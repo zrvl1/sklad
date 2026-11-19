@@ -24,6 +24,8 @@ export type SdProductPayload = {
   manufacturer?: string;
   // назва поля країни в API SalesDrive не задокументована — передаємо поширені варіанти, зайві SalesDrive ігнорує
   countryManufacturer?: string;
+  keywords?: string;
+  keywordsTranslate?: string; // українською (якщо SalesDrive двомовний)
   manufacturerCountry?: string;
   country?: string;
   supplier?: string;
@@ -100,6 +102,10 @@ export function productToSd(
     if (p.description !== null) {
       payload.description = p.description;
       payload.descriptionTranslate = p.descriptionTranslate?.trim() ? p.descriptionTranslate : p.description;
+    }
+    if (p.keywords?.trim()) {
+      payload.keywords = p.keywords;
+      payload.keywordsTranslate = p.keywordsUa?.trim() || p.keywords;
     }
     const params = parseParams(p.params).filter((x) => x.value.trim());
     if (params.length) {

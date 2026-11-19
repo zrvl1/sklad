@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import ParamsEditor, { type Param } from "./ParamsEditor";
+import { translateKeywords } from "@/lib/ruua";
 
 export type ClientTemplate = {
   id: number;
   name: string;
   categoryName: string | null;
   description: string | null;
+  descriptionTranslate?: string | null;
+  keywords?: string | null;
+  keywordsUa?: string | null;
+  country?: string | null;
   params: Param[];
 };
 
@@ -27,6 +32,8 @@ const render = (text: string, f: Record<string, string>) =>
 export default function DetailsFields({
   description,
   descriptionTranslate = null,
+  keywords = null,
+  keywordsUa = null,
   params,
   templates,
   isNew,
@@ -34,6 +41,8 @@ export default function DetailsFields({
 }: {
   description: string | null;
   descriptionTranslate?: string | null;
+  keywords?: string | null;
+  keywordsUa?: string | null;
   params: Param[];
   templates: ClientTemplate[];
   isNew: boolean;
@@ -42,6 +51,8 @@ export default function DetailsFields({
   const ref = useRef<HTMLDivElement>(null);
   const [desc, setDesc] = useState(description ?? "");
   const [descTr, setDescTr] = useState(descriptionTranslate ?? "");
+  const [kw, setKw] = useState(keywords ?? "");
+  const [kwUa, setKwUa] = useState(keywordsUa ?? "");
   const [rows, setRows] = useState<Param[]>(params);
   const [touched, setTouched] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -50,7 +61,7 @@ export default function DetailsFields({
     const form = ref.current?.closest("form");
     const v: Record<string, string> = {};
     if (!form) return v;
-    for (const n of ["name", "sku", "barcode", "manufacturer", "categoryName", "supplierName"]) {
+    for (const n of ["name", "nameTranslate", "sku", "barcode", "manufacturer", "categoryName", "supplierName", "country"]) {
       const el = form.elements.namedItem(n) as HTMLInputElement | null;
       v[n] = el?.value ?? "";
     }
@@ -65,6 +76,17 @@ export default function DetailsFields({
     const t = pick(f.categoryName ?? "");
     if (!t) return setInfo("Для цієї категорії немає шаблону. Створіть його в «Шаблони опису».");
     if (t.description && (force || !desc.trim())) setDesc(render(t.description, f));
+    if (t.descriptionTranslate && (force || !descTr.trim())) setDescTr(render(t.descriptionTranslate, { ...f, name: f.nameTranslate || f.name }));
+    let k = kw;
+    if (t.keywords && (force || !kw.trim())) setKw((k = render(t.keywords, f)));
+    if (force || !kwUa.trim()) {
+      if (t.keywordsUa) setKwUa(render(t.keywordsUa, { ...f, name: f.nameTranslate || f.name }));
+      else if (k) setKwUa(translateKeywords(k));
+    }
+    // країна за замовчуванням з шаблону
+    const form = ref.current?.closest("form");
+    const c = form?.elements.namedItem("country") as HTMLInputElement | null;
+    if (c && t.country && (force || !c.value)) c.value = t.country;
     const merged = [...rows.filter((r) => r.name.trim())];
     for (const tp of t.params) if (!merged.some((r) => r.name.toLowerCase() === tp.name.toLowerCase())) merged.push({ ...tp, value: render(tp.value, f) });
     setRows(merged);
@@ -114,6 +136,19 @@ export default function DetailsFields({
           </button>
         </span>
         <textarea name="descriptionTranslate" rows={4} value={descTr} onChange={(e) => setDescTr(e.target.value)} />
+      </label>
+      <label>
+        Пошукові запити RU (через кому)
+        <input name="keywords" value={kw} onChange={(e) => setKw(e.target.value)} placeholder="колодки на мотоцикл, тормозные колодки Lifan…" />
+      </label>
+      <label>
+        <span className="row" style={{ justifyContent: "space-between" }}>
+          <span>Пошукові запити UA</span>
+          <button type="button" className="btn sm" onClick={() => setKwUa(translateKeywords(kw))} disabled={!kw}>
+            перекласти з RU
+          </button>
+        </span>
+        <input name="keywordsUa" value={kwUa} onChange={(e) => setKwUa(e.target.value)} placeholder="колодки на мотоцикл, гальмівні колодки Lifan…" />
       </label>
       <div>
         <div className="toolbar" style={{ marginBottom: 6 }}>

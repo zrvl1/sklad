@@ -7,6 +7,10 @@ export type TemplateData = {
   name: string;
   categoryName: string | null;
   description: string | null;
+  descriptionTranslate: string | null;
+  keywords: string | null;
+  keywordsUa: string | null;
+  country: string | null;
   params: ProductParam[];
   manufacturer: string | null;
   supplierName: string | null;
@@ -47,6 +51,13 @@ export async function applyTemplate(productId: number) {
   if (!p.supplierName && t.supplierName) data.supplierName = t.supplierName;
   const ctx = { ...p, ...data };
   if (!p.description?.trim() && t.description) data.description = renderTemplate(t.description, ctx);
+  if (!p.descriptionTranslate?.trim() && t.descriptionTranslate) data.descriptionTranslate = renderTemplate(t.descriptionTranslate, { ...ctx, name: p.nameTranslate || p.name });
+  if (!p.country && t.country) data.country = t.country;
+  if (!p.keywords?.trim() && t.keywords) data.keywords = renderTemplate(t.keywords, ctx);
+  if (!p.keywordsUa?.trim() && (t.keywordsUa || t.keywords)) {
+    const { translateKeywords } = await import("./ruua");
+    data.keywordsUa = t.keywordsUa ? renderTemplate(t.keywordsUa, { ...ctx, name: p.nameTranslate || p.name }) : translateKeywords(String(data.keywords ?? p.keywords ?? ""));
+  }
   const own = parseParams(p.params);
   if (t.params.length) {
     // характеристики шаблону + вже введені (введені мають пріоритет)
@@ -69,7 +80,17 @@ export async function productFormContext() {
   const categories = [...new Set([...cats.map((c) => c.categoryName!), ...templates.map((t) => t.categoryName).filter((x): x is string => Boolean(x))])].sort();
   return {
     suppliers,
-    templates: templates.map((t) => ({ id: t.id, name: t.name, categoryName: t.categoryName, description: t.description, params: t.params })),
+    templates: templates.map((t) => ({
+      id: t.id,
+      name: t.name,
+      categoryName: t.categoryName,
+      description: t.description,
+      descriptionTranslate: t.descriptionTranslate,
+      keywords: t.keywords,
+      keywordsUa: t.keywordsUa,
+      country: t.country,
+      params: t.params,
+    })),
     categories,
     currencies: currencies.map((c) => c.code),
     showCurrency: process.env.ENABLE_CURRENCY === "true",

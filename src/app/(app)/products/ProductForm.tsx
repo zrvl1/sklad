@@ -100,8 +100,17 @@ export default function ProductForm({
           </datalist>
         </label>
         <label>
-          Виробник
+          Бренд (виробник запчастини)
           <input name="manufacturer" defaultValue={p?.manufacturer ?? ""} />
+        </label>
+        <label>
+          Країна виробник
+          <input name="country" list="countries-pf" defaultValue={p?.country ?? ""} placeholder="Китай" />
+          <datalist id="countries-pf">
+            {["Китай", "Індія", "Тайвань", "Японія", "Італія", "Україна", "Польща"].map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </label>
         <label>
           Артикул (SKU)
@@ -144,6 +153,8 @@ export default function ProductForm({
         <DetailsFields
           description={p?.description ?? null}
           descriptionTranslate={p?.descriptionTranslate ?? null}
+          keywords={p?.keywords ?? null}
+          keywordsUa={p?.keywordsUa ?? null}
           params={parseParams(p?.params)}
           templates={templates}
           isNew={!p}

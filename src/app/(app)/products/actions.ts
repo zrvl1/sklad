@@ -86,6 +86,9 @@ export async function saveProduct(formData: FormData) {
     sdId: str(formData.get("sdId")),
     description: str(formData.get("description")),
     descriptionTranslate: str(formData.get("descriptionTranslate")),
+    keywords: str(formData.get("keywords")),
+    keywordsUa: str(formData.get("keywordsUa")),
+    country: str(formData.get("country")),
     params: normParams(String(formData.get("params") ?? "[]")) as string | null,
   };
   // Собівартість: у гривні або у валюті закупівлі (тоді в гривні рахуємо за курсом SalesDrive)
@@ -124,13 +127,19 @@ export async function saveProduct(formData: FormData) {
     const beforeParams = normParams(before.params ?? "[]");
     if (before.description === null && !data.description) data.description = null;
     if (before.descriptionTranslate === null && !data.descriptionTranslate) data.descriptionTranslate = null;
+    // ключові слова й країна з YML можуть не приходити — не затираємо їх порожнім полем форми
+    if (!data.keywords && before.keywords) data.keywords = before.keywords;
+    if (!data.keywordsUa && before.keywordsUa) data.keywordsUa = before.keywordsUa;
+    if (!data.country && before.country) data.country = before.country;
     if (before.params === null && data.params === "[]") data.params = null; // характеристики не завантажені — не чіпаємо
     opts = {
       withName: before.name !== data.name || (before.nameTranslate ?? null) !== data.nameTranslate,
       withPrice: before.price !== data.price,
       withDetails:
         (before.description ?? null) !== data.description ||
-        (before.descriptionTranslate ?? null) !== data.descriptionTranslate || (data.params !== null && beforeParams !== data.params),
+        (before.descriptionTranslate ?? null) !== data.descriptionTranslate ||
+        (before.keywords ?? null) !== data.keywords ||
+        (before.keywordsUa ?? null) !== data.keywordsUa || (data.params !== null && beforeParams !== data.params),
       paramsMode: before.params === null ? "add" : "replace",
       withCost: before.cost !== costData.cost || (before.costCurrency ?? null) !== costData.costCurrency || (before.costOriginal ?? null) !== costData.costOriginal,
     };
@@ -586,6 +595,9 @@ export async function createKitCards(formData: FormData) {
       categorySdId: base.categorySdId,
       categoryName: base.categoryName,
       manufacturer: base.manufacturer,
+      country: base.country,
+      keywords: base.keywords ? `${r.name}, ${base.keywords}` : r.name,
+      keywordsUa: base.keywordsUa ? `${r.nameTranslate ?? r.name}, ${base.keywordsUa}` : null,
       supplierName: base.supplierName,
       description: r.description,
       descriptionTranslate: r.descriptionTranslate,

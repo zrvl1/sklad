@@ -31,9 +31,25 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
           Постачальник за замовчуванням
           <input name="supplierName" list="tpl-suppliers" defaultValue={t?.supplierName ?? ""} autoComplete="off" />
         </label>
+        <label>
+          Країна виробник за замовчуванням
+          <input name="country" defaultValue={t?.country ?? ""} placeholder="Китай" />
+        </label>
         <label style={{ gridColumn: "1 / -1" }}>
-          Опис (можна HTML). Підстановки: {"{name}"} {"{sku}"} {"{manufacturer}"} {"{category}"} {"{supplier}"} {"{barcode}"}
+          Опис RU (можна HTML). Підстановки: {"{name}"} {"{sku}"} {"{manufacturer}"} {"{category}"} {"{supplier}"} {"{barcode}"}
           <textarea name="description" rows={5} defaultValue={t?.description ?? ""} />
+        </label>
+        <label style={{ gridColumn: "1 / -1" }}>
+          Опис UA (у {"{name}"} підставиться українська назва товару)
+          <textarea name="descriptionTranslate" rows={5} defaultValue={t?.descriptionTranslate ?? ""} />
+        </label>
+        <label style={{ gridColumn: "1 / -1" }}>
+          Пошукові запити RU, через кому (напр. «{"{name}"}, тормозные колодки на мотоцикл, колодки {"{manufacturer}"}»)
+          <input name="keywords" defaultValue={t?.keywords ?? ""} />
+        </label>
+        <label style={{ gridColumn: "1 / -1" }}>
+          Пошукові запити UA (порожньо — перекладуться з RU автоматично)
+          <input name="keywordsUa" defaultValue={t?.keywordsUa ?? ""} />
         </label>
         <div style={{ gridColumn: "1 / -1" }}>
           <div className="muted small" style={{ marginBottom: 6 }}>
