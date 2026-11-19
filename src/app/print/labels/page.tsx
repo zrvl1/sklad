@@ -122,7 +122,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
       <style>{`
         body { background: #fff; }
         ${pageCss}
-        .label { width: ${t.w}mm; height: ${t.h}mm; padding: ${t.compact ? "1mm 1.5mm" : "1.5mm 2mm"}; overflow: hidden; box-sizing: border-box;
+        .label { width: ${t.w}mm; height: ${t.h}mm; padding: ${t.compact ? "1mm 1.5mm 1mm 3.5mm" : "1.5mm 2mm"}; overflow: hidden; box-sizing: border-box;
                  display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; color: #000;
                  transform: translate(var(--ox, 0mm), var(--oy, 0mm)); }
         @media print { body.print-frame .label { border: 0.2mm solid #000 !important; } }
@@ -135,6 +135,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
         .label .bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 1mm; line-height: 1; }
         .label .sku { font-size: 6.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .label .cell { font-size: 6.5pt; font-weight: 700; border: 0.2mm solid #000; padding: 0 0.6mm; margin-left: 1mm; }
+        .label.compact .name { margin-bottom: 1.5mm; }
         .label .bc { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
         @media print { .no-print { display: none !important; } }
       `}</style>
@@ -152,9 +153,9 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
           if (t.compact) {
             // 40×25: назва (2 рядки) → штрихкод → артикул [комірка] … ціна
             return (
-              <div className="label" key={key}>
+              <div className="label compact" key={key}>
                 <div className="name">{p.name}</div>
-                <div className="bc">{p.barcode ? <Barcode value={p.barcode} moduleMm={0.25} barMm={5.5} textMm={1.8} /> : null}</div>
+                <div className="bc">{p.barcode ? <Barcode value={p.barcode} moduleMm={0.25} barMm={5} textMm={1.8} /> : null}</div>
                 <div className="bottom">
                   <span className="sku">
                     {p.sku ?? ""}
