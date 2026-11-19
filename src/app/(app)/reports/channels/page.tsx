@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { saleStatusFilter } from "@/lib/finance";
 import { dateInput, getSetting, money } from "@/lib/util";
-import { resyncOrdersYear } from "../sales/actions";
+import { backfillState } from "@/lib/orders";
+import { continueBackfill, resyncOrdersYear } from "../sales/actions";
 
 type SP = Promise<{ from?: string; to?: string; msg?: string }>;
 
@@ -18,7 +19,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
   const saleFilter = await saleStatusFilter();
   const saleIds: number[] = "statusId" in saleFilter ? (saleFilter.statusId as { in: number[] }).in : [];
 
-  const [orders, spend, keysRaw, statuses] = await Promise.all([
+  const [orders, spend, keysRaw, statuses, bf] = await Promise.all([
     db.sdOrder.findMany({
       where: { orderTime: { gte: from, lte: to } },
       select: { statusId: true, amount: true, costAmount: true, profit: true, commission: true, site: true, utmCampaign: true, utmSource: true, utmMedium: true },
@@ -26,6 +27,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
     db.expense.findMany({ where: { kind: "expense", date: { gte: from, lte: to }, category: { contains: "Реклама" } }, select: { category: true, amount: true } }),
     getSetting("sdOrderKeys"),
     db.setting.findUnique({ where: { key: "sdStatuses" } }),
+    backfillState(),
   ]);
   const refusedIds = new Set<number>(
     statuses?.value ? (JSON.parse(statuses.value) as { id: number; name: string }[]).filter((s) => /відмов|поверн|скасов/i.test(s.name)).map((s) => s.id) : []
@@ -81,7 +83,16 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
         Канал = сайт заявки + UTM-кампанія з SalesDrive. Прибуток — після собівартості й <b>комісії Prom</b>. Рекламу вносьте в «Гроші за місяць» зі
         статтею, де є назва кампанії: «Реклама: Google Ads — horoshop_pmax», «Реклама: Google Ads — prom_pmax», «Реклама: Prom ProSale».
       </p>
-      {!hasData && (
+      {bf && (
+        <div className="msg warn small">
+          Завантаження заявок за рік у фоні: {bf.saved} заявок, сторінка {bf.page}
+          {bf.pages ? ` з ${bf.pages}` : ""}. Довантажується саме кожні 2 хвилини (ліміт SalesDrive — 10 запитів за хвилину); оновіть сторінку пізніше.
+          <form action={continueBackfill} style={{ marginTop: 6 }}>
+            <button className="btn sm">Продовжити зараз (≈1 хв)</button>
+          </form>
+        </div>
+      )}
+      {!hasData && !bf && (
         <div className="msg warn small">
           У заявках ще немає даних про канал. Натисніть «Перезавантажити заявки за рік» — це займе кілька хвилин.
           {keys.length > 0 && <div className="muted">Поля заявки з SalesDrive: {keys.join(", ")}</div>}

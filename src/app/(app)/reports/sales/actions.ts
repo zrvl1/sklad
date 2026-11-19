@@ -39,15 +39,32 @@ export async function resyncOrdersYear() {
   const user = await requirePerm("settings");
   let msg: string;
   try {
-    const { db } = await import("@/lib/db");
-    await db.setting.deleteMany({ where: { key: "lastOrderSync" } });
-    const r = await syncOrders(400);
+    const { backfillOrders, startBackfill } = await import("@/lib/orders");
+    await startBackfill(400);
+    const r = await backfillOrders();
     await logAction(user.id, "resync-orders", "orders", null, r);
-    msg = `Перезавантажено заявок: ${r.saved}`;
+    msg = r?.done
+      ? `Перезавантажено заявок: ${r.saved}`
+      : `Завантажено ${r?.saved ?? 0} заявок, решта довантажиться у фоні (≈ 8 сторінок по 100 заявок на хвилину через ліміт SalesDrive)`;
   } catch (e) {
     msg = `Помилка: ${e instanceof Error ? e.message : e}`;
   }
   revalidatePath("/reports/sales");
+  revalidatePath("/reports/channels");
+  redirect(`/reports/channels?msg=${encodeURIComponent(msg)}`);
+}
+
+/** Продовжити фонове завантаження вручну (одна порція) */
+export async function continueBackfill() {
+  await requirePerm("reports");
+  const { backfillOrders } = await import("@/lib/orders");
+  let msg: string;
+  try {
+    const r = await backfillOrders();
+    msg = !r ? "Завантаження не активне" : r.done ? `Готово: завантажено ${r.saved} заявок` : `Завантажено ${r.saved} заявок, сторінка ${r.page} з ${r.pages}`;
+  } catch (e) {
+    msg = `Помилка: ${e instanceof Error ? e.message : e}`;
+  }
   revalidatePath("/reports/channels");
   redirect(`/reports/channels?msg=${encodeURIComponent(msg)}`);
 }

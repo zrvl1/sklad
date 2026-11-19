@@ -11,6 +11,22 @@ export function ordersEnabled() {
   return Boolean(process.env.SALESDRIVE_URL && process.env.SALESDRIVE_ORDERS_KEY);
 }
 
+// SalesDrive: не більше 10 запитів списку заявок за хвилину — тримаємо паузу ≥ 6,5 с між ними
+let lastListCall = 0;
+async function sdGetList(params: Record<string, string>) {
+  const wait = lastListCall + 6500 - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastListCall = Date.now();
+  try {
+    return await sdGet("/api/order/list/", params);
+  } catch (e) {
+    if (!/limit reached/i.test(String(e))) throw e;
+    await new Promise((r) => setTimeout(r, 61_000)); // ліміт уже вичерпано (напр. інший запит) — чекаємо хвилину
+    lastListCall = Date.now();
+    return await sdGet("/api/order/list/", params);
+  }
+}
+
 async function sdGet(path: string, params: Record<string, string> = {}) {
   const url = process.env.SALESDRIVE_URL!.replace(/\/+$/, "");
   const qs = new URLSearchParams(params).toString();
@@ -83,11 +99,11 @@ export function orderAnalytics(o: Record<string, unknown>) {
   const num = (v: string | null) => (v ? Number(v.replace(",", ".")) || 0 : 0);
   const sale = find(/sale_?date|saledate|data_?prodaz|dataprodaz|prodazh/i);
   return {
-    utmSource: find(/utm_?source/i),
-    utmMedium: find(/utm_?medium/i),
-    utmCampaign: find(/utm_?campaign/i),
-    site: find(/^(sajt|sait|site|shop|sayt)$/i) ?? find(/sajt|sayt|^site/i, /utm/i),
-    commission: num(find(/komis|kommis|commission/i)),
+    utmSource: scalar(o.utmSource) ?? find(/utm_?source$/i),
+    utmMedium: scalar(o.utmMedium) ?? find(/utm_?medium/i),
+    utmCampaign: scalar(o.utmCampaign) ?? find(/utm_?campaign/i),
+    site: scalar(o.sajt) ?? find(/^(sait|site|shop|sayt)$/i),
+    commission: num(scalar(o.commissionAmount) ?? find(/komis|kommis|commission/i)),
     saleDate: (() => {
       const d = sale ? parseTime(sale) : null;
       return d && !Number.isNaN(d.getTime()) ? d : null;
@@ -113,10 +129,49 @@ export async function syncOrders(initialDays = 90) {
   }
   const last = await getSetting("lastOrderSync");
   const started = new Date();
-  const filter: Record<string, string> = { "filter[statusId]": "__NOTDELETED__" };
-  if (last) filter["filter[updateAt][from]"] = sdTime(new Date(new Date(last).getTime() - 10 * 60 * 1000));
-  else filter["filter[orderTime][from]"] = sdTime(new Date(Date.now() - initialDays * 864e5));
+  if (!last) {
+    // перше завантаження — великим обсягом, тому порціями у фоні (див. backfillOrders)
+    await startBackfill(initialDays);
+    await setSetting("lastOrderSync", started.toISOString());
+    return { saved: 0, backfill: true };
+  }
+  const filter: Record<string, string> = {
+    "filter[statusId]": "__NOTDELETED__",
+    "filter[updateAt][from]": sdTime(new Date(new Date(last).getTime() - 10 * 60 * 1000)),
+  };
+  const r = await fetchOrderPages(filter, 1, 8);
+  // якщо змін більше, ніж 8 сторінок, — решту доберемо наступного разу (час не зсуваємо)
+  if (r.done) await setSetting("lastOrderSync", started.toISOString());
+  return { saved: r.saved };
+}
 
+type Backfill = { from: string; to: string; page: number; saved: number; pages: number | null };
+
+/** Почати фонове перезавантаження заявок за N днів (порціями по 8 сторінок, щоб не впертися в ліміт API) */
+export async function startBackfill(days: number) {
+  const b: Backfill = { from: sdTime(new Date(Date.now() - days * 864e5)), to: sdTime(new Date()), page: 1, saved: 0, pages: null };
+  await setSetting("orderBackfill", JSON.stringify(b));
+}
+
+export async function backfillState() {
+  const raw = await getSetting("orderBackfill");
+  return raw ? (JSON.parse(raw) as Backfill) : null;
+}
+
+/** Один крок фонового завантаження (≈ 1 хвилина). Викликається кроном і кнопкою. */
+export async function backfillOrders() {
+  const b = await backfillState();
+  if (!b || !ordersEnabled()) return null;
+  const filter = { "filter[statusId]": "__NOTDELETED__", "filter[orderTime][from]": b.from, "filter[orderTime][to]": b.to };
+  const r = await fetchOrderPages(filter, b.page, 8);
+  const next: Backfill = { ...b, page: r.nextPage, saved: b.saved + r.saved, pages: r.pageCount };
+  if (r.done) await db.setting.deleteMany({ where: { key: "orderBackfill" } });
+  else await setSetting("orderBackfill", JSON.stringify(next));
+  return { ...next, done: r.done };
+}
+
+/** Завантажити до maxPages сторінок заявок, починаючи з firstPage */
+async function fetchOrderPages(filter: Record<string, string>, firstPage: number, maxPages: number) {
   // Для зіставлення рядків заявок з нашими товарами
   const products = await db.product.findMany({ select: { id: true, sdId: true, sku: true, barcode: true, name: true } });
   const bySd = new Map(products.filter((p) => p.sdId).map((p) => [p.sdId!, p.id]));
@@ -131,12 +186,14 @@ export async function syncOrders(initialDays = 90) {
     );
   };
 
-  let page = 1;
-  let pageCount = 1;
+  let page = firstPage;
+  let pageCount = firstPage;
   let saved = 0;
   let keysSaved = false;
+  let fetched = 0;
   do {
-    const r = await sdGet("/api/order/list/", { ...filter, limit: "100", page: String(page) });
+    const r = await sdGetList({ ...filter, limit: "100", page: String(page) });
+    fetched++;
     pageCount = Number(r.pagination?.pageCount) || 1;
     for (const o of (r.data ?? []) as Record<string, unknown>[]) {
       const id = Number(o.id);
@@ -185,9 +242,6 @@ export async function syncOrders(initialDays = 90) {
       saved++;
     }
     page++;
-    if (page <= pageCount) await new Promise((r) => setTimeout(r, 400)); // не навантажуємо API
-  } while (page <= pageCount && page <= 300);
-
-  await setSetting("lastOrderSync", started.toISOString());
-  return { saved };
+  } while (page <= pageCount && fetched < maxPages);
+  return { saved, nextPage: page, pageCount, done: page > pageCount };
 }
