@@ -68,3 +68,16 @@ export async function continueBackfill() {
   revalidatePath("/reports/channels");
   redirect(`/reports/channels?msg=${encodeURIComponent(msg)}`);
 }
+
+/** Назви сайтів (SalesDrive віддає їх номерами) */
+export async function saveSiteNames(formData: FormData) {
+  await requirePerm("reports");
+  const map: Record<string, string> = {};
+  for (const id of formData.getAll("siteId").map(String)) {
+    const name = String(formData.get(`siteName_${id}`) ?? "").trim().slice(0, 60);
+    if (name) map[id] = name;
+  }
+  await setSetting("siteNames", JSON.stringify(map));
+  revalidatePath("/reports/channels");
+  redirect(`/reports/channels?msg=${encodeURIComponent("Назви сайтів збережено")}`);
+}

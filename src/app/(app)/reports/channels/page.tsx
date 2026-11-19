@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { saleStatusFilter } from "@/lib/finance";
 import { dateInput, getSetting, money } from "@/lib/util";
 import { backfillState } from "@/lib/orders";
-import { continueBackfill, resyncOrdersYear } from "../sales/actions";
+import { continueBackfill, resyncOrdersYear, saveSiteNames } from "../sales/actions";
 
 type SP = Promise<{ from?: string; to?: string; msg?: string }>;
 
@@ -19,7 +19,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
   const saleFilter = await saleStatusFilter();
   const saleIds: number[] = "statusId" in saleFilter ? (saleFilter.statusId as { in: number[] }).in : [];
 
-  const [orders, spend, keysRaw, statuses, bf] = await Promise.all([
+  const [orders, spend, keysRaw, statuses, bf, siteNamesRaw] = await Promise.all([
     db.sdOrder.findMany({
       where: { orderTime: { gte: from, lte: to } },
       select: { statusId: true, amount: true, costAmount: true, profit: true, commission: true, site: true, utmCampaign: true, utmSource: true, utmMedium: true },
@@ -28,7 +28,14 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
     getSetting("sdOrderKeys"),
     db.setting.findUnique({ where: { key: "sdStatuses" } }),
     backfillState(),
+    getSetting("siteNames"),
   ]);
+  // SalesDrive віддає сайт номером — назви задаються нижче на сторінці
+  const siteNames: Record<string, string> = siteNamesRaw ? JSON.parse(siteNamesRaw) : {};
+  const siteIds = [...new Set(orders.map((o) => o.site).filter((s): s is string => Boolean(s)))].sort();
+  const siteLabel = (s: string | null) => (s ? (siteNames[s] ?? s) : "—");
+  // кампанії Prom ProSale у Google (Pmax_cpa_…) зводимо в одну
+  const campLabel = (c: string) => (/^pmax_cpa_/i.test(c) ? "ProSale (Google PMax від Prom)" : c);
   const refusedIds = new Set<number>(
     statuses?.value ? (JSON.parse(statuses.value) as { id: number; name: string }[]).filter((s) => /відмов|поверн|скасов/i.test(s.name)).map((s) => s.id) : []
   );
@@ -36,8 +43,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
   type Ch = { key: string; site: string; campaign: string; orders: number; sold: number; refused: number; revenue: number; profit: number; commission: number; spend: number };
   const chans = new Map<string, Ch>();
   for (const o of orders) {
-    const site = o.site ?? "—";
-    const campaign = o.utmCampaign && o.utmCampaign !== "(none)" ? o.utmCampaign : o.utmMedium === "organic" || o.utmSource === "organic" ? "органіка" : "—";
+    const site = siteLabel(o.site);
+    const campaign = o.utmCampaign && o.utmCampaign !== "(none)" ? campLabel(o.utmCampaign) : o.utmMedium === "organic" || o.utmSource === "organic" ? "органіка" : "—";
     const key = `${site} · ${campaign}`;
     const c = chans.get(key) ?? { key, site, campaign, orders: 0, sold: 0, refused: 0, revenue: 0, profit: 0, commission: 0, spend: 0 };
     c.orders++;
@@ -168,6 +175,19 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
         Окупність 3× — на кожну гривню реклами 3 грн прибутку (вже після собівартості й комісії). Нижче 1× — реклама збиткова. Заявки рахуються за датою
         створення, продаж — за поточним статусом.
       </p>
+      {siteIds.length > 0 && (
+        <form action={saveSiteNames} className="panel row small">
+          <b>Назви сайтів:</b>
+          {siteIds.map((id) => (
+            <label key={id} className="row" style={{ gap: 4 }}>
+              №{id}
+              <input type="hidden" name="siteId" value={id} />
+              <input name={`siteName_${id}`} defaultValue={siteNames[id] ?? (id === "19" ? "Prom" : id === "26" ? "Сайт (Horoshop)" : "")} style={{ width: 140 }} />
+            </label>
+          ))}
+          <button className="btn sm">Зберегти</button>
+        </form>
+      )}
       <form action={resyncOrdersYear}>
         <button className="btn sm">Перезавантажити заявки за рік (кілька хвилин)</button>
       </form>
