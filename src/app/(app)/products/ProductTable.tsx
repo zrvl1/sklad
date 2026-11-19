@@ -71,6 +71,9 @@ export default function ProductTable({ products, canEdit = true, showCost = true
         <button className="btn primary" disabled={!count} onClick={print}>
           🖨 Друкувати цінники ({Object.values(selected).reduce((a, b) => a + b, 0)})
         </button>
+        <a className="btn" href={`/print/labels?test=1&tpl=${tpl}`} target="_blank" title="Перевірка й калібрування зсуву принтера">
+          Тестова наліпка / налаштування
+        </a>
         <span className="spacer" />
         {canEdit && (
           <button className="btn danger" disabled={!count || pending} onClick={remove}>
