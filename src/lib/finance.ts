@@ -18,7 +18,7 @@ export async function monthSummary(from: Date, to: Date) {
   const [orders, receipts, money] = await Promise.all([
     db.sdOrder.aggregate({
       where: { orderTime: { gte: from, lt: to }, ...statusFilter },
-      _sum: { amount: true, costAmount: true, profit: true },
+      _sum: { amount: true, costAmount: true, profit: true, commission: true },
       _count: true,
     }),
     db.receipt.aggregate({ where: { status: "posted", date: { gte: from, lt: to } }, _sum: { total: true }, _count: true }),
@@ -27,15 +27,18 @@ export async function monthSummary(from: Date, to: Date) {
   const k = (kind: MoneyKind) => money.find((m) => m.kind === kind)?._sum.amount ?? 0;
   const revenue = orders._sum.amount ?? 0;
   const cogs = orders._sum.costAmount ?? 0;
-  const gross = orders._sum.profit ?? revenue - cogs;
+  const commission = orders._sum.commission ?? 0;
+  // прибуток SalesDrive не враховує комісію Prom — віднімаємо її
+  const gross = (orders._sum.profit ?? revenue - cogs) - commission;
   const net = gross + k("income") - k("expense");
   const purchases = receipts._sum.total ?? 0;
   const cashIn = revenue + k("income") + k("invest");
-  const cashOut = purchases + k("expense") + k("owner");
+  const cashOut = purchases + commission + k("expense") + k("owner");
   return {
     sales: orders._count,
     revenue,
     cogs,
+    commission,
     gross,
     income: k("income"),
     expense: k("expense"),

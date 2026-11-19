@@ -65,6 +65,12 @@ export default async function MoneyPage({ searchParams }: { searchParams: SP }) 
                 <td>− Собівартість проданого</td>
                 <td className="num">{money(s.cogs)}</td>
               </tr>
+              {s.commission > 0 && (
+                <tr>
+                  <td>− Комісія Prom</td>
+                  <td className="num">{money(s.commission)}</td>
+                </tr>
+              )}
               <tr>
                 <td>
                   <b>= Валовий прибуток</b>
@@ -134,6 +140,12 @@ export default async function MoneyPage({ searchParams }: { searchParams: SP }) 
                 </td>
                 <td className="num">{money(s.purchases)}</td>
               </tr>
+              {s.commission > 0 && (
+                <tr>
+                  <td>− Комісія Prom</td>
+                  <td className="num">{money(s.commission)}</td>
+                </tr>
+              )}
               <tr>
                 <td>− Витрати бізнесу</td>
                 <td className="num">{money(s.expense)}</td>

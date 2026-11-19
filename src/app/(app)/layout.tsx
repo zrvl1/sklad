@@ -41,6 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {can(user, "reports") && <Link href="/reports/sales">Звіт: продажі</Link>}
         {can(user, "reports") && <Link href="/reports">Звіт: приходи</Link>}
         {can(user, "reports") && <Link href="/reports/expenses">Гроші за місяць</Link>}
+        {can(user, "reports") && <Link href="/reports/channels">Канали й реклама</Link>}
         <Link href="/settings">{can(user, "settings") ? "Налаштування" : "Мій профіль"}</Link>
         <div className="bottom">
           <div>{user.name}</div>

@@ -307,7 +307,13 @@ model SdOrder {
   statusId    Int
   amount      Float         @default(0) // сума заявки
   costAmount  Float         @default(0) // собівартість
-  profit      Float         @default(0)
+  profit      Float         @default(0) // прибуток SalesDrive (без комісії Prom)
+  commission  Float         @default(0) // комісія майданчика (Prom)
+  site        String?       // звідки заявка: Prom, Хорошоп…
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  saleDate    DateTime?     // дата продажу (отримання посилки)
   lines       SdOrderLine[]
   ttns        OrderTtn[]
   pack        OrderPack?

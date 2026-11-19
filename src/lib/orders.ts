@@ -54,6 +54,47 @@ const numOr0 = (v: unknown) => {
 
 type RawProduct = { productId?: unknown; text?: unknown; sku?: unknown; barcode?: unknown; amount?: unknown; price?: unknown; discount?: unknown; costPrice?: unknown };
 
+/** Значення поля заявки: рядок, число, {name|text|value} або перший елемент масиву */
+function scalar(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) return v.length ? scalar(v[0]) : null;
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return scalar(o.text ?? o.name ?? o.title ?? o.value ?? null);
+  }
+  const s = String(v).trim();
+  return s && s !== "0" && s.toLowerCase() !== "null" ? s.slice(0, 120) : null;
+}
+
+/**
+ * Поля заявки для аналітики реклами: сайт, UTM-мітки, комісія, дата продажу.
+ * Назви полів у API SalesDrive залежать від налаштувань, тому шукаємо за схожістю назви ключа.
+ * Контактні дані клієнта не беремо.
+ */
+export function orderAnalytics(o: Record<string, unknown>) {
+  const keys = Object.keys(o);
+  const find = (re: RegExp, not?: RegExp) => {
+    for (const k of keys) if (re.test(k) && !(not && not.test(k))) {
+      const v = scalar(o[k]);
+      if (v) return v;
+    }
+    return null;
+  };
+  const num = (v: string | null) => (v ? Number(v.replace(",", ".")) || 0 : 0);
+  const sale = find(/sale_?date|saledate|data_?prodaz|dataprodaz|prodazh/i);
+  return {
+    utmSource: find(/utm_?source/i),
+    utmMedium: find(/utm_?medium/i),
+    utmCampaign: find(/utm_?campaign/i),
+    site: find(/^(sajt|sait|site|shop|sayt)$/i) ?? find(/sajt|sayt|^site/i, /utm/i),
+    commission: num(find(/komis|kommis|commission/i)),
+    saleDate: (() => {
+      const d = sale ? parseTime(sale) : null;
+      return d && !Number.isNaN(d.getTime()) ? d : null;
+    })(),
+  };
+}
+
 /**
  * Завантажити заявки: перший раз — за останні `initialDays` днів (за датою створення),
  * далі — лише змінені з минулої синхронізації (за датою оновлення).
@@ -93,6 +134,7 @@ export async function syncOrders(initialDays = 90) {
   let page = 1;
   let pageCount = 1;
   let saved = 0;
+  let keysSaved = false;
   do {
     const r = await sdGet("/api/order/list/", { ...filter, limit: "100", page: String(page) });
     pageCount = Number(r.pagination?.pageCount) || 1;
@@ -110,7 +152,13 @@ export async function syncOrders(initialDays = 90) {
         discount: numOr0(x.discount),
         costPrice: numOr0(x.costPrice),
       }));
+      if (!keysSaved) {
+        // назви полів (без значень) — щоб бачити, що віддає SalesDrive
+        await setSetting("sdOrderKeys", JSON.stringify(Object.keys(o)));
+        keysSaved = true;
+      }
       const data = {
+        ...orderAnalytics(o),
         orderTime: parseTime(o.orderTime) ?? new Date(),
         updateAt: parseTime(o.updateAt),
         statusId: numOr0(o.statusId),

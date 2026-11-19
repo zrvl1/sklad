@@ -25,7 +25,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   const [orders, lines, expenses] = await Promise.all([
     db.sdOrder.aggregate({
       where: { orderTime: { gte: from, lte: to }, ...statusFilter },
-      _sum: { amount: true, costAmount: true, profit: true },
+      _sum: { amount: true, costAmount: true, profit: true, commission: true },
       _count: true,
     }),
     db.sdOrderLine.findMany({
@@ -42,7 +42,8 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   const otherIncome = expenses.filter((e) => e.kind === "income").reduce((s, e) => s + (e._sum.amount ?? 0), 0);
   const ownerOut = expenses.filter((e) => e.kind === "owner").reduce((s, e) => s + (e._sum.amount ?? 0), 0);
   const expTotal = bizExp.reduce((s, e) => s + (e._sum.amount ?? 0), 0);
-  const gross = orders._sum.profit ?? 0;
+  const commission = orders._sum.commission ?? 0;
+  const gross = (orders._sum.profit ?? 0) - commission;
   const net = gross + otherIncome - expTotal;
 
   // По товарах: продажі карток-комплектів зводимо на основний (фізичний) товар, у штуках основного
@@ -183,6 +184,12 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
               <td>− Собівартість проданого</td>
               <td className="num">{money(orders._sum.costAmount)}</td>
             </tr>
+            {commission > 0 && (
+              <tr>
+                <td>− Комісія Prom</td>
+                <td className="num">{money(commission)}</td>
+              </tr>
+            )}
             <tr>
               <td>
                 <b>= Валовий прибуток</b>

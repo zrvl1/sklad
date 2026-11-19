@@ -9,7 +9,9 @@ export type MoneyKind = keyof typeof MONEY_KINDS;
 
 export const MONEY_CATEGORIES: Record<MoneyKind, string[]> = {
   expense: [
-    "Реклама: Google Ads",
+    "Реклама: Google Ads — horoshop_pmax",
+    "Реклама: Google Ads — prom_pmax",
+    "Реклама: Google Ads — інші кампанії",
     "Реклама: Prom ProSale",
     "Реклама: Facebook / Instagram",
     "Prom: комісія за замовлення",
@@ -20,6 +22,7 @@ export const MONEY_CATEGORIES: Record<MoneyKind, string[]> = {
     "Підписка: інші сервіси",
     "Доставка товару від постачальника",
     "Доставка клієнтам за наш рахунок",
+    "Доставка: повернення й відмови (Нова пошта)",
     "Пакування й витратні матеріали",
     "Оренда",
     "Комунальні",

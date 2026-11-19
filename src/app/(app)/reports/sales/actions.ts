@@ -30,3 +30,24 @@ export async function saveSaleStatuses(formData: FormData) {
   revalidatePath("/reports/sales");
   redirect(`/reports/sales?msg=${encodeURIComponent("Статуси збережено")}`);
 }
+
+/**
+ * Перезавантажити заявки за рік — щоб у старих заявок з'явились сайт, UTM-мітки, комісія, дата продажу.
+ * Довге (кілька хвилин на ~4000 заявок); якщо обірветься — натиснути ще раз, продовжить звичайне оновлення.
+ */
+export async function resyncOrdersYear() {
+  const user = await requirePerm("settings");
+  let msg: string;
+  try {
+    const { db } = await import("@/lib/db");
+    await db.setting.deleteMany({ where: { key: "lastOrderSync" } });
+    const r = await syncOrders(400);
+    await logAction(user.id, "resync-orders", "orders", null, r);
+    msg = `Перезавантажено заявок: ${r.saved}`;
+  } catch (e) {
+    msg = `Помилка: ${e instanceof Error ? e.message : e}`;
+  }
+  revalidatePath("/reports/sales");
+  revalidatePath("/reports/channels");
+  redirect(`/reports/channels?msg=${encodeURIComponent(msg)}`);
+}
