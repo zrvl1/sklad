@@ -69,9 +69,9 @@ export type PromChange = { promId: string; name: string | null; from: string; to
  */
 export async function promStockSync({ dryRun = false } = {}) {
   if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN");
-  // список товарів Prom — раз на 6 годин (між ними знаємо, що самі відправили)
+  // список товарів Prom — щогодини (так підхоплюємо нові товари після імпорту Prom), між цим знаємо, що самі відправили
   const mapAt = await getSetting("promMapAt");
-  if (!mapAt || Date.now() - new Date(mapAt).getTime() > 6 * 3600e3 || dryRun) await refreshPromMap();
+  if (!mapAt || Date.now() - new Date(mapAt).getTime() > 3600e3 || dryRun) await refreshPromMap();
 
   const offers = parseYml(await fetchYmlText());
   const bySd = new Map<string, number | null>(offers.map((o) => [o.sdId, o.qty]));
@@ -86,10 +86,14 @@ export async function promStockSync({ dryRun = false } = {}) {
   for (const l of links) {
     // лише «в наявності» / «немає»: «під замовлення» й інші статуси — ваше рішення на Prom, не чіпаємо
     if (l.presence !== "available" && l.presence !== "not_available") continue;
-    const q = l.externalId && bySd.has(l.externalId) ? bySd.get(l.externalId) : l.sku ? bySku.get(l.sku.toUpperCase()) : undefined;
+    let q = l.externalId && bySd.has(l.externalId) ? bySd.get(l.externalId) : l.sku ? bySku.get(l.sku.toUpperCase()) : undefined;
     if (q === undefined) {
-      unmatched.push(l.name ?? l.promId);
-      continue;
+      // товар з ID імпорту, якого вже немає в SalesDrive (видалили) — знімаємо з наявності на Prom
+      if (l.externalId && offers.length > 0) q = 0;
+      else {
+        unmatched.push(l.name ?? l.promId);
+        continue;
+      }
     }
     matched++;
     if (q === null) continue; // у YML немає кількості — не знаємо
