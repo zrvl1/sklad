@@ -16,9 +16,10 @@ export async function applyBulkParam(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const value = String(formData.get("value") ?? "").trim();
   const category = String(formData.get("category") ?? "");
-  const mode = formData.get("mode") === "replace" ? "replace" : "missing";
+  const m = String(formData.get("mode") ?? "");
+  const mode = m === "replace" ? "replace" : m === "remove" ? "remove" : "missing";
   const back = (q: string) => redirect(`/products/bulk-params?${q}`);
-  if (!name || !value) back(`err=${encodeURIComponent("Вкажіть назву і значення характеристики")}`);
+  if (!name || (!value && mode !== "remove")) back(`err=${encodeURIComponent("Вкажіть назву і значення характеристики")}`);
   // без характеристик з YML ми не знаємо поточних — відправка повним списком стерла б їх у SalesDrive
   if ((await getSetting("ymlHasDetails")) !== "1")
     back(`err=${encodeURIComponent("YML SalesDrive не віддає описи й характеристики — увімкніть їх у вивантаженні, інакше можна стерти наявні")}`);
@@ -28,7 +29,17 @@ export async function applyBulkParam(formData: FormData) {
   });
   const changed: number[] = [];
   for (const p of products) {
-    const params = parseParams(p.params);
+    let params = parseParams(p.params);
+    if (mode === "remove") {
+      const left = params.filter((x) => x.name.trim().toLowerCase() !== name.toLowerCase());
+      if (left.length === params.length) continue;
+      params = left;
+      // порожній список у SalesDrive не шлеться (захист від стирання) — тож лишаємо хоча б одну характеристику
+      if (!params.length) continue;
+      await db.product.update({ where: { id: p.id }, data: { params: JSON.stringify(params) } });
+      changed.push(p.id);
+      continue;
+    }
     const ex = params.find((x) => x.name.trim().toLowerCase() === name.toLowerCase());
     if (ex && (mode === "missing" ? ex.value.trim() !== "" : ex.value === value)) continue;
     if (ex) ex.value = value;
@@ -49,5 +60,5 @@ export async function applyBulkParam(formData: FormData) {
   }
   await logAction(user.id, "bulk-param", "product", null, { name, value, category, mode, changed: changed.length });
   revalidatePath("/products");
-  back(`msg=${encodeURIComponent(`«${name}: ${value}» — оновлено товарів: ${changed.length}${changed.length ? " (відправлено в SalesDrive)" : ""}`)}${warn ? `&warn=${encodeURIComponent(`SalesDrive: ${warn}`)}` : ""}`);
+  back(`msg=${encodeURIComponent(`«${name}${mode === "remove" ? "» прибрано" : `: ${value}»`} — оновлено товарів: ${changed.length}${changed.length ? " (відправлено в SalesDrive)" : ""}`)}${warn ? `&warn=${encodeURIComponent(`SalesDrive: ${warn}`)}` : ""}`);
 }

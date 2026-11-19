@@ -48,7 +48,7 @@ export default async function BulkParamsPage({ searchParams }: { searchParams: S
           </label>
           <label>
             Значення
-            <input name="value" required placeholder="Новий" style={{ width: 200 }} />
+            <input name="value" placeholder="Новий (для «прибрати» — порожньо)" style={{ width: 220 }} />
           </label>
           <label>
             Товари
@@ -66,6 +66,7 @@ export default async function BulkParamsPage({ searchParams }: { searchParams: S
             <select name="mode" defaultValue="missing">
               <option value="missing">не чіпати (додати лише де немає)</option>
               <option value="replace">замінити значення</option>
+              <option value="remove">прибрати цю характеристику з товарів</option>
             </select>
           </label>
           <button className="btn primary">Застосувати й відправити</button>
