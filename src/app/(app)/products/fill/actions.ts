@@ -16,6 +16,7 @@ export async function saveFill(formData: FormData) {
   const user = await requirePerm("products.edit");
   const ids = formData.getAll("id").map(Number).filter(Boolean);
   const bulkMan = String(formData.get("bulkManufacturer") ?? "").trim();
+  const bulkCountry = String(formData.get("bulkCountry") ?? "").trim();
   const back = String(formData.get("back") ?? "/products/fill");
   const products = await db.product.findMany({ where: { id: { in: ids } } });
   const toSd: number[] = [];
@@ -29,8 +30,11 @@ export async function saveFill(formData: FormData) {
     if (bulkMan && selected) man = bulkMan;
     const costRaw = String(formData.get(`c_${p.id}`) ?? "").trim();
     const cost = costRaw === "" ? p.cost : num(costRaw);
-    const data: { manufacturer?: string | null; cost?: number; costCurrency?: null; costOriginal?: null } = {};
+    let country = String(formData.get(`k_${p.id}`) ?? "").trim();
+    if (bulkCountry && selected) country = bulkCountry;
+    const data: { manufacturer?: string | null; country?: string | null; cost?: number; costCurrency?: null; costOriginal?: null } = {};
     if ((man || null) !== (p.manufacturer || null)) data.manufacturer = man || null;
+    if ((country || null) !== (p.country || null)) data.country = country || null;
     if (cost >= 0 && Math.abs(cost - p.cost) > 0.001) {
       if (p.price > 0 && cost > p.price * 3) errors.push(`${p.sku ?? p.name}: собівартість ${cost} у 3+ рази більша за ціну — не збережено`);
       else Object.assign(data, { cost: Math.round(cost * 100) / 100, costCurrency: null, costOriginal: null });

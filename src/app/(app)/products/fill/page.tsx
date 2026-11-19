@@ -2,12 +2,14 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { saveFill } from "./actions";
+import SelectAllButton from "@/components/SelectAllButton";
 
 type SP = Promise<{ f?: string; q?: string; page?: string; msg?: string; warn?: string }>;
 const PER = 50;
 const FILTERS: Record<string, string> = {
   cost: "Без собівартості",
-  man: "Без виробника",
+  man: "Без бренду",
+  country: "Без країни",
   cell: "Без комірки (є залишок)",
   all: "Усі основні товари",
 };
@@ -25,6 +27,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       ? { ...base, cost: { lte: 0 } }
       : f === "man"
         ? { ...base, OR: [{ manufacturer: null }, { manufacturer: "" }] }
+        : f === "country"
+          ? { ...base, OR: [{ country: null }, { country: "" }] }
         : f === "cell"
           ? { ...base, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } }
           : base;
@@ -33,6 +37,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
     Promise.all([
       db.product.count({ where: { deletedAt: null, baseProductId: null, cost: { lte: 0 } } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ manufacturer: null }, { manufacturer: "" }] } }),
+      db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ country: null }, { country: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } } }),
     ]),
     db.product.count({ where }),
@@ -63,7 +68,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>
             {t}
-            {i < 3 ? ` (${counts[i]})` : ""}
+            {i < 4 ? ` (${counts[i]})` : ""}
           </Link>
         ))}
         <form className="row" style={{ gap: 6 }}>
@@ -79,6 +84,11 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
 
       <form action={saveFill}>
         <input type="hidden" name="back" value={back} />
+        <datalist id="countries">
+          {["Китай", "Індія", "Тайвань", "Японія", "Італія", "Україна", "Польща"].map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
         <datalist id="mans">
           {mans.map((m) => (
             <option key={m.manufacturer!} value={m.manufacturer!} />
@@ -86,9 +96,14 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         </datalist>
         <div className="toolbar">
           <label className="row" style={{ gap: 6 }}>
-            Виробник для позначених:
-            <input name="bulkManufacturer" list="mans" placeholder="напр. WLJF" style={{ width: 180 }} />
+            Для позначених — бренд:
+            <input name="bulkManufacturer" list="mans" placeholder="напр. WLJF" style={{ width: 160 }} />
           </label>
+          <label className="row" style={{ gap: 6 }}>
+            країна:
+            <input name="bulkCountry" list="countries" placeholder="Китай" style={{ width: 120 }} />
+          </label>
+          <SelectAllButton />
           <button className="btn primary">Зберегти сторінку</button>
           <span className="muted small">
             {total} товарів · сторінка {page} з {pages}
@@ -103,7 +118,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
                 <th className="num">Залишок</th>
                 <th className="num">Ціна</th>
                 <th>Собівартість, грн</th>
-                <th>Виробник</th>
+                <th>Бренд</th>
+                <th>Країна</th>
                 <th>Комірка</th>
               </tr>
             </thead>
@@ -130,7 +146,10 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
                       <input name={`c_${p.id}`} inputMode="decimal" placeholder={p.cost > 0 ? String(p.cost) : "0 — вкажіть"} style={{ width: 100 }} />
                     </td>
                     <td>
-                      <input name={`m_${p.id}`} list="mans" defaultValue={p.manufacturer ?? ""} style={{ width: 140 }} />
+                      <input name={`m_${p.id}`} list="mans" defaultValue={p.manufacturer ?? ""} style={{ width: 130 }} />
+                    </td>
+                    <td>
+                      <input name={`k_${p.id}`} list="countries" defaultValue={p.country ?? ""} style={{ width: 90 }} />
                     </td>
                     <td>
                       {p.cells.length > 0 && (
@@ -161,7 +180,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted">
+                  <td colSpan={8} className="muted">
                     Усе заповнено 🎉
                   </td>
                 </tr>

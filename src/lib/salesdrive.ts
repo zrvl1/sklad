@@ -22,6 +22,10 @@ export type SdProductPayload = {
   sku?: string;
   barcode?: string;
   manufacturer?: string;
+  // назва поля країни в API SalesDrive не задокументована — передаємо поширені варіанти, зайві SalesDrive ігнорує
+  countryManufacturer?: string;
+  manufacturerCountry?: string;
+  country?: string;
   supplier?: string;
   discount?: { value: string; date_start: string; date_end: string };
   stockBalance?: string;
@@ -118,6 +122,7 @@ export function productToSd(
   if (p.sku) payload.sku = p.sku;
   if (p.barcode) payload.barcode = p.barcode;
   if (p.manufacturer) payload.manufacturer = p.manufacturer;
+  if (p.country) payload.countryManufacturer = payload.manufacturerCountry = payload.country = p.country;
   if (p.supplierName) payload.supplier = p.supplierName;
   if (p.categorySdId || p.categoryName) {
     payload.category = {};
