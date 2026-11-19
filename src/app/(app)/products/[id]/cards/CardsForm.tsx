@@ -53,7 +53,7 @@ export default function CardsForm({ base }: { base: Base }) {
             <input value={tplName} onChange={(e) => setTplName(e.target.value)} />
           </label>
           <label>
-            Шаблон назви — друга мова
+            Шаблон назви — UA
             <input value={tplNameTr} onChange={(e) => setTplNameTr(e.target.value)} placeholder="{name_tr} {model}" />
           </label>
           <label>
@@ -62,7 +62,7 @@ export default function CardsForm({ base }: { base: Base }) {
           </label>
         </div>
         <p className="muted small">
-          {"{name}"} — назва основного, {"{name_tr}"} — його назва другою мовою, {"{model}"} — модель із переліку (працює і в описах основного).
+          {"{name}"} — назва основного (RU), {"{name_tr}"} — українська назва, {"{model}"} — модель із переліку (працює і в описах основного).
         </p>
         <button type="button" className="btn" onClick={generate} disabled={!models.trim()}>
           Сформувати картки
@@ -83,11 +83,11 @@ export default function CardsForm({ base }: { base: Base }) {
             </div>
             <div className="grid2">
               <label style={{ gridColumn: "1 / -1" }}>
-                Назва *
+                Назва RU *
                 <input name={`name_${i}`} value={r.name} onChange={(e) => set(i, "name", e.target.value)} maxLength={255} placeholder={`${base.name} для …`} />
               </label>
               <label style={{ gridColumn: "1 / -1" }}>
-                Назва — друга мова
+                Назва UA
                 <input name={`nameTr_${i}`} value={r.nameTr} onChange={(e) => set(i, "nameTr", e.target.value)} maxLength={255} placeholder="порожньо — така сама" />
               </label>
               <label>
@@ -106,11 +106,11 @@ export default function CardsForm({ base }: { base: Base }) {
               </summary>
               <div className="grid2" style={{ marginTop: 8 }}>
                 <label>
-                  Опис
+                  Опис RU
                   <textarea name={`desc_${i}`} rows={5} value={r.desc} onChange={(e) => set(i, "desc", e.target.value)} />
                 </label>
                 <label>
-                  Опис — друга мова
+                  Опис UA
                   <textarea name={`descTr_${i}`} rows={5} value={r.descTr} onChange={(e) => set(i, "descTr", e.target.value)} />
                 </label>
                 <label style={{ gridColumn: "1 / -1" }}>

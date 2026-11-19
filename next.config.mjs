@@ -31,6 +31,8 @@ const nextConfig = {
   poweredByHeader: false,
   // Типи перевіряються під час розробки; на сервері не зупиняємо публікацію через дрібну розбіжність типів
   typescript: { ignoreBuildErrors: true },
+  // завантаження Excel-експорту SalesDrive через форму (типово ліміт 1 МБ)
+  experimental: { serverActions: { bodySizeLimit: "10mb" } },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

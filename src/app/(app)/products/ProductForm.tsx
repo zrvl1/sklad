@@ -31,12 +31,12 @@ export default function ProductForm({
       {p && <input type="hidden" name="id" value={p.id} />}
       <div className="grid2">
         <label style={{ gridColumn: "1 / -1" }}>
-          Назва *
+          Назва російською (RU, основна в SalesDrive) *
           <input name="name" defaultValue={p?.name} required minLength={2} maxLength={255} autoFocus={!p} />
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
-          Назва — друга мова (переклад у SalesDrive)
-          <input name="nameTranslate" defaultValue={p?.nameTranslate ?? ""} maxLength={255} placeholder="порожньо — піде така сама, як основна" />
+          Назва українською (UA)
+          <input name="nameTranslate" defaultValue={p?.nameTranslate ?? ""} maxLength={255} placeholder="порожньо — піде така сама, як російська" />
         </label>
         <label>
           Категорія

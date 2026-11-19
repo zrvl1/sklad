@@ -95,7 +95,7 @@ export default function DetailsFields({
         </div>
       )}
       <label>
-        Опис (піде в SalesDrive; можна HTML)
+        Опис російською (RU; можна HTML)
         <textarea
           name="description"
           rows={6}
@@ -108,9 +108,9 @@ export default function DetailsFields({
       </label>
       <label>
         <span className="row" style={{ justifyContent: "space-between" }}>
-          <span>Опис — друга мова (порожньо — піде такий самий, як основний)</span>
+          <span>Опис українською (UA) — порожньо: такий самий, як російський</span>
           <button type="button" className="btn sm" onClick={() => setDescTr(desc)} disabled={!desc}>
-            скопіювати основний
+            скопіювати з RU
           </button>
         </span>
         <textarea name="descriptionTranslate" rows={4} value={descTr} onChange={(e) => setDescTr(e.target.value)} />

@@ -23,7 +23,13 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <h1>Основні товари й картки-комплекти</h1>
+      <div className="toolbar">
+        <h1 style={{ margin: 0 }}>Основні товари й картки-комплекти</h1>
+        <span className="spacer" />
+        <Link className="btn primary" href="/products/import">
+          Звірити з Excel SalesDrive
+        </Link>
+      </div>
       {okMsg && <div className="msg ok">{okMsg}</div>}
       {warn && <div className="msg warn">{warn}</div>}
 
