@@ -214,6 +214,7 @@ export type YmlOffer = {
   sku: string | null;
   barcode: string | null;
   manufacturer: string | null;
+  country: string | null;
   categoryId: string | null;
   categoryName: string | null;
   qty: number | null;
@@ -310,6 +311,7 @@ export function parseYml(xml: string): YmlOffer[] {
         sku: text(o.vendorCode as Node) ?? text(o.sku as Node) ?? text(o.article as Node) ?? param("sku", "артикул"),
         barcode: text(o.barcode as Node) ?? param("штрихкод", "штрих-код", "barcode"),
         manufacturer: text(o.vendor as Node) ?? param("виробник", "производитель"),
+        country: text(o.country_of_origin as Node) ?? text(o.country as Node) ?? param("країна виробник", "страна производитель", "країна-виробник", "страна-производитель"),
         categoryId,
         categoryName: categoryId ? cats.get(categoryId) ?? null : null,
         qty: firstNum(

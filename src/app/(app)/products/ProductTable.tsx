@@ -13,6 +13,8 @@ type Row = {
   name: string;
   sku: string | null;
   barcode: string | null;
+  manufacturer?: string | null;
+  country?: string | null;
   price: number;
   cost: number;
   stock: number;
@@ -91,6 +93,7 @@ export default function ProductTable({ products, canEdit = true, showCost = true
               </th>
               <th>Назва</th>
               <th>SKU</th>
+              <th>Бренд · країна</th>
               <th>Штрихкод</th>
               <th>Комірки</th>
               <th className="num">Залишок</th>
@@ -121,6 +124,10 @@ export default function ProductTable({ products, canEdit = true, showCost = true
                   )}
                 </td>
                 <td>{p.sku}</td>
+                <td className="small">
+                  {p.manufacturer ?? <span className="badge warn">немає бренду</span>}
+                  <div className="muted">{p.country ?? "—"}</div>
+                </td>
                 <td>{p.barcode ?? <span className="badge warn">немає</span>}</td>
                 <td>{p.cells || <span className="muted">—</span>}</td>
                 <td className="num">{p.stock}</td>

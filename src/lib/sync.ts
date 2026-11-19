@@ -55,6 +55,7 @@ export async function syncFromYml() {
             sku: o.sku,
             barcode: o.barcode,
             manufacturer: o.manufacturer,
+            ...(o.country ? { country: o.country } : {}),
             categorySdId: o.categoryId,
             categoryName: o.categoryName,
             search: buildSearch(

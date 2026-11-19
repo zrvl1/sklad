@@ -78,6 +78,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
         products={products.map((p) => ({
           id: p.id,
           sdId: p.sdId,
+          manufacturer: p.manufacturer,
+          country: p.country,
           name: p.name,
           sku: p.sku,
           barcode: p.barcode,
