@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFindDups, promHideDups, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
 import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -22,6 +22,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     ? await Promise.all([getSetting("promEnabled"), getSetting("promLast"), getSetting("promDry"), getSetting("promLog")])
     : [null, null, null, null];
   const promOn = promOnRaw === "1";
+  const promDupsRaw = isAdmin ? await getSetting("promDups") : null;
+  const promDups = promDupsRaw ? (JSON.parse(promDupsRaw) as string[]) : null;
   type PromRes = { at: string; prom: number; matched: number; unmatched: number; changes: number; sent: number; errors: string[]; guard: boolean };
   const promLast = promLastRaw ? (JSON.parse(promLastRaw) as PromRes) : null;
   const promDry = promDryRaw
@@ -124,6 +126,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                       {promDry.unmatched > promDry.unmatchedSample.length ? "…" : ""}
                     </p>
                   )}
+                </details>
+              )}
+              <div className="toolbar" style={{ marginTop: 8 }}>
+                <span className="small">Дублі товарів на Prom:</span>
+                <form action={promFindDups}>
+                  <button className="btn sm">Знайти</button>
+                </form>
+                {promDups && promDups.length > 0 && (
+                  <form action={promHideDups}>
+                    <button className="btn sm danger">Приховати дублі з вітрини</button>
+                  </form>
+                )}
+              </div>
+              {promDups && promDups.length > 0 && (
+                <details className="small">
+                  <summary>Дублі (товари з тим самим артикулом, але без ID SalesDrive) — перші {promDups.length}</summary>
+                  {promDups.map((d, i) => (
+                    <div key={i}>{d}</div>
+                  ))}
                 </details>
               )}
               {promLog.length > 0 && (

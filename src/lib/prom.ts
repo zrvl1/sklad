@@ -139,3 +139,38 @@ export async function promStockSync({ dryRun = false } = {}) {
   }
   return { ...result, sample: changes.slice(0, 30), unmatchedSample: unmatched.slice(0, 15) };
 }
+
+/**
+ * Дублі на Prom: товари, «ID імпорту» яких не з SalesDrive, хоча товар з тим самим артикулом
+ * і правильним ID (= ID у SalesDrive) уже є. Імпорт YML їх не оновлює, а заявки по них SalesDrive не впізнає.
+ */
+export async function findPromDuplicates() {
+  await refreshPromMap();
+  const sdIds = new Set((await db.product.findMany({ where: { sdId: { not: null } }, select: { sdId: true } })).map((p) => p.sdId!));
+  const links = await db.promLink.findMany();
+  const goodSku = new Set(links.filter((l) => l.externalId && sdIds.has(l.externalId) && l.sku).map((l) => l.sku!.toUpperCase()));
+  return links.filter((l) => !(l.externalId && sdIds.has(l.externalId)) && l.sku && goodSku.has(l.sku.toUpperCase()));
+}
+
+/** Приховати дублі з вітрини Prom (статус «не на сайті») — потім їх можна видалити в кабінеті Prom фільтром «Приховані» */
+export async function hidePromDuplicates() {
+  const dups = await findPromDuplicates();
+  let hidden = 0;
+  const errors: string[] = [];
+  for (let i = 0; i < dups.length; i += 100) {
+    const chunk = dups.slice(i, i + 100);
+    try {
+      const r = await promFetch("/products/edit", {
+        method: "POST",
+        body: JSON.stringify(chunk.map((d) => ({ id: Number(d.promId), status: "not_on_display", presence: "not_available" }))),
+      });
+      const failed = new Set<string>(Object.keys(r.errors ?? {}));
+      for (const [id, err] of Object.entries(r.errors ?? {})) errors.push(`${id}: ${JSON.stringify(err).slice(0, 120)}`);
+      hidden += chunk.filter((d) => !failed.has(d.promId)).length;
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+      break;
+    }
+  }
+  return { found: dups.length, hidden, errors };
+}

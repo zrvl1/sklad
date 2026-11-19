@@ -197,3 +197,34 @@ export async function promToggle(formData: FormData) {
   await logAction(user.id, on ? "prom-on" : "prom-off", "settings", null);
   done(on ? "Автооновлення наявності на Prom увімкнено (кожні 5 хв)" : "Автооновлення Prom вимкнено");
 }
+
+/** Prom: знайти дублі (без змін) */
+export async function promFindDups() {
+  await requirePerm("settings");
+  const { findPromDuplicates } = await import("@/lib/prom");
+  const { setSetting } = await import("@/lib/util");
+  let msg: string;
+  try {
+    const d = await findPromDuplicates();
+    await setSetting("promDups", JSON.stringify(d.slice(0, 30).map((x) => `${x.sku} · ${x.name} (Prom ID ${x.promId})`)));
+    msg = d.length ? `Знайдено дублів на Prom: ${d.length}` : "Дублів на Prom не знайдено";
+  } catch (e) {
+    msg = `Помилка Prom: ${e instanceof Error ? e.message : e}`;
+  }
+  done(msg);
+}
+
+/** Prom: приховати дублі з вітрини */
+export async function promHideDups() {
+  const user = await requirePerm("settings");
+  const { hidePromDuplicates } = await import("@/lib/prom");
+  let msg: string;
+  try {
+    const r = await hidePromDuplicates();
+    msg = `Дублі на Prom: знайдено ${r.found}, приховано ${r.hidden}${r.errors.length ? `, помилки: ${r.errors.slice(0, 3).join("; ")}` : ""}`;
+  } catch (e) {
+    msg = `Помилка Prom: ${e instanceof Error ? e.message : e}`;
+  }
+  await logAction(user.id, "prom-hide-dups", "settings", null, msg);
+  done(msg);
+}
