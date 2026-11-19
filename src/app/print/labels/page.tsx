@@ -127,7 +127,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
                  transform: translate(var(--ox, 0mm), var(--oy, 0mm)); }
         @media print { body.print-frame .label { border: 0.2mm solid #000 !important; } }
         .label .name { font-size: ${t.nameSize}pt; line-height: 1.12; font-weight: 600;
-                       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+                       display: -webkit-box; -webkit-line-clamp: ${t.compact ? 3 : 2}; -webkit-box-orient: vertical; overflow: hidden; }
         .label .prices { display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
         .label .price { font-size: ${t.priceSize}pt; font-weight: 800; white-space: nowrap; }
         .label .old { font-size: ${Math.max(6, Math.round(t.priceSize * 0.5))}pt; text-decoration: line-through; color: #333; white-space: nowrap; }
@@ -154,7 +154,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
             return (
               <div className="label" key={key}>
                 <div className="name">{p.name}</div>
-                <div className="bc">{p.barcode ? <Barcode value={p.barcode} moduleMm={0.25} barMm={8} textMm={2} /> : null}</div>
+                <div className="bc">{p.barcode ? <Barcode value={p.barcode} moduleMm={0.25} barMm={5.5} textMm={1.8} /> : null}</div>
                 <div className="bottom">
                   <span className="sku">
                     {p.sku ?? ""}
