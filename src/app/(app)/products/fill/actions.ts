@@ -43,6 +43,18 @@ export async function saveFill(formData: FormData) {
       await db.product.update({ where: { id: p.id }, data: { ...data, search: buildSearch({ ...p, ...data }) } });
       changed++;
       if (p.sdId) toSd.push(p.id);
+      // бренд і країна — ті самі в картках-комплектах (на Prom це окремі товари)
+      const kitData = {
+        ...(data.manufacturer !== undefined ? { manufacturer: data.manufacturer } : {}),
+        ...(data.country !== undefined ? { country: data.country } : {}),
+      };
+      if (Object.keys(kitData).length) {
+        const kits = await db.product.findMany({ where: { baseProductId: p.id, deletedAt: null }, select: { id: true, sdId: true } });
+        if (kits.length) {
+          await db.product.updateMany({ where: { id: { in: kits.map((k) => k.id) } }, data: kitData });
+          toSd.push(...kits.filter((k) => k.sdId).map((k) => k.id));
+        }
+      }
     }
     const cellId = Number(formData.get(`cell_${p.id}`)) || 0;
     if (cellId) {
