@@ -1,5 +1,6 @@
 "use client";
 
+import PrintButton from "@/components/PrintButton";
 import TemplateSelect, { useTemplate } from "@/components/TemplateSelect";
 
 /** Кнопка «надрукувати цінники на все, що надійшло» (кількість = кількість у приході) */
@@ -9,12 +10,12 @@ export default function PrintReceiptLabels({ receiptId, highlight }: { receiptId
     <div className={highlight ? "msg ok toolbar" : "toolbar"}>
       {highlight && <span>Прихід проведено. Надрукувати цінники на весь товар?</span>}
       <TemplateSelect value={tpl} onChange={setTpl} />
-      <a className="btn primary" href={`/print/labels?receipt=${receiptId}&tpl=${tpl}`} target="_blank">
+      <PrintButton className="btn primary" href={`/print/labels?receipt=${receiptId}&tpl=${tpl}`}>
         🖨 Цінники на прихід
-      </a>
-      <a className="btn" href={`/print/labels?receipt=${receiptId}&tpl=${tpl}&one=1`} target="_blank">
+      </PrintButton>
+      <PrintButton className="btn" href={`/print/labels?receipt=${receiptId}&tpl=${tpl}&one=1`}>
         По одному на товар
-      </a>
+      </PrintButton>
     </div>
   );
 }

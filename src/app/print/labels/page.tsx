@@ -22,7 +22,7 @@ type SP = Promise<{
 
 const MAX_LABELS = 2000;
 
-const priceText = (v: number) => `${v.toLocaleString("uk-UA", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })} ₴`;
+const priceText = (v: number) => `${v.toLocaleString("uk-UA", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })} грн`;
 
 export default async function PrintLabels({ searchParams }: { searchParams: SP }) {
   await requireUser();
@@ -109,7 +109,13 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
     : `@page { size: ${t.w}mm ${t.h}mm; margin: 0; }
        .labels { display: flex; flex-wrap: wrap; gap: 4mm; padding: 4mm; }
        .label { border: 0.2mm solid #ccc; }
-       @media print { .labels { display: block; padding: 0; } .label { border: 0; page-break-after: always; break-after: page; } }`;
+       @media print {
+         html, body { margin: 0 !important; padding: 0 !important; width: ${t.w}mm; }
+         .labels { display: block; padding: 0; }
+         .label { border: 0; page-break-after: always; break-after: page; }
+         /* остання наліпка — без розриву сторінки, інакше принтер проганяє ще одну порожню */
+         .label:last-child { page-break-after: auto; break-after: auto; }
+       }`;
 
   return (
     <div style={{ background: "#fff", minHeight: "100vh" }}>
@@ -148,7 +154,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
             return (
               <div className="label" key={key}>
                 <div className="name">{p.name}</div>
-                <div className="bc">{p.barcode ? <Barcode value={p.barcode} height={t.barcodeH} fontSize={8} width={1.15} /> : null}</div>
+                <div className="bc">{p.barcode ? <Barcode value={p.barcode} moduleMm={0.25} barMm={8} textMm={2} /> : null}</div>
                 <div className="bottom">
                   <span className="sku">
                     {p.sku ?? ""}
@@ -170,7 +176,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
                 <span className="price">{priceText(fp.price)}</span>
               </div>
               {t.barcodeH > 0 && p.barcode ? (
-                <Barcode value={p.barcode} height={t.barcodeH} fontSize={t.w >= 50 ? 11 : 9} width={t.w >= 50 ? 1.6 : 1.2} />
+                <Barcode value={p.barcode} moduleMm={t.w >= 50 ? 0.375 : 0.25} barMm={t.w >= 50 ? 12 : 9} textMm={t.w >= 50 ? 2.8 : 2.2} />
               ) : null}
               <div className="meta">
                 <span>

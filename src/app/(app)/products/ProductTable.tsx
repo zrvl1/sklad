@@ -1,5 +1,6 @@
 "use client";
 
+import { printUrl } from "@/components/PrintButton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -60,7 +61,7 @@ export default function ProductTable({ products, canEdit = true, showCost = true
     const items = Object.entries(selected)
       .map(([id, q]) => `${id}:${q}`)
       .join(",");
-    window.open(`/print/labels?items=${items}&tpl=${tpl}`, "_blank");
+    printUrl(`/print/labels?items=${items}&tpl=${tpl}`);
   };
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import PrintButton from "@/components/PrintButton";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { PackLine } from "@/lib/picking";
 import { identifyCode, loadOrderByScan, markPacked } from "./actions";
@@ -232,9 +233,9 @@ export default function PackStation() {
                             +1
                           </button>
                           {l.labelId && (
-                            <a className="btn sm" href={`/print/labels?items=${l.labelId}:${l.qty - have}`} target="_blank" title="Немає наліпки — надрукувати й наклеїти">
+                            <PrintButton className="btn sm" href={`/print/labels?items=${l.labelId}:${l.qty - have}`} title="Немає наліпки — надрукувати й наклеїти">
                               🖨
-                            </a>
+                            </PrintButton>
                           )}
                         </span>
                       )}

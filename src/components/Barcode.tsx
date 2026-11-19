@@ -4,27 +4,34 @@ import JsBarcode from "jsbarcode";
 import { useEffect, useRef } from "react";
 import { barcodeFormat } from "@/lib/barcode";
 
-export default function Barcode({ value, height, fontSize = 10, width = 1.4 }: { value: string; height: number; fontSize?: number; width?: number }) {
+/**
+ * Штрихкод у міліметрах, без масштабування браузером.
+ * moduleMm — ширина найтоншої смуги: 0.25 мм = рівно 2 точки термопринтера 203 dpi (XP-235B), 0.375 = 3 точки.
+ * Цілі точки — чіткі смуги, які сканер читає з першого разу.
+ */
+export default function Barcode({ value, moduleMm = 0.25, barMm = 8, textMm = 2 }: { value: string; moduleMm?: number; barMm?: number; textMm?: number }) {
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
-    if (!ref.current || !value) return;
+    const svg = ref.current;
+    if (!svg || !value) return;
+    const U = 10; // одиниць SVG на модуль
+    const opts = { width: U, height: Math.round((barMm / moduleMm) * U), fontSize: Math.round((textMm / moduleMm) * U), margin: 0, textMargin: Math.round(U * 1.5), displayValue: textMm > 0, font: "Arial", fontOptions: "bold" };
     try {
-      JsBarcode(ref.current, value, {
-        format: barcodeFormat(value),
-        height,
-        width,
-        fontSize,
-        margin: 0,
-        textMargin: 1,
-        displayValue: fontSize > 0,
-      });
+      JsBarcode(svg, value, { ...opts, format: barcodeFormat(value) });
     } catch {
-      // некоректний код для формату — друкуємо як CODE128
       try {
-        JsBarcode(ref.current, value, { format: "CODE128", height, width, fontSize, margin: 0, textMargin: 1, displayValue: fontSize > 0 });
+        JsBarcode(svg, value, { ...opts, format: "CODE128" });
       } catch {}
     }
-  }, [value, height, fontSize, width]);
-  // crispEdges — чіткі смуги на термопринтері без розмиття
-  return <svg ref={ref} shapeRendering="crispEdges" style={{ maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} />;
+    // розмір у мм: ширина в одиницях / U × ширина модуля
+    const w = Number(svg.getAttribute("width")) || 0;
+    const h = Number(svg.getAttribute("height")) || 0;
+    if (w && h) {
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.style.width = `${(w / U) * moduleMm}mm`;
+      svg.style.height = `${(h / U) * moduleMm}mm`;
+    }
+  }, [value, moduleMm, barMm, textMm]);
+  // crispEdges — без згладжування країв смуг
+  return <svg ref={ref} shapeRendering="crispEdges" style={{ display: "block", margin: "0 auto" }} />;
 }

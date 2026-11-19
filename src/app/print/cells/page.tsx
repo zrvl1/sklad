@@ -35,7 +35,7 @@ export default async function PrintCells({ searchParams }: { searchParams: Promi
           <div className="cell" key={c.id}>
             <div className="wh">{c.warehouse.name}</div>
             <div className="code">{c.code}</div>
-            <Barcode value={`CELL:${c.code}`} height={26} fontSize={0} width={1.3} />
+            <Barcode value={`CELL:${c.code}`} moduleMm={0.25} barMm={7} textMm={0} />
           </div>
         ))}
       </div>

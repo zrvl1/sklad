@@ -1,3 +1,4 @@
+import PrintButton from "@/components/PrintButton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -37,9 +38,9 @@ export default async function CellPage({ params, searchParams }: Props) {
           🖨 Етикетка комірки
         </a>
         {printItems && (
-          <a className="btn" href={`/print/labels?items=${printItems}`} target="_blank">
+          <PrintButton className="btn" href={`/print/labels?items=${printItems}`}>
             🖨 Цінники на вміст
-          </a>
+          </PrintButton>
         )}
         <Link className="btn" href="/warehouse">
           До складу

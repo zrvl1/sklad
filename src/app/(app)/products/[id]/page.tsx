@@ -1,3 +1,4 @@
+import PrintButton from "@/components/PrintButton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -49,9 +50,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <h1 style={{ margin: 0 }}>{product.name}</h1>
           <span className="spacer" />
           {can(user, "labels") && (
-            <a className="btn" href={`/print/labels?items=${product.id}:1`} target="_blank">
+            <PrintButton className="btn" href={`/print/labels?items=${product.id}:1`}>
               🖨 Наліпка
-            </a>
+            </PrintButton>
           )}
           <Link className="btn" href="/products">
             До списку
@@ -137,9 +138,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>{product.name}</h1>
         <span className="spacer" />
-        <a className="btn" href={`/print/labels?items=${product.id}:1`} target="_blank">
+        <PrintButton className="btn" href={`/print/labels?items=${product.id}:1`}>
           🖨 Цінник
-        </a>
+        </PrintButton>
         <Link className="btn" href="/products">
           До списку
         </Link>
