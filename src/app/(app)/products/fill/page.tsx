@@ -10,6 +10,7 @@ const FILTERS: Record<string, string> = {
   cost: "Без собівартості",
   man: "Без бренду",
   country: "Без країни",
+  kw: "Без ключових слів",
   cell: "Без комірки (є залишок)",
   all: "Усі основні товари",
 };
@@ -29,6 +30,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         ? { ...base, OR: [{ manufacturer: null }, { manufacturer: "" }] }
         : f === "country"
           ? { ...base, OR: [{ country: null }, { country: "" }] }
+        : f === "kw"
+          ? { ...base, OR: [{ keywords: null }, { keywords: "" }] }
         : f === "cell"
           ? { ...base, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } }
           : base;

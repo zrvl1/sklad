@@ -15,6 +15,8 @@ type Row = {
   barcode: string | null;
   manufacturer?: string | null;
   country?: string | null;
+  keywords?: string | null;
+  keywordsUa?: string | null;
   price: number;
   cost: number;
   stock: number;
@@ -115,7 +117,18 @@ export default function ProductTable({ products, canEdit = true, showCost = true
                       не в CRM
                     </span>
                   )}
-                  <div className="muted small">ID {p.sdId ?? "—"}</div>
+                  <div className="muted small">
+                    ID {p.sdId ?? "—"} ·{" "}
+                    <span title={p.keywords ?? "Немає пошукових запитів у SalesDrive"} style={{ color: p.keywords ? "var(--ok)" : "var(--err)" }}>
+                      ключові RU {p.keywords ? "✓" : "✗"}
+                    </span>
+                    {p.keywordsUa !== undefined && (
+                      <span title={p.keywordsUa ?? ""} style={{ color: p.keywordsUa ? "var(--ok)" : "var(--muted)" }}>
+                        {" "}
+                        · UA {p.keywordsUa ? "✓" : "—"}
+                      </span>
+                    )}
+                  </div>
                   {!!p.kitsCount && <span className="badge" title="Картки-комплекти на сайті">+{p.kitsCount} карток</span>}
                   {p.base && (
                     <span className="badge warn">

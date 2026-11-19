@@ -80,6 +80,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
           sdId: p.sdId,
           manufacturer: p.manufacturer,
           country: p.country,
+          keywords: p.keywords,
+          keywordsUa: p.keywordsUa,
           name: p.name,
           sku: p.sku,
           barcode: p.barcode,

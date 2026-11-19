@@ -56,6 +56,8 @@ export async function syncFromYml() {
             barcode: o.barcode,
             manufacturer: o.manufacturer,
             ...(o.country ? { country: o.country } : {}),
+            ...(o.keywords !== undefined ? { keywords: o.keywords } : {}),
+            ...(o.keywordsUa !== undefined ? { keywordsUa: o.keywordsUa } : {}),
             categorySdId: o.categoryId,
             categoryName: o.categoryName,
             search: buildSearch(
