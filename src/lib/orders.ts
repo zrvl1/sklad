@@ -1,3 +1,4 @@
+import { fixLayout } from "./scan";
 /**
  * Продажі із SalesDrive для звітів.
  * Окремий ключ SALESDRIVE_ORDERS_KEY з правами лише на читання: «Заявки» і «Статуси заявки».
@@ -24,7 +25,7 @@ async function sdGet(path: string, params: Record<string, string> = {}) {
 
 /** Нормалізація номера ТТН: без пробілів і дефісів, великими літерами (NP: 14 цифр, Укрпошта: цифри або RR…UA) */
 export function normTtn(v: string) {
-  return v.replace(/[\s-]/g, "").toUpperCase();
+  return fixLayout(v).replace(/[\s-]/g, "").toUpperCase();
 }
 
 export type SdStatus = { id: number; name: string; type: number };

@@ -1,6 +1,7 @@
 "use client";
 
 import PrintButton from "@/components/PrintButton";
+import { fixLayout } from "@/lib/scan";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { PackLine } from "@/lib/picking";
 import { identifyCode, loadOrderByScan, markPacked } from "./actions";
@@ -92,7 +93,7 @@ export default function PackStation() {
     });
 
   const onScan = (raw: string) => {
-    const code = raw.trim().toUpperCase().replace(/\s/g, "");
+    const code = fixLayout(raw.trim()).toUpperCase().replace(/\s/g, "");
     setInput("");
     if (!code) return;
     // немає відкритої заявки або відскановано іншу ТТН — відкриваємо заявку

@@ -1,3 +1,4 @@
+import { scanVariants } from "./scan";
 import { db } from "./db";
 import { buildSearch } from "./util";
 
@@ -41,15 +42,16 @@ async function toBaseProducts(list: FoundProduct[]): Promise<FoundProduct[]> {
  * артикул постачальника або додатковий штрихкод.
  */
 export async function findByCode(raw: string, toBase = false): Promise<FoundProduct[]> {
-  const code = raw.trim();
-  if (!code) return [];
+  const variants = scanVariants(raw);
+  if (!variants.length) return [];
+  const code = variants[0];
   const direct = await db.product.findMany({
-    where: { deletedAt: null, OR: [{ barcode: code }, { sku: code }, { sdId: code }] },
+    where: { deletedAt: null, OR: [{ barcode: { in: variants } }, { sku: { in: variants } }, { sdId: { in: variants } }] },
     select: productSelect,
     take: 5,
   });
   const viaCodes = await db.productCode.findMany({
-    where: { code, product: { deletedAt: null } },
+    where: { code: { in: variants }, product: { deletedAt: null } },
     include: { product: { select: productSelect }, supplier: { select: { name: true } } },
     take: 5,
   });
@@ -58,7 +60,7 @@ export async function findByCode(raw: string, toBase = false): Promise<FoundProd
   for (const p of direct) {
     if (seen.has(p.id)) continue;
     seen.add(p.id);
-    out.push({ ...p, matchedBy: p.barcode === code ? "штрихкод" : p.sku === code ? "артикул" : "ID" });
+    out.push({ ...p, matchedBy: p.barcode && variants.includes(p.barcode) ? "штрихкод" : p.sku && variants.includes(p.sku) ? "артикул" : "ID" });
   }
   for (const c of viaCodes) {
     if (seen.has(c.product.id)) continue;
