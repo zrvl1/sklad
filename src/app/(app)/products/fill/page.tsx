@@ -41,6 +41,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       db.product.count({ where: { deletedAt: null, baseProductId: null, cost: { lte: 0 } } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ manufacturer: null }, { manufacturer: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ country: null }, { country: "" }] } }),
+      db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ keywords: null }, { keywords: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } } }),
     ]),
     db.product.count({ where }),
@@ -71,7 +72,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>
             {t}
-            {i < 4 ? ` (${counts[i]})` : ""}
+            {i < 5 ? ` (${counts[i]})` : ""}
           </Link>
         ))}
         <form className="row" style={{ gap: 6 }}>
