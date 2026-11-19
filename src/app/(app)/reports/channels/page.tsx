@@ -32,7 +32,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
   ]);
   // SalesDrive віддає сайт номером — назви задаються нижче на сторінці
   const siteNames: Record<string, string> = siteNamesRaw ? JSON.parse(siteNamesRaw) : {};
-  const siteIds = [...new Set(orders.map((o) => o.site).filter((s): s is string => Boolean(s)))].sort();
+  const siteIds: string[] = [...new Set<string>(orders.map((o) => o.site).filter((s): s is string => Boolean(s)))].sort();
   const siteLabel = (s: string | null) => (s ? (siteNames[s] ?? s) : "—");
   // кампанії Prom ProSale у Google (Pmax_cpa_…) зводимо в одну
   const campLabel = (c: string) => (/^pmax_cpa_/i.test(c) ? "ProSale (Google PMax від Prom)" : c);
