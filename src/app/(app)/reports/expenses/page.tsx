@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { MONEY_KINDS, type MoneyKind } from "@/lib/finance-consts";
-import { monthSummary } from "@/lib/finance";
+import { ensureStockSnapshot, monthSummary, stockSnapshot, stockValueNow } from "@/lib/finance";
 import { dateInput, dateUa, money } from "@/lib/util";
 import { deleteExpense } from "./actions";
 import MoneyForm from "./MoneyForm";
@@ -21,6 +21,9 @@ export default async function MoneyPage({ searchParams }: { searchParams: SP }) 
   const next = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
   const defKind = (sp.kind && sp.kind in MONEY_KINDS ? sp.kind : "expense") as MoneyKind;
 
+  if (month === cur) await ensureStockSnapshot(now);
+  const [stockStart, stockEndSnap, stockNow] = await Promise.all([stockSnapshot(month), stockSnapshot(next), month === cur ? stockValueNow() : null]);
+  const stockEnd = stockNow ?? stockEndSnap;
   const [rows, usedRaw, s] = await Promise.all([
     db.expense.findMany({ where: { date: { gte: from, lt: to } }, orderBy: { date: "desc" }, include: { createdBy: { select: { name: true } } } }),
     db.expense.findMany({ distinct: ["kind", "category"], select: { kind: true, category: true } }),
@@ -167,6 +170,25 @@ export default async function MoneyPage({ searchParams }: { searchParams: SP }) 
           <p className="muted small" style={{ marginBottom: 0 }}>
             Скільки грошей прийшло і пішло. Мінус при плюсовому прибутку — нормально, якщо гроші вкладено в товар (закупівлі).
           </p>
+        </div>
+      </div>
+
+      <div className="panel small">
+        <b>Склад за собівартістю:</b> на 1 число — {stockStart ? <b>{money(stockStart.value)}</b> : <span className="muted">не знято</span>}
+        {" · "}
+        {month === cur ? "зараз" : "на кінець місяця"} — {stockEnd ? <b>{money(stockEnd.value)}</b> : <span className="muted">не знято</span>}
+        {stockStart && stockEnd && (
+          <>
+            {" · "}зміна{" "}
+            <b style={red(stockEnd.value - stockStart.value)}>
+              {stockEnd.value - stockStart.value >= 0 ? "+" : ""}
+              {money(stockEnd.value - stockStart.value)}
+            </b>
+          </>
+        )}
+        {stockEnd && stockEnd.noCost > 0 && <span className="muted"> · без собівартості {stockEnd.noCost} шт (не пораховано)</span>}
+        <div className="muted">
+          Знімок робиться сам 1-го числа. Гроші «в товарі»: якщо склад виріс, частина прибутку лежить на полицях, а не на рахунку.
         </div>
       </div>
 

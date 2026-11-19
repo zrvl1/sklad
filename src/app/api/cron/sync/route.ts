@@ -20,6 +20,8 @@ export async function GET(req: Request) {
   }
   try {
     const r = await syncFromYml();
+    // знімок вартості складу на початок місяця (крон о 7:00 — 1-го числа це і є початок)
+    await (await import("@/lib/finance")).ensureStockSnapshot();
     // прибираємо старі записи спроб входу (старші за 90 днів)
     await db.loginAttempt.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 90 * 864e5) } } });
     const orders = ordersEnabled() ? await syncOrders() : null; // продажі для звітів

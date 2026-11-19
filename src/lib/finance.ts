@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { cachedStatuses } from "./orders";
-import { getSetting } from "./util";
+import { getSetting, setSetting } from "./util";
 import type { MoneyKind } from "./finance-consts";
 export * from "./finance-consts";
 
@@ -51,4 +51,39 @@ export async function monthSummary(from: Date, to: Date) {
     cashOut,
     cashNet: cashIn - cashOut,
   };
+}
+
+/** Вартість складу за собівартістю зараз (лише основні товари; картки-комплекти — це той самий товар) */
+export async function stockValueNow() {
+  const rows = await db.stockBalance.findMany({
+    where: { qty: { gt: 0 }, product: { deletedAt: null, baseProductId: null } },
+    select: { qty: true, product: { select: { cost: true } } },
+  });
+  let value = 0;
+  let qty = 0;
+  let noCost = 0;
+  for (const r of rows) {
+    qty += r.qty;
+    if (r.product.cost > 0) value += r.qty * r.product.cost;
+    else noCost += r.qty;
+  }
+  return { value: Math.round(value * 100) / 100, qty, noCost };
+}
+
+/**
+ * Знімок вартості складу на 1-ше число місяця (зберігається один раз за місяць: денний крон і перший перегляд сторінки).
+ * Кінець місяця = знімок на початок наступного.
+ */
+export async function ensureStockSnapshot(date = new Date()) {
+  const key = `stockValue:${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const have = await getSetting(key);
+  if (have) return JSON.parse(have) as { at: string; value: number; qty: number; noCost: number };
+  const v = { at: new Date().toISOString(), ...(await stockValueNow()) };
+  await setSetting(key, JSON.stringify(v));
+  return v;
+}
+
+export async function stockSnapshot(month: string) {
+  const raw = await getSetting(`stockValue:${month}`);
+  return raw ? (JSON.parse(raw) as { at: string; value: number; qty: number; noCost: number }) : null;
 }
