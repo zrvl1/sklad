@@ -1,37 +1,42 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { MONEY_KINDS, type MoneyKind } from "@/lib/finance-consts";
+import { monthSummary } from "@/lib/finance";
 import { dateInput, dateUa, money } from "@/lib/util";
-import { addExpense, deleteExpense } from "./actions";
+import { deleteExpense } from "./actions";
+import MoneyForm from "./MoneyForm";
 
-const EXPENSE_CATEGORIES = ["Google Ads", "Prom: ProSale (реклама)", "Prom: комісія за замовлення", "Prom: тариф / пакет", "Horoshop: тариф", "Facebook / Instagram", "Доставка за наш рахунок", "Пакування", "Зарплата", "Сервіси (CRM, Checkbox, хостинг)", "Інше"];
+type SP = Promise<{ month?: string; kind?: string; msg?: string; err?: string }>;
 
-type SP = Promise<{ month?: string; msg?: string; err?: string }>;
-
-// Витрати за місяць: реклама, комісії, сервіси — для чистого прибутку у «Звіт: продажі»
-export default async function ExpensesPage({ searchParams }: { searchParams: SP }) {
+// Гроші за місяць: прибуток, рух коштів, витрати, виведене власником
+export default async function MoneyPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const now = new Date();
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : cur;
   const [y, m] = month.split("-").map(Number);
   const from = new Date(y, m - 1, 1);
   const to = new Date(y, m, 1);
   const prev = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
   const next = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
+  const defKind = (sp.kind && sp.kind in MONEY_KINDS ? sp.kind : "expense") as MoneyKind;
 
-  const [rows, used] = await Promise.all([
+  const [rows, usedRaw, s] = await Promise.all([
     db.expense.findMany({ where: { date: { gte: from, lt: to } }, orderBy: { date: "desc" }, include: { createdBy: { select: { name: true } } } }),
-    db.expense.findMany({ distinct: ["category"], select: { category: true } }),
+    db.expense.findMany({ distinct: ["kind", "category"], select: { kind: true, category: true } }),
+    monthSummary(from, to),
   ]);
+  const used: Record<string, string[]> = {};
+  for (const u of usedRaw) (used[u.kind] ??= []).push(u.category);
   const byCat = new Map<string, number>();
-  for (const r of rows) byCat.set(r.category, (byCat.get(r.category) ?? 0) + r.amount);
-  const total = rows.reduce((s, r) => s + r.amount, 0);
-  const cats = [...new Set([...EXPENSE_CATEGORIES, ...used.map((u) => u.category)])];
-  const defDate = month === dateInput(now).slice(0, 7) ? dateInput(now) : dateInput(new Date(y, m, 0));
+  for (const r of rows.filter((r) => r.kind === "expense")) byCat.set(r.category, (byCat.get(r.category) ?? 0) + r.amount);
+  const defDate = month === cur ? dateInput(now) : dateInput(new Date(y, m, 0));
+  const red = (v: number) => (v < 0 ? { color: "var(--err)" } : undefined);
 
   return (
     <>
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>Витрати</h1>
+        <h1 style={{ margin: 0 }}>Гроші за місяць</h1>
         <span className="spacer" />
         <Link className="btn sm" href={`/reports/expenses?month=${prev}`}>
           ←
@@ -41,91 +46,182 @@ export default async function ExpensesPage({ searchParams }: { searchParams: SP 
           →
         </Link>
         <Link className="btn" href={`/reports/sales?from=${dateInput(from)}&to=${dateInput(new Date(y, m, 0))}`}>
-          Прибуток за місяць
+          Продажі за місяць
         </Link>
       </div>
       {sp.msg && <div className="msg ok">{sp.msg}</div>}
       {sp.err && <div className="msg err">{sp.err}</div>}
+
+      <div className="grid2">
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Прибуток</h2>
+          <table className="small">
+            <tbody>
+              <tr>
+                <td>Продажі ({s.sales} заявок)</td>
+                <td className="num">{money(s.revenue)}</td>
+              </tr>
+              <tr>
+                <td>− Собівартість проданого</td>
+                <td className="num">{money(s.cogs)}</td>
+              </tr>
+              <tr>
+                <td>
+                  <b>= Валовий прибуток</b>
+                </td>
+                <td className="num">
+                  <b>{money(s.gross)}</b>
+                </td>
+              </tr>
+              {s.income > 0 && (
+                <tr>
+                  <td>+ Інші доходи</td>
+                  <td className="num">{money(s.income)}</td>
+                </tr>
+              )}
+              <tr>
+                <td>− Витрати бізнесу</td>
+                <td className="num">{money(s.expense)}</td>
+              </tr>
+              <tr>
+                <td>
+                  <b>= Чистий прибуток</b>
+                </td>
+                <td className="num">
+                  <b style={red(s.net)}>{money(s.net)}</b>
+                </td>
+              </tr>
+              <tr>
+                <td className="muted">Виведено собі / особисте</td>
+                <td className="num muted">{money(s.owner)}</td>
+              </tr>
+              <tr>
+                <td>Лишилось у бізнесі з прибутку</td>
+                <td className="num" style={red(s.net - s.owner)}>
+                  {money(s.net - s.owner)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="muted small" style={{ marginBottom: 0 }}>
+            Прибуток — з проданого товару. Закупівля — не витрата, а товар на складі: витратою він стає, коли продається.
+          </p>
+        </div>
+
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Рух грошей</h2>
+          <table className="small">
+            <tbody>
+              <tr>
+                <td>+ Продажі</td>
+                <td className="num">{money(s.revenue)}</td>
+              </tr>
+              {s.income > 0 && (
+                <tr>
+                  <td>+ Інші доходи</td>
+                  <td className="num">{money(s.income)}</td>
+                </tr>
+              )}
+              {s.invest > 0 && (
+                <tr>
+                  <td>+ Вклав власні</td>
+                  <td className="num">{money(s.invest)}</td>
+                </tr>
+              )}
+              <tr>
+                <td>
+                  − Закупівлі товару ({s.receipts} <Link href="/reports">приходів</Link>)
+                </td>
+                <td className="num">{money(s.purchases)}</td>
+              </tr>
+              <tr>
+                <td>− Витрати бізнесу</td>
+                <td className="num">{money(s.expense)}</td>
+              </tr>
+              <tr>
+                <td>− Виведено собі / особисте</td>
+                <td className="num">{money(s.owner)}</td>
+              </tr>
+              <tr>
+                <td>
+                  <b>= Різниця за місяць</b>
+                </td>
+                <td className="num">
+                  <b style={red(s.cashNet)}>{money(s.cashNet)}</b>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="muted small" style={{ marginBottom: 0 }}>
+            Скільки грошей прийшло і пішло. Мінус при плюсовому прибутку — нормально, якщо гроші вкладено в товар (закупівлі).
+          </p>
+        </div>
+      </div>
+
+      <MoneyForm defDate={defDate} defKind={defKind} used={used} />
       <p className="muted small">
-        Вносьте те, що реально <b>витрачено</b> за місяць (дивіться статистику Google Ads, Prom), а не поповнення рахунку: гроші на балансі реклами ще не
-        витрата. Закупівля товару сюди не йде — вона стає собівартістю, коли товар продано.
+        Рекламу вносьте за фактом <b>витраченого</b> (статистика Google Ads, Prom), а не поповнення балансу. Закупівлі товару сюди не вносьте — вони
+        беруться з приходів.
       </p>
 
-      <form action={addExpense} className="panel row">
-        <label>
-          Дата
-          <input type="date" name="date" defaultValue={defDate} required />
-        </label>
-        <label>
-          Стаття
-          <input name="category" list="exp-cats" required placeholder="оберіть або впишіть" style={{ width: 240 }} />
-          <datalist id="exp-cats">
-            {cats.map((c) => (
-              <option key={c} value={c} />
+      {byCat.size > 0 && (
+        <div className="stats">
+          {[...byCat.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([c, v]) => (
+              <div key={c} className="stat">
+                {c}
+                <b>{money(v)}</b>
+              </div>
             ))}
-          </datalist>
-        </label>
-        <label>
-          Сума, грн
-          <input name="amount" type="number" min={0.01} step="0.01" required style={{ width: 120 }} />
-        </label>
-        <label>
-          Примітка
-          <input name="note" placeholder="напр. 1–15 листопада" />
-        </label>
-        <button className="btn primary">Додати</button>
-      </form>
-
-      <div className="stats">
-        <div className="stat">
-          Усього за місяць
-          <b>{money(total)}</b>
         </div>
-        {[...byCat.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([c, v]) => (
-            <div key={c} className="stat">
-              {c}
-              <b>{money(v)}</b>
-            </div>
-          ))}
-      </div>
+      )}
 
       <div className="tablewrap">
         <table>
           <thead>
             <tr>
               <th>Дата</th>
+              <th>Тип</th>
               <th>Стаття</th>
               <th className="num">Сума</th>
+              <th>Рахунок</th>
               <th>Примітка</th>
-              <th>Додав</th>
+              <th>Записав</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{dateUa(r.date)}</td>
-                <td>{r.category}</td>
-                <td className="num">{money(r.amount)}</td>
-                <td className="small">{r.note}</td>
-                <td className="small muted">{r.createdBy.name}</td>
-                <td>
-                  <form action={deleteExpense}>
-                    <input type="hidden" name="id" value={r.id} />
-                    <input type="hidden" name="month" value={month} />
-                    <button className="btn sm" title="Видалити">
-                      ×
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const k = MONEY_KINDS[r.kind as MoneyKind] ?? MONEY_KINDS.expense;
+              return (
+                <tr key={r.id}>
+                  <td>{dateUa(r.date)}</td>
+                  <td className="small">{k.title}</td>
+                  <td>{r.category}</td>
+                  <td className="num" style={{ color: k.sign > 0 ? "var(--ok)" : undefined }}>
+                    {k.sign > 0 ? "+" : "−"}
+                    {money(r.amount)}
+                  </td>
+                  <td className="small">{r.account}</td>
+                  <td className="small">{r.note}</td>
+                  <td className="small muted">{r.createdBy.name}</td>
+                  <td>
+                    <form action={deleteExpense}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <input type="hidden" name="month" value={month} />
+                      <button className="btn sm" title="Видалити">
+                        ×
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              );
+            })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
-                  За цей місяць витрат ще немає
+                <td colSpan={8} className="muted">
+                  За цей місяць записів ще немає
                 </td>
               </tr>
             )}

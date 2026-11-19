@@ -191,8 +191,10 @@ model ReceiptLine {
 model Expense {
   id          Int        @id @default(autoincrement())
   date        DateTime   @default(now())
+  kind        String     @default("expense") // expense — витрата бізнесу | owner — вивів собі / особисте | invest — вклав власні | income — інший дохід
   category    String
   amount      Float
+  account     String?    // з якого рахунку: ФОП, картка, готівка
   warehouseId Int?
   legalEntity String?    // ФОП
   note        String?

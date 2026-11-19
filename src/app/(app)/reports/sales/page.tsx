@@ -36,11 +36,14 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
         },
       },
     }),
-    db.expense.groupBy({ by: ["category"], where: { date: { gte: from, lte: to } }, _sum: { amount: true } }),
+    db.expense.groupBy({ by: ["kind", "category"], where: { date: { gte: from, lte: to } }, _sum: { amount: true } }),
   ]);
-  const expTotal = expenses.reduce((s, e) => s + (e._sum.amount ?? 0), 0);
+  const bizExp = expenses.filter((e) => e.kind === "expense");
+  const otherIncome = expenses.filter((e) => e.kind === "income").reduce((s, e) => s + (e._sum.amount ?? 0), 0);
+  const ownerOut = expenses.filter((e) => e.kind === "owner").reduce((s, e) => s + (e._sum.amount ?? 0), 0);
+  const expTotal = bizExp.reduce((s, e) => s + (e._sum.amount ?? 0), 0);
   const gross = orders._sum.profit ?? 0;
-  const net = gross - expTotal;
+  const net = gross + otherIncome - expTotal;
 
   // По товарах: продажі карток-комплектів зводимо на основний (фізичний) товар, у штуках основного
   const byProduct = new Map<string, { id: number | null; name: string; category: string; qty: number; revenue: number; cost: number; cards: number }>();
@@ -188,7 +191,13 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
                 <b>{money(gross)}</b>
               </td>
             </tr>
-            {expenses
+            {otherIncome > 0 && (
+              <tr>
+                <td>+ Інші доходи</td>
+                <td className="num">{money(otherIncome)}</td>
+              </tr>
+            )}
+            {bizExp
               .sort((a, b) => (b._sum.amount ?? 0) - (a._sum.amount ?? 0))
               .map((e) => (
                 <tr key={e.category}>
@@ -196,7 +205,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
                   <td className="num">{money(e._sum.amount)}</td>
                 </tr>
               ))}
-            {expenses.length === 0 && (
+            {bizExp.length === 0 && (
               <tr>
                 <td colSpan={2} className="muted">
                   − Витрат за період не внесено. <Link href="/reports/expenses">Внести рекламу й інші витрати</Link>
@@ -211,6 +220,12 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
                 <b style={{ color: net < 0 ? "#b91c1c" : undefined }}>{money(net)}</b>
               </td>
             </tr>
+            {ownerOut > 0 && (
+              <tr>
+                <td className="muted">Виведено власником / особисте (не витрата бізнесу)</td>
+                <td className="num muted">{money(ownerOut)}</td>
+              </tr>
+            )}
             {orders._count > 0 && expTotal > 0 && (
               <tr>
                 <td className="muted">Витрати на 1 продаж</td>
@@ -220,7 +235,8 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
           </tbody>
         </table>
         <p className="muted small" style={{ marginBottom: 0 }}>
-          Закупівлі сюди не входять: товар стає витратою, коли проданий (собівартість у заявці). Скільки грошей пішло на закупівлі — «Звіт: приходи».
+          Продаж — заявка в статусі продажу, місяць — за датою створення заявки. Закупівлі сюди не входять: товар стає витратою, коли проданий
+          (собівартість у заявці). Увесь рух грошей, з закупівлями й виведеним — у «Гроші за місяць».
         </p>
       </div>
 

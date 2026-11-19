@@ -60,6 +60,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       {isAdmin && (
         <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Резервна копія</h2>
+          <p className="small muted">
+            Один файл з усім, що є лише в додатку: комірки, приходи, списання, інвентаризації, рух товару, гроші, шаблони, коди. Зберігайте раз на тиждень
+            (і перед великими змінами) на Google Диск чи флешку. Файл містить собівартість — нікому не пересилайте.
+          </p>
+          <a className="btn" href="/api/backup">
+            ⬇ Завантажити резервну копію
+          </a>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="panel">
           <h2 style={{ marginTop: 0 }}>Prom: швидке оновлення наявності</h2>
           <p className="small muted">
             Кожні 5 хвилин додаток бере залишки з SalesDrive і через API Prom змінює наявність і кількість лише тих товарів, де вона змінилась. Товари зі
