@@ -317,8 +317,9 @@ export function parseYml(xml: string): YmlOffer[] {
       return {
         sdId: sdId ?? "",
         name: mainName,
-        nameTranslate: trName && trName !== mainName ? trName : undefined,
-        descriptionTranslate: trDesc && trDesc !== mainDesc ? trDesc : undefined,
+        // українська версія з SalesDrive — навіть якщо збігається з російською (тоді це й треба побачити й виправити)
+        nameTranslate: trName ?? undefined,
+        descriptionTranslate: trDesc ?? undefined,
         price: firstNum(text(o.price as Node)) ?? 0,
         priceCurrency: text(o.currencyId as Node)?.toUpperCase() ?? null,
         description: "description" in o ? text(o.description as Node) : undefined,
