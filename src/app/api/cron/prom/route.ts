@@ -16,6 +16,13 @@ export async function GET(req: Request) {
   if (!promConfigured() || (await getSetting("promEnabled")) !== "1") return Response.json({ ok: true, skipped: true });
   try {
     const r = await promStockSync();
+    if ((await getSetting("promKwAuto")) === "1") {
+      try {
+        await (await import("@/lib/prom")).promPushUaKeywords({ limit: 30 });
+      } catch {
+        /* не заважає наявності */
+      }
+    }
     return Response.json({ ok: true, ...r, sample: undefined, unmatchedSample: undefined });
   } catch (e) {
     return Response.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

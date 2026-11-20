@@ -27,7 +27,15 @@ async function promFetch(path: string, init?: RequestInit) {
   }
 }
 
-type PromProduct = { id: number | string; external_id?: string | null; sku?: string | null; name?: string | null; presence?: string | null; quantity_in_stock?: number | null };
+type PromProduct = {
+  id: number | string;
+  external_id?: string | null;
+  sku?: string | null;
+  name?: string | null;
+  presence?: string | null;
+  quantity_in_stock?: number | null;
+  keywords?: string | null;
+};
 
 /** Повний список товарів Prom → таблиця PromLink (поточна наявність на Prom) */
 export async function refreshPromMap() {
@@ -49,6 +57,7 @@ export async function refreshPromMap() {
         name: p.name ? String(p.name).slice(0, 255) : null,
         presence: p.presence ?? null,
         qty: typeof p.quantity_in_stock === "number" ? Math.round(p.quantity_in_stock) : null,
+        ...(p.keywords !== undefined ? { keywordsUa: p.keywords ? String(p.keywords) : null } : {}),
       };
       await db.promLink.upsert({ where: { promId }, update: data, create: { promId, ...data } });
     }
@@ -173,4 +182,68 @@ export async function hidePromDuplicates() {
     }
   }
   return { found: dups.length, hidden, errors };
+}
+
+/**
+ * Українські пошукові запити на Prom. SalesDrive віддає в YML лише російські, а Prom перекладає їх тільки при ручному
+ * збереженні товару. Тут: беремо російські з SalesDrive (через додаток), перекладаємо (DeepL або словник)
+ * і записуємо в українську версію товару на Prom (запит з X-LANGUAGE: uk).
+ */
+export async function promPushUaKeywords({ limit = 50, onlyMissing = true, test = false } = {}) {
+  if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN");
+  await refreshPromMap();
+  const products = await db.product.findMany({
+    where: { deletedAt: null, sdId: { not: null }, keywords: { not: null } },
+    select: { sdId: true, sku: true, keywords: true, keywordsUa: true, name: true },
+  });
+  const bySd = new Map(products.map((p) => [p.sdId!, p]));
+  const links = await db.promLink.findMany();
+  const todo = links
+    .map((l) => ({ l, p: l.externalId ? bySd.get(l.externalId) : undefined }))
+    .filter((x) => x.p?.keywords?.trim() && (!onlyMissing || !x.l.keywordsUa?.trim()))
+    .slice(0, test ? 1 : limit);
+  if (!todo.length) return { candidates: 0, sent: 0, errors: [] as string[], sample: null as string | null };
+
+  const { translate, translateConfigured } = await import("./translate");
+  const { translateKeywords } = await import("./ruua");
+  const src = todo.map((x) => x.p!.keywordsUa?.trim() || "");
+  const need = todo.map((x, i) => (src[i] ? "" : x.p!.keywords!));
+  let tr: string[] = need.map((t) => (t ? translateKeywords(t) : ""));
+  if (translateConfigured() && need.some(Boolean)) {
+    try {
+      tr = await translate(need, "RU", "UK");
+    } catch {
+      /* залишаємо словниковий переклад */
+    }
+  }
+  const values = todo.map((_, i) => src[i] || tr[i]);
+  const errors: string[] = [];
+  let sent = 0;
+  for (let i = 0; i < todo.length; i += 50) {
+    const chunk = todo.slice(i, i + 50);
+    try {
+      const r = await promFetch("/products/edit", {
+        method: "POST",
+        headers: { "X-LANGUAGE": "uk" },
+        body: JSON.stringify(chunk.map((x, k) => ({ id: Number(x.l.promId), keywords: values[i + k] }))),
+      });
+      const failed = new Set<string>(Object.keys(r.errors ?? {}));
+      for (const [id, err] of Object.entries(r.errors ?? {})) errors.push(`${id}: ${JSON.stringify(err).slice(0, 150)}`);
+      for (const [k, x] of chunk.entries()) {
+        if (failed.has(x.l.promId)) continue;
+        await db.promLink.update({ where: { promId: x.l.promId }, data: { keywordsUa: values[i + k], kwPushedAt: new Date() } });
+        sent++;
+      }
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+      break;
+    }
+  }
+  const first = todo[0];
+  return {
+    candidates: todo.length,
+    sent,
+    errors,
+    sample: first ? `${first.p!.sku ?? ""} ${first.l.name ?? ""} (Prom ID ${first.l.promId}): ${values[0]}` : null,
+  };
 }

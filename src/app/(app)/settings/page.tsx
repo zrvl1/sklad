@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFindDups, promHideDups, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
 import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -22,6 +22,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     ? await Promise.all([getSetting("promEnabled"), getSetting("promLast"), getSetting("promDry"), getSetting("promLog")])
     : [null, null, null, null];
   const promOn = promOnRaw === "1";
+  const promKwAuto = isAdmin ? (await getSetting("promKwAuto")) === "1" : false;
+  const promNoKw = isAdmin ? await db.promLink.count({ where: { OR: [{ keywordsUa: null }, { keywordsUa: "" }] } }) : 0;
   const promDupsRaw = isAdmin ? await getSetting("promDups") : null;
   const promDups = promDupsRaw ? (JSON.parse(promDupsRaw) as string[]) : null;
   type PromRes = { at: string; prom: number; matched: number; unmatched: number; changes: number; sent: number; errors: string[]; guard: boolean };
@@ -128,6 +130,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   )}
                 </details>
               )}
+              <div className="toolbar" style={{ marginTop: 8 }}>
+                <span className="small">
+                  Українські пошукові запити на Prom (без них ≈ {promNoKw}; оновиться після «Перевірити»):
+                </span>
+                <form action={promKw}>
+                  <input type="hidden" name="mode" value="test" />
+                  <button className="btn sm">Тест на 1 товарі</button>
+                </form>
+                <form action={promKw}>
+                  <input type="hidden" name="mode" value="all" />
+                  <button className="btn sm">Заповнити всім, де немає</button>
+                </form>
+                <form action={promKw}>
+                  <input type="hidden" name="mode" value={promKwAuto ? "auto-off" : "auto-on"} />
+                  <button className={`btn sm ${promKwAuto ? "" : "primary"}`}>{promKwAuto ? "Вимкнути авто" : "Авто для нових товарів"}</button>
+                </form>
+              </div>
               <div className="toolbar" style={{ marginTop: 8 }}>
                 <span className="small">Дублі товарів на Prom:</span>
                 <form action={promFindDups}>

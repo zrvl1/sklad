@@ -228,3 +228,26 @@ export async function promHideDups() {
   await logAction(user.id, "prom-hide-dups", "settings", null, msg);
   done(msg);
 }
+
+/** Prom: українські пошукові запити — тест на 1 товарі / усім / автоматично */
+export async function promKw(formData: FormData) {
+  const user = await requirePerm("settings");
+  const mode = String(formData.get("mode") ?? "test");
+  const { setSetting } = await import("@/lib/util");
+  if (mode === "auto-on" || mode === "auto-off") {
+    await setSetting("promKwAuto", mode === "auto-on" ? "1" : "0");
+    done(mode === "auto-on" ? "Українські запити на Prom: автоматично для нових товарів" : "Автозапис українських запитів вимкнено");
+  }
+  const { promPushUaKeywords } = await import("@/lib/prom");
+  let msg: string;
+  try {
+    const r = await promPushUaKeywords({ test: mode === "test", limit: 500 });
+    msg = r.candidates === 0
+      ? "Усі товари на Prom уже мають українські пошукові запити"
+      : `Українські запити на Prom: записано ${r.sent} з ${r.candidates}${r.sample ? `. Перевірте: ${r.sample}` : ""}${r.errors.length ? `. Помилки: ${r.errors.slice(0, 2).join("; ")}` : ""}`;
+  } catch (e) {
+    msg = `Помилка Prom: ${e instanceof Error ? e.message : e}`;
+  }
+  await logAction(user.id, "prom-kw", "settings", null, msg);
+  done(msg);
+}

@@ -455,6 +455,8 @@ model PromLink {
   name       String?
   presence   String?   // available | not_available | order | waiting | service
   qty        Int?      // quantity_in_stock на Prom
+  keywordsUa String?   // пошукові запити українською на Prom (список читаємо з X-LANGUAGE: uk)
+  kwPushedAt DateTime? // коли додаток записав українські запити
   pushedAt   DateTime? // коли додаток востаннє змінив наявність
   updatedAt  DateTime  @updatedAt
 
