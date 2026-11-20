@@ -182,7 +182,17 @@ export default async function ProductPage({ params, searchParams }: Props) {
       {(() => {
         type Side = { name: string | null; keywords: string | null; presence: string | null; qty: number | null };
         const r = promCheckRaw
-          ? (JSON.parse(promCheckRaw) as { at: string; ok: boolean; error?: string; pushed?: string | null; promId?: string; ru?: Side; uk?: Side })
+          ? (JSON.parse(promCheckRaw) as {
+              at: string;
+              ok: boolean;
+              error?: string;
+              pushed?: string | null;
+              promId?: string;
+              ru?: Side;
+              uk?: Side;
+              fields?: string;
+              multilang?: string;
+            })
           : null;
         const empty = <span style={{ color: "var(--err)" }}>порожньо</span>;
         return (
@@ -196,12 +206,12 @@ export default async function ProductPage({ params, searchParams }: Props) {
               </form>
               <form action={promProductForm}>
                 <input type="hidden" name="id" value={product.id} />
-                <input type="hidden" name="mode" value="push" />
-                <button className="btn sm primary">Записати українські запити на Prom</button>
+                <input type="hidden" name="mode" value="restore-ru" />
+                <button className="btn sm">Повернути російські запити з SalesDrive</button>
               </form>
             </div>
             {r && !r.ok && <div className="msg warn">{r.error}</div>}
-            {r?.pushed && <div className="msg ok">Українські запити: {r.pushed}</div>}
+            {r?.pushed && <div className="msg ok">{r.pushed}</div>}
             {r?.ok && r.ru && r.uk && (
               <table className="small">
                 <tbody>
@@ -231,6 +241,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
                         <span style={{ color: "var(--err)" }}> — це російські, українських немає</span>
                       )}
                     </td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Поля Prom</td>
+                    <td style={{ wordBreak: "break-all" }}>{r.fields}</td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Мовні поля</td>
+                    <td style={{ wordBreak: "break-all" }}>{r.multilang && r.multilang !== "{}" ? r.multilang : "немає"}</td>
                   </tr>
                 </tbody>
               </table>

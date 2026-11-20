@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { PROM_UA_KW_ENABLED } from "@/lib/prom";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
@@ -138,7 +139,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   )}
                 </details>
               )}
-              <div className="toolbar" style={{ marginTop: 8 }}>
+              {PROM_UA_KW_ENABLED ? (
+                <div className="toolbar" style={{ marginTop: 8 }}>
                 <span className="small">
                   Українські пошукові запити на Prom (без них ≈ {promNoKw}; оновиться після «Перевірити»):
                 </span>
@@ -155,6 +157,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <button className={`btn sm ${promKwAuto ? "" : "primary"}`}>{promKwAuto ? "Вимкнути авто" : "Авто для нових товарів"}</button>
                 </form>
               </div>
+              ) : (
+                <p className="small muted" style={{ marginTop: 8 }}>
+                  Українські пошукові запити на Prom (без них ≈ {promNoKw}): запис через API тимчасово вимкнено — Prom записує їх у
+                  російську версію.
+                </p>
+              )}
               <div className="toolbar" style={{ marginTop: 8 }}>
                 <span className="small">Дублі товарів на Prom:</span>
                 <form action={promFindDups}>

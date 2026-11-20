@@ -189,6 +189,9 @@ export async function hidePromDuplicates() {
  * збереженні товару. Тут: беремо російські з SalesDrive (через додаток), перекладаємо (DeepL або словник)
  * і записуємо в українську версію товару на Prom (запит з X-LANGUAGE: uk).
  */
+/** Prom ігнорує X-LANGUAGE при записі — запити потрапляють у російську версію. Вимкнено, доки не знайдемо правильне поле. */
+export const PROM_UA_KW_ENABLED = false;
+
 export async function promPushUaKeywords({
   limit = 50,
   onlyMissing = true,
@@ -196,6 +199,7 @@ export async function promPushUaKeywords({
   sdIds,
 }: { limit?: number; onlyMissing?: boolean; test?: boolean; sdIds?: string[] } = {}) {
   if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN");
+  if (!PROM_UA_KW_ENABLED) throw new Error("Запис українських запитів на Prom тимчасово вимкнено: Prom записує їх у російську версію");
   if (!sdIds) await refreshPromMap();
   const products = await db.product.findMany({
     where: { deletedAt: null, sdId: sdIds ? { in: sdIds } : { not: null }, keywords: { not: null } },
@@ -274,9 +278,22 @@ export async function promProductInfo(sdId: string | null, sku: string | null) {
   if (!link) return null;
   const get = async (lang: "ru" | "uk") => {
     const r = await promFetch(`/products/${link!.promId}`, { headers: { "X-LANGUAGE": lang } });
-    const p = (r.product ?? r) as { name?: string; keywords?: string; presence?: string; quantity_in_stock?: number };
-    return { name: p.name ?? null, keywords: p.keywords ?? null, presence: p.presence ?? null, qty: p.quantity_in_stock ?? null };
+    const p = (r.product ?? r) as Record<string, unknown> & { name?: string; keywords?: string; presence?: string; quantity_in_stock?: number };
+    return { name: p.name ?? null, keywords: p.keywords ?? null, presence: p.presence ?? null, qty: p.quantity_in_stock ?? null, raw: p };
   };
   const [ru, uk] = await Promise.all([get("ru"), get("uk")]);
-  return { promId: link.promId, ru, uk, at: new Date().toISOString() };
+  // діагностика: які поля взагалі віддає Prom і чи є окремі мовні версії
+  const raw = uk.raw;
+  const fields = Object.keys(raw).sort().join(", ");
+  const multilang: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) if (/multilang|_uk$|_ua$|_ru$|lang/i.test(k)) multilang[k] = v;
+  const strip = (x: typeof ru) => ({ name: x.name, keywords: x.keywords, presence: x.presence, qty: x.qty });
+  return { promId: link.promId, ru: strip(ru), uk: strip(uk), fields, multilang: JSON.stringify(multilang).slice(0, 3000), at: new Date().toISOString() };
+}
+
+/** Записати російські пошукові запити (з SalesDrive) назад на Prom — для відновлення */
+export async function promRestoreRuKeywords(promId: string, keywords: string) {
+  const r = await promFetch("/products/edit", { method: "POST", body: JSON.stringify([{ id: Number(promId), keywords }]) });
+  const errs = Object.entries(r.errors ?? {}).map(([id, e]) => `${id}: ${JSON.stringify(e).slice(0, 200)}`);
+  if (errs.length) throw new Error(errs.join("; "));
 }

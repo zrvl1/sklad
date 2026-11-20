@@ -708,11 +708,19 @@ export async function promProductForm(formData: FormData) {
   const id = Number(formData.get("id"));
   const mode = String(formData.get("mode") ?? "check");
   const p = await db.product.findUniqueOrThrow({ where: { id } });
-  const { promConfigured, promProductInfo, promPushUaKeywords } = await import("@/lib/prom");
+  const { promConfigured, promProductInfo, promPushUaKeywords, promRestoreRuKeywords } = await import("@/lib/prom");
   let result: Record<string, unknown>;
   try {
     if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN у Vercel");
     let pushed: string | null = null;
+    if (mode === "restore-ru") {
+      if (!p.keywords?.trim()) throw new Error("У товару немає російських ключових слів");
+      const info0 = await promProductInfo(p.sdId, p.sku);
+      if (!info0) throw new Error("Товару немає на Prom");
+      await promRestoreRuKeywords(info0.promId, p.keywords);
+      pushed = "російські запити повернуто з SalesDrive";
+      await logAction(user.id, "prom-kw", "product", id, pushed);
+    }
     if (mode === "push") {
       if (!p.sdId) throw new Error("Товар ще не в SalesDrive");
       if (!p.keywords?.trim() && !p.keywordsUa?.trim()) throw new Error("У товару немає ключових слів — заповніть їх у формі нижче");
