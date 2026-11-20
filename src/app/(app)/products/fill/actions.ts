@@ -123,21 +123,36 @@ export async function translateRuFromUa() {
       break;
     }
   }
-  // у SalesDrive
+  // у SalesDrive: ця порція + усі, перекладені/змінені раніше й ще не відправлені з текстами
   let sdErr = "";
-  const ids = batch.map((p) => p.id);
-  if (done && isSalesDriveConfigured()) {
-    const full = await db.product.findMany({ where: { id: { in: ids }, sdId: { not: null } } });
+  let sent = 0;
+  const { getSetting, setSetting } = await import("@/lib/util");
+  const startedAt = new Date();
+  const sentUntil = new Date((await getSetting("ruTextsSentUntil")) ?? Date.now() - 48 * 3600_000);
+  if (isSalesDriveConfigured()) {
+    const full = await db.product.findMany({
+      where: { deletedAt: null, sdId: { not: null }, OR: [{ id: { in: batch.map((p) => p.id) } }, { textEditedAt: { gt: sentUntil } }] },
+    });
     try {
-      await sdUpdateProducts(full.map((p) => productToSd(p, null, {})));
+      for (let i = 0; i < full.length; i += 100) {
+        const payloads = full.slice(i, i + 100).map((p) => {
+          // лише назва й опис обома мовами (+ ключові слова); характеристики не чіпаємо
+          const x = productToSd(p, null, { withName: true, withDetails: true });
+          delete x.params;
+          delete x.paramsMode;
+          return x;
+        });
+        await sdUpdateProducts(payloads);
+        sent += payloads.length;
+      }
       await db.product.updateMany({ where: { id: { in: full.map((p) => p.id) } }, data: { syncError: null, syncedAt: new Date() } });
+      await setSetting("ruTextsSentUntil", startedAt.toISOString());
     } catch (e) {
       sdErr = e instanceof Error ? e.message : String(e);
-      await db.product.updateMany({ where: { id: { in: full.map((p) => p.id) } }, data: { syncError: sdErr } });
     }
   }
   const left = Math.max(0, todo.length - done);
-  const msg = `Перекладено UA→RU: ${done}. Залишилось: ${left}${left ? " — натисніть ще раз" : ""}${errors.length ? `. Помилка DeepL: ${errors[0].slice(0, 200)}` : ""}${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
+  const msg = `Перекладено UA→RU: ${done}. Відправлено в SalesDrive: ${sent}. Залишилось: ${left}${left ? " — натисніть ще раз" : ""}${errors.length ? `. Помилка DeepL: ${errors[0].slice(0, 200)}` : ""}${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
   await logAction(user.id, "translate-ru", "product", null, msg);
   revalidatePath("/products/fill");
   redirect(`/products/fill?f=lang&msg=${encodeURIComponent(msg)}`);
