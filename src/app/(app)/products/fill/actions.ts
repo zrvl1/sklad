@@ -83,3 +83,62 @@ export async function saveFill(formData: FormData) {
   const sep = back.includes("?") ? "&" : "?";
   redirect(`${back}${sep}msg=${encodeURIComponent(`Збережено: товарів ${changed}, комірок ${cellsSet}${toSd.length ? " (у SalesDrive відправлено)" : ""}`)}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`);
 }
+
+/**
+ * У SalesDrive у багатьох товарів у російському описі/назві лежить український текст.
+ * Перекладаємо українську версію (DeepL, UA→RU, з HTML) у російське поле і відправляємо в SalesDrive.
+ * Порціями, щоб не впертися в ліміт часу: натискати, доки не залишиться 0.
+ */
+export async function translateRuFromUa() {
+  const user = await requirePerm("products.edit");
+  const { translate, translateConfigured } = await import("@/lib/translate");
+  const { foreignWords } = await import("@/lib/langcheck");
+  if (!translateConfigured()) redirect(`/products/fill?f=lang&msg=${encodeURIComponent("Немає DEEPL_API_KEY у Vercel")}`);
+  const all = await db.product.findMany({
+    where: { deletedAt: null },
+    select: { id: true, name: true, nameTranslate: true, description: true, descriptionTranslate: true },
+  });
+  const badDesc = (p: (typeof all)[number]) =>
+    Boolean(p.descriptionTranslate?.trim()) && (!p.description?.trim() || foreignWords(p.description, "ru").length > 0);
+  const badName = (p: (typeof all)[number]) => Boolean(p.nameTranslate?.trim()) && foreignWords(p.name, "ru").length > 0;
+  const todo = all.filter((p) => badDesc(p) || badName(p));
+  const batch = todo.slice(0, 100);
+  let done = 0;
+  const errors: string[] = [];
+  for (let i = 0; i < batch.length; i += 25) {
+    const chunk = batch.slice(i, i + 25);
+    try {
+      const descs = await translate(chunk.map((p) => (badDesc(p) ? (p.descriptionTranslate as string) : "")), "UK", "RU", true);
+      const names = await translate(chunk.map((p) => (badName(p) ? (p.nameTranslate as string) : "")), "UK", "RU");
+      for (const [k, p] of chunk.entries()) {
+        const data: { description?: string; name?: string } = {};
+        if (badDesc(p) && descs[k]?.trim()) data.description = descs[k];
+        if (badName(p) && names[k]?.trim()) data.name = names[k].trim();
+        if (!Object.keys(data).length) continue;
+        await db.product.update({ where: { id: p.id }, data: { ...data, textEditedAt: new Date() } });
+        done++;
+      }
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+      break;
+    }
+  }
+  // у SalesDrive
+  let sdErr = "";
+  const ids = batch.map((p) => p.id);
+  if (done && isSalesDriveConfigured()) {
+    const full = await db.product.findMany({ where: { id: { in: ids }, sdId: { not: null } } });
+    try {
+      await sdUpdateProducts(full.map((p) => productToSd(p, null, {})));
+      await db.product.updateMany({ where: { id: { in: full.map((p) => p.id) } }, data: { syncError: null, syncedAt: new Date() } });
+    } catch (e) {
+      sdErr = e instanceof Error ? e.message : String(e);
+      await db.product.updateMany({ where: { id: { in: full.map((p) => p.id) } }, data: { syncError: sdErr } });
+    }
+  }
+  const left = Math.max(0, todo.length - done);
+  const msg = `Перекладено UA→RU: ${done}. Залишилось: ${left}${left ? " — натисніть ще раз" : ""}${errors.length ? `. Помилка DeepL: ${errors[0].slice(0, 200)}` : ""}${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
+  await logAction(user.id, "translate-ru", "product", null, msg);
+  revalidatePath("/products/fill");
+  redirect(`/products/fill?f=lang&msg=${encodeURIComponent(msg)}`);
+}

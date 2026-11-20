@@ -66,6 +66,7 @@ model Product {
   keywordsUa       String?        // пошукові запити українською, якщо YML їх віддає
   country          String?        // країна виробник (з YML SalesDrive: country_of_origin)
   nameTranslate    String?        // назва другою мовою (у SalesDrive: nameTranslate); порожня — іде основна
+  textEditedAt     DateTime?      // коли тексти змінено в додатку: синхронізація з YML кілька годин їх не перезаписує
   categorySdId     String?
   categoryName     String?
   price            Float          @default(0) // ціна продажу (у SalesDrive: costPerItem)

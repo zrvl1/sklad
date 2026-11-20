@@ -3,7 +3,7 @@ import { mainImage } from "@/lib/images";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import { saveFill } from "./actions";
+import { saveFill, translateRuFromUa } from "./actions";
 import { langIssues } from "@/lib/langcheck";
 import SelectAllButton from "@/components/SelectAllButton";
 
@@ -99,6 +99,13 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         собівартості — без змін. Комірку зручно ставити, коли стоїте біля полиці: оберіть комірку, кількість підставиться із залишку.
       </p>
 
+      {f === "lang" && (
+        <form action={translateRuFromUa} className="panel small" style={{ marginBottom: 12 }}>
+          <b>Російські описи й назви з українським текстом</b> — перекласти з української версії через DeepL (з HTML) і відправити в
+          SalesDrive. По 100 товарів за раз; українська версія не змінюється.{" "}
+          <button className="btn sm primary">🌐 Перекласти UA → RU (100 товарів)</button>
+        </form>
+      )}
       <form action={saveFill}>
         <input type="hidden" name="back" value={back} />
         <datalist id="countries">

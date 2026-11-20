@@ -49,6 +49,12 @@ export async function syncFromYml() {
       .map((p) => p.sdId)
       .filter((x): x is string => Boolean(x))
   );
+  // тексти, щойно змінені в додатку, не перезаписуємо старими з YML (SalesDrive оновлює YML не миттєво)
+  const textHold = new Set(
+    (await db.product.findMany({ where: { textEditedAt: { gt: new Date(Date.now() - 6 * 3600_000) } }, select: { sdId: true } }))
+      .map((p) => p.sdId)
+      .filter((x): x is string => Boolean(x))
+  );
   let created = 0;
   let updated = 0;
 
@@ -57,17 +63,18 @@ export async function syncFromYml() {
     await db.$transaction(
       async (tx) => {
         for (const o of batch) {
+          const hold = textHold.has(o.sdId);
           const data = {
-            name: o.name,
+            ...(hold ? {} : { name: o.name }),
             price: o.price,
             priceCurrency: o.priceCurrency,
             sku: o.sku,
             barcode: o.barcode,
             manufacturer: o.manufacturer,
             ...(o.country ? { country: o.country } : {}),
-            ...(o.keywords !== undefined ? { keywords: o.keywords } : {}),
+            ...(o.keywords !== undefined && !hold ? { keywords: o.keywords } : {}),
             ...(o.images !== undefined && o.images.length && o.images.length >= (localImages.get(o.sdId) ?? 0) ? { images: JSON.stringify(o.images) } : {}),
-            ...(o.keywordsUa !== undefined ? { keywordsUa: o.keywordsUa } : {}),
+            ...(o.keywordsUa !== undefined && !hold ? { keywordsUa: o.keywordsUa } : {}),
             categorySdId: o.categoryId,
             categoryName: o.categoryName,
             search: buildSearch(
@@ -78,15 +85,15 @@ export async function syncFromYml() {
             deletedAt: null, // товар є в SalesDrive — отже не видалений
             ...(o.cost !== null && !foreignCost.has(o.sdId) ? { cost: o.cost } : {}),
             // опис і характеристики — лише якщо в YML-експорті увімкнено «опис, фото та характеристики»
-            ...(o.description !== undefined ? { description: o.description } : {}),
+            ...(o.description !== undefined && !hold ? { description: o.description } : {}),
             ...(o.params !== undefined ? { params: JSON.stringify(o.params) } : {}),
-            ...(o.nameTranslate !== undefined ? { nameTranslate: o.nameTranslate } : {}),
-            ...(o.descriptionTranslate !== undefined ? { descriptionTranslate: o.descriptionTranslate } : {}),
+            ...(o.nameTranslate !== undefined && !hold ? { nameTranslate: o.nameTranslate } : {}),
+            ...(o.descriptionTranslate !== undefined && !hold ? { descriptionTranslate: o.descriptionTranslate } : {}),
           };
           const id = existing.get(o.sdId);
           const product = id
             ? await tx.product.update({ where: { id }, data, select: { id: true } })
-            : await tx.product.create({ data: { ...data, sdId: o.sdId }, select: { id: true } });
+            : await tx.product.create({ data: { ...data, name: o.name, sdId: o.sdId }, select: { id: true } });
           if (id) updated++;
           else {
             created++;

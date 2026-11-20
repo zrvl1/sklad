@@ -164,7 +164,7 @@ export async function saveProduct(formData: FormData) {
       paramsMode: before.params === null ? "add" : "replace",
       withCost: before.cost !== costData.cost || (before.costCurrency ?? null) !== costData.costCurrency || (before.costOriginal ?? null) !== costData.costOriginal,
     };
-    await db.product.update({ where: { id }, data: { ...data, ...costData, search: buildSearch(data) } });
+    await db.product.update({ where: { id }, data: { ...data, ...costData, textEditedAt: new Date(), search: buildSearch(data) } });
     productId = id;
     await finalizeNewProduct(id, gen);
     await logAction(user.id, "update", "product", id, data);
