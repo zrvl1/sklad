@@ -11,7 +11,8 @@ export const maxDuration = 300;
  * тому заливаємо їх файлом (Prom → Імпорт → з компʼютера, «Тільки оновлення», лише «Пошукові запити (українською)»).
  * Українські запити беремо з картки товару; якщо порожньо — перекладаємо російські (DeepL або словник) і зберігаємо в картку.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const only = (new URL(req.url).searchParams.get("sku") ?? "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
   const user = await getUser();
   if (!user || user.role !== "admin") return new Response("forbidden", { status: 403 });
 
@@ -32,7 +33,9 @@ export async function GET() {
     select: { id: true, sku: true, sdId: true, name: true, nameTranslate: true, keywords: true, keywordsUa: true },
     orderBy: { sku: "asc" },
   });
-  const rows = products.filter((p) => p.keywords?.trim() && promBySd.has(p.sdId as string));
+  const rows = products.filter(
+    (p) => p.keywords?.trim() && promBySd.has(p.sdId as string) && (!only.length || only.includes((p.sku ?? "").toUpperCase())),
+  );
 
   // переклад відсутніх
   const need = rows.filter((p) => !p.keywordsUa?.trim());
