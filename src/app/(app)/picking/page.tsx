@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -54,7 +55,7 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
   const ids = [...need.values()].map((x) => x.productId).filter((x): x is number => x !== null);
   const [cells, products] = await Promise.all([
     db.productCell.findMany({ where: { productId: { in: ids }, qty: { gt: 0 } }, include: { cell: true } }),
-    db.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, sku: true, barcode: true, manufacturer: true } }),
+    db.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, nameTranslate: true, sku: true, barcode: true, manufacturer: true } }),
   ]);
   const prod = new Map<number, { id: number; name: string; sku: string | null; barcode: string | null; manufacturer: string | null }>(products.map((p) => [p.id, p]));
   const rows = [...need.values()].map((x) => {
@@ -161,7 +162,7 @@ export default async function PickingPage({ searchParams }: { searchParams: SP }
                     )}
                   </td>
                   <td>
-                    {r.productId ? <Link href={`/products/${r.productId}`}>{r.product?.name ?? r.name}</Link> : `${r.name} ⚠`}
+                    {r.productId ? <Link href={`/products/${r.productId}`}>{r.product ? ua(r.product) : r.name}</Link> : `${r.name} ⚠`}
                     {/* виробник — щоб не сплутати однакові назви різних виробників */}
                     {r.product?.manufacturer && <b style={{ marginLeft: 6 }}>[{r.product.manufacturer}]</b>}
                     <div className="muted small">{[r.product?.sku ?? r.sku, r.product?.barcode].filter(Boolean).join(" · ")}</div>

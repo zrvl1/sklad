@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import { mainImage } from "./images";
 import { db } from "./db";
 import { cachedStatuses, normTtn } from "./orders";
@@ -83,14 +84,14 @@ export async function orderForPacking(orderId: number) {
     merged.set(key, {
       key,
       productId: l.productId,
-      name: (p?.name ?? l.name) + (!b && p?.manufacturer ? ` [${p.manufacturer}]` : ""),
+      name: (p ? ua(p) : l.name) + (!b && p?.manufacturer ? ` [${p.manufacturer}]` : ""),
       sku: p?.sku ?? l.sku,
       qty: l.qty,
       codes: [...new Set(codes)],
       cells: (b ?? p)?.cells.sort((x, y) => y.qty - x.qty).map((c) => c.cell.code) ?? [],
       labelId: (b ?? p)?.id ?? null,
       image: mainImage(p?.images) ?? mainImage(b?.images),
-      physical: b ? `${b.name}${b.manufacturer ? ` [${b.manufacturer}]` : ""} (${b.sku ?? b.barcode ?? "основний"})` : null,
+      physical: b ? `${ua(b)}${b.manufacturer ? ` [${b.manufacturer}]` : ""} (${b.sku ?? b.barcode ?? "основний"})` : null,
     });
   }
   const statuses = await cachedStatuses();

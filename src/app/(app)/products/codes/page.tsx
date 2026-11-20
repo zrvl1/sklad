@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -22,7 +23,7 @@ export default async function CodesPage({ searchParams }: { searchParams: Promis
   const dupProducts = dupCodes.length
     ? await db.product.findMany({
         where: { deletedAt: null, OR: [{ barcode: { in: dupCodes } }, { sku: { in: dupCodes } }] },
-        select: { id: true, name: true, sku: true, barcode: true },
+        select: { id: true, name: true, nameTranslate: true, sku: true, barcode: true },
         orderBy: { name: "asc" },
       })
     : [];
@@ -154,7 +155,7 @@ export default async function CodesPage({ searchParams }: { searchParams: Promis
             {dupProducts.map((p) => (
               <tr key={p.id}>
                 <td>
-                  <Link href={`/products/${p.id}`}>{p.name}</Link>
+                  <Link href={`/products/${p.id}`}>{ua(p)}</Link>
                 </td>
                 <td>{dupCodes.includes(p.sku ?? "") ? <span className="badge warn">{p.sku}</span> : p.sku}</td>
                 <td>{dupCodes.includes(p.barcode ?? "") ? <span className="badge warn">{p.barcode}</span> : p.barcode}</td>

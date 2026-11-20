@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -58,7 +59,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
             lines: r.lines.map((l) => ({
               key: String(l.id),
               productId: l.productId,
-              name: l.product.name,
+              name: ua(l.product),
               sku: l.product.sku,
               barcode: l.product.barcode,
               price: l.product.price,
@@ -140,7 +141,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               <tr key={l.id}>
                 <td>{i + 1}</td>
                 <td>
-                  <Link href={`/products/${l.productId}`}>{l.product.name}</Link>
+                  <Link href={`/products/${l.productId}`}>{ua(l.product)}</Link>
                 </td>
                 <td>{l.product.barcode}</td>
                 <td>{l.cell?.code ?? "—"}</td>

@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -42,7 +43,7 @@ export default async function InventoryPage({ params }: { params: Promise<{ id: 
           lines={inv.lines.map((l) => ({
             key: `${l.productId}:${l.cellId ?? 0}`,
             productId: l.productId,
-            name: l.product.name,
+            name: ua(l.product),
             sku: l.product.sku,
             barcode: l.product.barcode,
             cellId: l.cellId,
@@ -61,7 +62,7 @@ export default async function InventoryPage({ params }: { params: Promise<{ id: 
   // Проведена: підсумок по товарах
   const byProduct = new Map<number, { name: string; cost: number; system: number; counted: number; cells: string[] }>();
   for (const l of inv.lines) {
-    const x = byProduct.get(l.productId) ?? { name: l.product.name, cost: l.product.cost, system: l.systemQty ?? 0, counted: 0, cells: [] as string[] };
+    const x = byProduct.get(l.productId) ?? { name: ua(l.product), cost: l.product.cost, system: l.systemQty ?? 0, counted: 0, cells: [] as string[] };
     x.counted += l.counted;
     if (l.cell) x.cells.push(`${l.cell.code}: ${l.counted}`);
     byProduct.set(l.productId, x);

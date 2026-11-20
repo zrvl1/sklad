@@ -31,8 +31,12 @@ export function dateTimeUa(d: Date | null | undefined) {
 }
 
 /** Рядок для пошуку: нижній регістр, щоб працював і для кирилиці */
-export function buildSearch(p: { name?: string | null; sku?: string | null; barcode?: string | null; sdId?: string | null }, codes: string[] = []) {
-  return [p.name, p.sku, p.barcode, p.sdId, ...codes].filter(Boolean).join(" ").toLowerCase();
+export function buildSearch(
+  p: { name?: string | null; nameTranslate?: string | null; sku?: string | null; barcode?: string | null; sdId?: string | null },
+  codes: string[] = []
+) {
+  // шукаємо і за російською, і за українською назвою
+  return [p.name, p.nameTranslate, p.sku, p.barcode, p.sdId, ...codes].filter(Boolean).join(" ").toLowerCase();
 }
 
 /** Ціна з урахуванням знижки, якщо знижка діє на вказану дату */

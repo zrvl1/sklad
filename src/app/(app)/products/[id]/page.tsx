@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import PrintButton from "@/components/PrintButton";
 import ProductPhotos from "./ProductPhotos";
 import { productImages } from "@/lib/images";
@@ -51,7 +52,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
     return (
       <>
         <div className="toolbar">
-          <h1 style={{ margin: 0 }}>{product.name}</h1>
+          <h1 style={{ margin: 0 }}>{ua(product)}</h1>
           <span className="spacer" />
           {can(user, "labels") && (
             <PrintButton className="btn" href={`/print/labels?items=${product.id}:1`}>
@@ -65,7 +66,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <ProductPhotos productId={product.id} images={productImages(product.images ?? physical.images)} canEdit={false} />
         {product.base && (
           <div className="msg warn">
-            Картка-комплект. Фізично на складі — <b>{product.base.name}</b> ({product.base.sku ?? "—"}): шукайте й скануйте наліпку основного товару.
+            Картка-комплект. Фізично на складі — <b>{ua(product.base)}</b> ({product.base.sku ?? "—"}): шукайте й скануйте наліпку основного товару.
           </div>
         )}
         <div className="stats">
@@ -117,7 +118,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
             <b>Продається на сайті також як:</b>
             {product.kits.map((k) => (
               <div key={k.id}>
-                ↳ {k.name} <span className="muted">· {k.sku ?? "—"}</span>
+                ↳ {ua(k)} <span className="muted">· {k.sku ?? "—"}</span>
               </div>
             ))}
           </div>
@@ -142,7 +143,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   return (
     <>
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>{product.name}</h1>
+        <h1 style={{ margin: 0 }}>{ua(product)}</h1>
         <span className="spacer" />
         <PrintButton className="btn" href={`/print/labels?items=${product.id}:1`}>
           🖨 Цінник
@@ -234,7 +235,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <input type="hidden" name="kitId" value={product.id} />
           Це <b>картка-комплект</b> (вітрина для сайту). Фізичний товар —{" "}
           <Link href={`/products/${product.base.id}`}>
-            <b>{product.base.name}</b>
+            <b>{ua(product.base)}</b>
           </Link>{" "}
           ({product.base.sku ?? "—"}){product.kitQty !== 1 ? `, ×${product.kitQty} шт` : ""}. Прихід, комірки, наліпки й інвентаризація ведуться на
           основному товарі; скан цієї картки в документах підставить основний.{" "}
@@ -248,7 +249,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <b>Картки-комплекти цього товару ({product.kits.length})</b> — продаються на сайті під різні моделі, залишок списується з цього товару:
           {product.kits.map((k) => (
             <div key={k.id} className="small" style={{ padding: "2px 0 2px 12px" }}>
-              ↳ <Link href={`/products/${k.id}`}>{k.name}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн</span>
+              ↳ <Link href={`/products/${k.id}`}>{ua(k)}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн</span>
               {k.sdKitPending && (
                 <form action={confirmKitSd} style={{ display: "inline" }}>
                   <input type="hidden" name="kitId" value={k.id} />

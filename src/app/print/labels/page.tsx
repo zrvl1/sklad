@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import { Suspense } from "react";
 import type { Product } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -154,7 +155,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
             // 40×25: назва (2 рядки) → штрихкод → артикул [комірка] … ціна
             return (
               <div className="label compact" key={key}>
-                <div className="name">{p.name}</div>
+                <div className="name">{ua(p)}</div>
                 <div className="bc">{p.barcode ? <Barcode value={p.barcode} moduleMm={0.25} barMm={5} textMm={1.8} /> : null}</div>
                 <div className="bottom">
                   <span className="sku">
@@ -171,7 +172,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
           }
           return (
             <div className="label" key={key}>
-              <div className="name">{p.name}</div>
+              <div className="name">{ua(p)}</div>
               <div className="prices">
                 {fp.old !== null && <span className="old">{priceText(fp.old)}</span>}
                 <span className="price">{priceText(fp.price)}</span>

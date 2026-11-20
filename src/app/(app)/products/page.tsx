@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -86,7 +87,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
           keywordsUa: p.keywordsUa,
           image: mainImage(p.images) ?? mainImage(p.base?.images),
           langIssues: langIssues(p).map((x) => `${x.field}: ${x.words.join(", ")}`),
-          name: p.name,
+          name: ua(p),
           sku: p.sku,
           barcode: p.barcode,
           price: p.price,

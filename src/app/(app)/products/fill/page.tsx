@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
@@ -149,7 +150,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
                       <input type="checkbox" name={`sel_${p.id}`} value="1" title="Позначити для масового виробника" />
                     </td>
                     <td>
-                      <Link href={`/products/${p.id}`}>{p.name}</Link>
+                      <Link href={`/products/${p.id}`}>{ua(p)}</Link>
                       {f === "lang" &&
                         langIssues(p).map((x) => (
                           <div key={x.field} className="small" style={{ color: "var(--err)" }}>

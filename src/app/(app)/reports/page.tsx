@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { dateInput, money } from "@/lib/util";
@@ -27,7 +28,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
     bySupplier.set(sName, s);
 
     const costUah = l.cost * l.receipt.rate;
-    const p = byProduct.get(l.productId) ?? { id: l.productId, name: l.product.name, qty: 0, sum: 0, lastCost: costUah };
+    const p = byProduct.get(l.productId) ?? { id: l.productId, name: ua(l.product), qty: 0, sum: 0, lastCost: costUah };
     p.qty += l.qty;
     p.sum += l.qty * costUah;
     p.lastCost = costUah;

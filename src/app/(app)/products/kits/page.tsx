@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { detectKits } from "@/lib/kits";
@@ -15,7 +16,7 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
     }),
     db.product.findMany({
       where: { sdKitPending: true, deletedAt: null, baseProductId: { not: null } },
-      include: { base: { select: { id: true, name: true, sku: true } } },
+      include: { base: { select: { id: true, name: true, nameTranslate: true, sku: true } } },
       orderBy: { sku: "asc" },
     }),
   ]);
@@ -58,10 +59,10 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
                       <input type="checkbox" name="kitId" value={k.id} />
                     </td>
                     <td>
-                      <b>{k.sku}</b> · {k.sdId} — <Link href={`/products/${k.id}`}>{k.name}</Link>
+                      <b>{k.sku}</b> · {k.sdId} — <Link href={`/products/${k.id}`}>{ua(k)}</Link>
                     </td>
                     <td>
-                      <b>{k.base?.sku}</b> × {k.kitQty} — {k.base?.name}
+                      <b>{k.base?.sku}</b> × {k.kitQty} — {k.base ? ua(k.base) : ""}
                     </td>
                   </tr>
                 ))}
@@ -124,7 +125,7 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
                     </td>
                     <td>
                       {!p.stockMatch && <span title="Залишки різняться">⚠ </span>}
-                      <Link href={`/products/${p.base.id}`}>{p.base.name}</Link>
+                      <Link href={`/products/${p.base.id}`}>{ua(p.base)}</Link>
                       <div className="muted small">
                         {p.base.sku} · залишок {p.base.stocks.reduce((s, x) => s + x.qty, 0)}
                       </div>
@@ -149,7 +150,7 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
         <div key={b.id} className="panel">
           <div className="toolbar" style={{ marginBottom: 6 }}>
             <Link href={`/products/${b.id}`}>
-              <b>{b.name}</b>
+              <b>{ua(b)}</b>
             </Link>
             <span className="muted small">
               {b.sku} · ш/к {b.barcode ?? "—"} · залишок {b.stocks.reduce((s, x) => s + x.qty, 0)} · комірки{" "}
@@ -161,7 +162,7 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
               <input type="hidden" name="kitId" value={k.id} />
               <input type="hidden" name="back" value="/products/kits" />
               <span>
-                ↳ <Link href={`/products/${k.id}`}>{k.name}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн{k.kitQty !== 1 ? ` · ×${k.kitQty}` : ""}</span>
+                ↳ <Link href={`/products/${k.id}`}>{ua(k)}</Link> <span className="muted">· {k.sku ?? "—"} · {k.price} грн{k.kitQty !== 1 ? ` · ×${k.kitQty}` : ""}</span>
               </span>
               <span className="row" style={{ gap: 6 }}>
                 <button className="btn sm" formAction={makeBaseForm} title="У SalesDrive фізичний товар — саме ця картка">

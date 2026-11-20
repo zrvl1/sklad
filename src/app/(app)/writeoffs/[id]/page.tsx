@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -40,7 +41,7 @@ export default async function WriteOffPage({ params }: { params: Promise<{ id: s
           lines={w.lines.map((l) => ({
             key: String(l.id),
             productId: l.productId,
-            name: l.product.name,
+            name: ua(l.product),
             sku: l.product.sku,
             barcode: l.product.barcode,
             cost: l.product.cost,
@@ -82,7 +83,7 @@ export default async function WriteOffPage({ params }: { params: Promise<{ id: s
             {w.lines.map((l) => (
               <tr key={l.id}>
                 <td>
-                  <Link href={`/products/${l.productId}`}>{l.product.name}</Link>
+                  <Link href={`/products/${l.productId}`}>{ua(l.product)}</Link>
                 </td>
                 <td>{l.cell?.code ?? "авто"}</td>
                 <td className="num">{l.qty}</td>

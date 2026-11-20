@@ -2,7 +2,7 @@ import { scanVariants } from "./scan";
 import { db } from "./db";
 import { buildSearch } from "./util";
 
-const productSelect = { id: true, name: true, sku: true, barcode: true, price: true, cost: true, sdId: true, baseProductId: true } as const;
+const productSelect = { id: true, name: true, nameTranslate: true, sku: true, barcode: true, price: true, cost: true, sdId: true, baseProductId: true } as const;
 
 export type FoundProduct = {
   id: number;

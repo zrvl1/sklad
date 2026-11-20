@@ -71,7 +71,7 @@ export async function syncFromYml() {
             categorySdId: o.categoryId,
             categoryName: o.categoryName,
             search: buildSearch(
-              { name: o.name, sku: o.sku, barcode: o.barcode, sdId: o.sdId },
+              { name: o.name, nameTranslate: o.nameTranslate, sku: o.sku, barcode: o.barcode, sdId: o.sdId },
               codesByProduct.get(existing.get(o.sdId) ?? -1)
             ),
             syncedAt: now,

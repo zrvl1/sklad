@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -32,7 +33,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
       where: { order: { orderTime: { gte: from, lte: to }, ...statusFilter } },
       include: {
         product: {
-          select: { id: true, name: true, cost: true, categoryName: true, kitQty: true, base: { select: { id: true, name: true, cost: true, categoryName: true } } },
+          select: { id: true, name: true, nameTranslate: true, cost: true, categoryName: true, kitQty: true, base: { select: { id: true, name: true, nameTranslate: true, cost: true, categoryName: true } } },
         },
       },
     }),
@@ -56,7 +57,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
     const unitCost = l.costPrice || (base ? base.cost * mult : l.product?.cost) || 0;
     const x = byProduct.get(key) ?? {
       id: target?.id ?? null,
-      name: target?.name ?? l.name,
+      name: target ? ua(target) : l.name,
       category: target?.categoryName ?? "Без категорії",
       qty: 0,
       revenue: 0,
@@ -113,8 +114,8 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   // Неліквід: є на складі, але не продавалось 30 днів
   const deadIds = stocks.filter((s) => (s._sum.qty ?? 0) > 0 && !soldMap.get(s.productId)).map((s) => s.productId);
   const [buyProducts, deadProducts] = await Promise.all([
-    db.product.findMany({ where: { id: { in: buyIds.map((b) => b.id) } }, select: { id: true, name: true, sku: true } }),
-    db.product.findMany({ where: { id: { in: deadIds } }, select: { id: true, name: true, sku: true, cost: true } }),
+    db.product.findMany({ where: { id: { in: buyIds.map((b) => b.id) } }, select: { id: true, name: true, nameTranslate: true, sku: true } }),
+    db.product.findMany({ where: { id: { in: deadIds } }, select: { id: true, name: true, nameTranslate: true, sku: true, cost: true } }),
   ]);
   const dead = deadProducts
     .map((p) => ({ ...p, stock: stockMap.get(p.id) ?? 0, value: (stockMap.get(p.id) ?? 0) * p.cost }))
@@ -327,7 +328,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
                 {buyIds.map((b) => (
                   <tr key={b.id}>
                     <td>
-                      <Link href={`/products/${b.id}`}>{nameOf.get(b.id)?.name ?? b.id}</Link>
+                      <Link href={`/products/${b.id}`}>{nameOf.get(b.id) ? ua(nameOf.get(b.id)!) : b.id}</Link>
                     </td>
                     <td className="num">{b.stock}</td>
                     <td className="num">{b.sold}</td>
@@ -354,7 +355,7 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
                 {dead.map((d) => (
                   <tr key={d.id}>
                     <td>
-                      <Link href={`/products/${d.id}`}>{d.name}</Link>
+                      <Link href={`/products/${d.id}`}>{ua(d)}</Link>
                     </td>
                     <td className="num">{d.stock}</td>
                     <td className="num">{money(d.value)}</td>

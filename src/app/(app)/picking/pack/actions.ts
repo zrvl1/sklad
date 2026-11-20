@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -55,6 +56,6 @@ export async function identifyCode(code: string) {
   if (orderId) return { kind: "order" as const, orderId };
   const { findByCode } = await import("@/lib/codes");
   const [p] = await findByCode(code);
-  if (p) return { kind: "product" as const, name: p.name, sku: p.sku };
+  if (p) return { kind: "product" as const, name: ua(p), sku: p.sku };
   return { kind: "unknown" as const };
 }
