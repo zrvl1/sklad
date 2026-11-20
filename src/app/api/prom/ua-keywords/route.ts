@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 
   const products = await db.product.findMany({
     where: { deletedAt: null, sdId: { not: null }, keywords: { not: null } },
-    select: { id: true, sku: true, sdId: true, name: true, nameTranslate: true, keywords: true, keywordsUa: true },
+    select: { id: true, sku: true, sdId: true, name: true, nameTranslate: true, description: true, descriptionTranslate: true, keywords: true, keywordsUa: true },
     orderBy: { sku: "asc" },
   });
   const rows = products.filter(
@@ -61,11 +61,11 @@ export async function GET(req: Request) {
     }
   }
 
-  const esc = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
-  const head = ["Код_товару", "Назва_позиції", "Назва_позиції_укр", "Пошукові_запити_укр", "Унікальний_ідентифікатор", "Ідентифікатор_товару"];
+  const esc = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`; // CSV: лапки подвоєні, переноси — пробіл
+  const head = ["Код_товару", "Назва_позиції", "Назва_позиції_укр", "Пошукові_запити", "Пошукові_запити_укр", "Опис", "Опис_укр", "Унікальний_ідентифікатор", "Ідентифікатор_товару"];
   const lines = [head.join(",")];
   for (const p of rows) {
-    lines.push([esc(p.sku), esc(p.name), esc(p.nameTranslate || p.name), esc(p.keywordsUa), esc(promBySd.get(p.sdId as string)), esc(p.sdId)].join(","));
+    lines.push([esc(p.sku), esc(p.name), esc(p.nameTranslate || p.name), esc(p.keywords), esc(p.keywordsUa), esc(p.description || p.descriptionTranslate || p.name), esc(p.descriptionTranslate || p.description || p.nameTranslate || p.name), esc(promBySd.get(p.sdId as string)), esc(p.sdId)].join(","));
   }
   await logAction(user.id, "prom-kw-file", "settings", null, `рядків ${rows.length}, перекладено ${need.length}`);
   const date = new Date().toISOString().slice(0, 10);
