@@ -167,7 +167,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
             {raw && raw.inYml && (
               <table className="small">
                 <tbody>
-                  {["name", "name_ua", "description", "description_ua", "keywords"].map((k) => (
+                  {["name", "name_ua", "description", "description_ua", "keywords", "keywords_ua", "tags"].map((k) => (
                     <tr key={k}>
                       <td className="muted">{k}</td>
                       <td>{(raw[k] as string | null) ?? <span style={{ color: "var(--err)" }}>немає тегу</span>}</td>

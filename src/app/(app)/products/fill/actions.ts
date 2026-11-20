@@ -123,7 +123,16 @@ export async function translateRuFromUa() {
       break;
     }
   }
-  // у SalesDrive: ця порція + усі, перекладені/змінені раніше й ще не відправлені з текстами
+  const { sent, sdErr } = await sendTexts(batch.map((p) => p.id));
+  const left = Math.max(0, todo.length - done);
+  const msg = `Перекладено UA→RU: ${done}. Відправлено в SalesDrive: ${sent}. Залишилось: ${left}${left ? " — натисніть ще раз" : ""}${errors.length ? `. Помилка DeepL: ${errors[0].slice(0, 200)}` : ""}${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
+  await logAction(user.id, "translate-ru", "product", null, msg);
+  revalidatePath("/products/fill");
+  redirect(`/products/fill?f=lang&msg=${encodeURIComponent(msg)}`);
+}
+
+/** Відправити в SalesDrive назви, описи й ключові слова (обома мовами): ці товари + усі змінені в додатку з минулої відправки */
+async function sendTexts(ids: number[]) {
   let sdErr = "";
   let sent = 0;
   const { getSetting, setSetting } = await import("@/lib/util");
@@ -131,7 +140,7 @@ export async function translateRuFromUa() {
   const sentUntil = new Date((await getSetting("ruTextsSentUntil")) ?? Date.now() - 48 * 3600_000);
   if (isSalesDriveConfigured()) {
     const full = await db.product.findMany({
-      where: { deletedAt: null, sdId: { not: null }, OR: [{ id: { in: batch.map((p) => p.id) } }, { textEditedAt: { gt: sentUntil } }] },
+      where: { deletedAt: null, sdId: { not: null }, OR: [{ id: { in: ids } }, { textEditedAt: { gt: sentUntil } }] },
     });
     try {
       for (let i = 0; i < full.length; i += 100) {
@@ -151,9 +160,39 @@ export async function translateRuFromUa() {
       sdErr = e instanceof Error ? e.message : String(e);
     }
   }
+  return { sent, sdErr };
+}
+
+/** Українські ключові слова: де порожньо або копія російських — перекласти (DeepL) і відправити в SalesDrive → YML → Prom */
+export async function translateUaKeywords() {
+  const user = await requirePerm("products.edit");
+  const { translate, translateConfigured } = await import("@/lib/translate");
+  const { uaKwMissing } = await import("@/lib/langcheck");
+  if (!translateConfigured()) redirect(`/products/fill?f=kwua&msg=${encodeURIComponent("Немає DEEPL_API_KEY у Vercel")}`);
+  const all = await db.product.findMany({ where: { deletedAt: null, keywords: { not: null } }, select: { id: true, keywords: true, keywordsUa: true } });
+  const todo = all.filter((p) => p.keywords?.trim() && uaKwMissing(p.keywordsUa, p.keywords));
+  const batch = todo.slice(0, 150);
+  let done = 0;
+  let err = "";
+  for (let i = 0; i < batch.length; i += 50) {
+    const chunk = batch.slice(i, i + 50);
+    try {
+      const tr = await translate(chunk.map((p) => p.keywords as string), "RU", "UK");
+      for (const [k, p] of chunk.entries()) {
+        const v = tr[k]?.trim();
+        if (!v || v.toLowerCase() === p.keywords!.trim().toLowerCase()) continue;
+        await db.product.update({ where: { id: p.id }, data: { keywordsUa: v, textEditedAt: new Date() } });
+        done++;
+      }
+    } catch (e) {
+      err = e instanceof Error ? e.message : String(e);
+      break;
+    }
+  }
+  const { sent, sdErr } = await sendTexts(batch.map((p) => p.id));
   const left = Math.max(0, todo.length - done);
-  const msg = `Перекладено UA→RU: ${done}. Відправлено в SalesDrive: ${sent}. Залишилось: ${left}${left ? " — натисніть ще раз" : ""}${errors.length ? `. Помилка DeepL: ${errors[0].slice(0, 200)}` : ""}${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
-  await logAction(user.id, "translate-ru", "product", null, msg);
+  const msg = `Українські ключові слова: перекладено ${done}, відправлено в SalesDrive ${sent}. Залишилось: ${left}${left ? " — натисніть ще раз" : ""}${err ? `. DeepL: ${err.slice(0, 200)}` : ""}${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
+  await logAction(user.id, "translate-kw-ua", "product", null, msg);
   revalidatePath("/products/fill");
-  redirect(`/products/fill?f=lang&msg=${encodeURIComponent(msg)}`);
+  redirect(`/products/fill?f=kwua&msg=${encodeURIComponent(msg)}`);
 }

@@ -113,7 +113,8 @@ export function productToSd(
     }
     if (p.keywords?.trim()) {
       payload.keywords = p.keywords;
-      payload.keywordsTranslate = p.keywordsUa?.trim() || p.keywords;
+      // українські — лише справжні (копія російських потрапила б на Prom в українську версію)
+      if (p.keywordsUa?.trim()) payload.keywordsTranslate = p.keywordsUa;
     }
     const params = parseParams(p.params).filter((x) => x.value.trim());
     if (params.length) {

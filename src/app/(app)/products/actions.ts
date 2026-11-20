@@ -683,6 +683,9 @@ export async function checkFromYml(formData: FormData) {
     description: tag("description")?.slice(0, 300) ?? null,
     description_ua: tag("description_ua")?.slice(0, 300) ?? null,
     keywords: tag("keywords"),
+    keywords_ua: tag("keywords_ua"),
+    // усі назви тегів цього товару — щоб бачити, як SalesDrive називає українські поля
+    tags: [...new Set([...raw.matchAll(/<([a-z_]+)[\s>]/gi)].map((m) => m[1]))].join(", "),
   };
   if (raw) {
     const full = { description: tag("description"), description_ua: tag("description_ua") };

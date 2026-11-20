@@ -3,8 +3,8 @@ import { mainImage } from "@/lib/images";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import { saveFill, translateRuFromUa } from "./actions";
-import { langIssues } from "@/lib/langcheck";
+import { saveFill, translateRuFromUa, translateUaKeywords } from "./actions";
+import { langIssues, uaKwMissing } from "@/lib/langcheck";
 import SelectAllButton from "@/components/SelectAllButton";
 
 type SP = Promise<{ f?: string; q?: string; page?: string; msg?: string; warn?: string }>;
@@ -14,6 +14,7 @@ const FILTERS: Record<string, string> = {
   man: "Без бренду",
   country: "Без країни",
   kw: "Без ключових слів",
+  kwua: "Ключові UA = RU",
   lang: "Змішана мова (RU/UA)",
   cell: "Без комірки (є залишок)",
   all: "Усі основні товари",
@@ -32,6 +33,11 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
   )
     .filter((p) => langIssues(p).length > 0)
     .map((p) => p.id);
+  const kwuaIds = (
+    await db.product.findMany({ where: { deletedAt: null, keywords: { not: null } }, select: { id: true, keywords: true, keywordsUa: true } })
+  )
+    .filter((p) => p.keywords?.trim() && uaKwMissing(p.keywordsUa, p.keywords))
+    .map((p) => p.id);
   const base: Prisma.ProductWhereInput = { deletedAt: null, baseProductId: null, ...(q ? { search: { contains: q } } : {}) };
   const where: Prisma.ProductWhereInput =
     f === "cost"
@@ -40,6 +46,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         ? { ...base, OR: [{ manufacturer: null }, { manufacturer: "" }] }
         : f === "country"
           ? { ...base, OR: [{ country: null }, { country: "" }] }
+        : f === "kwua"
+          ? { deletedAt: null, id: { in: kwuaIds }, ...(q ? { search: { contains: q } } : {}) }
         : f === "lang"
           ? { deletedAt: null, id: { in: langIds }, ...(q ? { search: { contains: q } } : {}) }
         : f === "kw"
@@ -54,6 +62,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ manufacturer: null }, { manufacturer: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ country: null }, { country: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ keywords: null }, { keywords: "" }] } }),
+      Promise.resolve(kwuaIds.length),
       Promise.resolve(langIds.length),
       db.product.count({ where: { deletedAt: null, baseProductId: null, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } } }),
     ]),
@@ -85,7 +94,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>
             {t}
-            {i < 6 ? ` (${counts[i]})` : ""}
+            {i < 7 ? ` (${counts[i]})` : ""}
           </Link>
         ))}
         <form className="row" style={{ gap: 6 }}>
@@ -99,6 +108,13 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         собівартості — без змін. Комірку зручно ставити, коли стоїте біля полиці: оберіть комірку, кількість підставиться із залишку.
       </p>
 
+      {f === "kwua" && (
+        <form action={translateUaKeywords} className="panel small" style={{ marginBottom: 12 }}>
+          <b>Українські ключові слова</b> — там, де їх немає або там копія російських: перекласти російські через DeepL, зберегти й
+          відправити в SalesDrive. Звідти вони підуть у YML і на Prom з наступним імпортом. По 150 товарів за раз.{" "}
+          <button className="btn sm primary">🌐 Перекласти ключові RU → UA</button>
+        </form>
+      )}
       {f === "lang" && (
         <form action={translateRuFromUa} className="panel small" style={{ marginBottom: 12 }}>
           <b>Російські описи й назви з українським текстом</b> — перекласти з української версії через DeepL (з HTML) і відправити в

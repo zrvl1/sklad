@@ -22,3 +22,11 @@ export function langIssues(p: { name: string; nameTranslate?: string | null; des
   add("Опис UA (є російські слова)", foreignWords(p.descriptionTranslate, "ua"));
   return out;
 }
+
+/** Українських ключових слів фактично немає: порожньо, копія російських або з російськими літерами */
+export function uaKwMissing(ua: string | null | undefined, ru: string | null | undefined) {
+  const v = ua?.trim();
+  if (!v) return true;
+  if (ru && v.toLowerCase() === ru.trim().toLowerCase()) return true;
+  return /[ыэъё]/i.test(v);
+}

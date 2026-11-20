@@ -1,3 +1,4 @@
+import { uaKwMissing } from "./langcheck";
 import { db } from "./db";
 import { fetchYmlText, parseYml } from "./salesdrive";
 import { buildSearch, setSetting } from "./util";
@@ -74,7 +75,8 @@ export async function syncFromYml() {
             ...(o.country ? { country: o.country } : {}),
             ...(o.keywords !== undefined && !hold ? { keywords: o.keywords } : {}),
             ...(o.images !== undefined && o.images.length && o.images.length >= (localImages.get(o.sdId) ?? 0) ? { images: JSON.stringify(o.images) } : {}),
-            ...(o.keywordsUa !== undefined && !hold ? { keywordsUa: o.keywordsUa } : {}),
+            // українські ключові з YML беремо, лише якщо це не копія російських
+            ...(o.keywordsUa !== undefined && !hold && !uaKwMissing(o.keywordsUa, o.keywords) ? { keywordsUa: o.keywordsUa } : {}),
             categorySdId: o.categoryId,
             categoryName: o.categoryName,
             search: buildSearch(
