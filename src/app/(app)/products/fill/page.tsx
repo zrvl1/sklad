@@ -1,4 +1,5 @@
 import { ua } from "@/lib/names";
+import { mainImage } from "@/lib/images";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
@@ -130,6 +131,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
             <thead>
               <tr>
                 <th style={{ width: 24 }} />
+                <th style={{ width: 60 }}>Фото</th>
                 <th>Товар</th>
                 <th className="num">Залишок</th>
                 <th className="num">Ціна</th>
@@ -148,6 +150,22 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
                     <td>
                       <input type="hidden" name="id" value={p.id} />
                       <input type="checkbox" name={`sel_${p.id}`} value="1" title="Позначити для масового виробника" />
+                    </td>
+                    <td>
+                      {mainImage(p.images) ? (
+                        <a href={mainImage(p.images)!} target="_blank" rel="noreferrer" title="Відкрити фото">
+                          <img
+                            src={mainImage(p.images)!}
+                            alt=""
+                            loading="lazy"
+                            style={{ width: 52, height: 52, objectFit: "contain", background: "#fff", borderRadius: 6, border: "1px solid var(--line)", display: "block" }}
+                          />
+                        </a>
+                      ) : (
+                        <Link href={`/products/${p.id}`} className="muted small" title="Додати фото">
+                          + фото
+                        </Link>
+                      )}
                     </td>
                     <td>
                       <Link href={`/products/${p.id}`}>{ua(p)}</Link>
@@ -202,7 +220,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted">
+                  <td colSpan={9} className="muted">
                     Усе заповнено 🎉
                   </td>
                 </tr>
