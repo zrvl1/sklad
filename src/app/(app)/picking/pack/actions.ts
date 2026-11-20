@@ -1,5 +1,5 @@
-import { ua } from "@/lib/names";
 "use server";
+import { ua } from "@/lib/names";
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
