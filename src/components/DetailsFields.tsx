@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ParamsEditor, { type Param } from "./ParamsEditor";
 import { translateKeywords } from "@/lib/ruua";
+import { translateTexts } from "./translateClient";
 
 export type ClientTemplate = {
   id: number;
@@ -56,6 +57,30 @@ export default function DetailsFields({
   const [rows, setRows] = useState<Param[]>(params);
   const [touched, setTouched] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [trBusy, setTrBusy] = useState(false);
+  const [trErr, setTrErr] = useState<string | null>(null);
+  // перекласти опис і ключові слова: ru-ua або ua-ru
+  const tr = async (dir: "ru-ua" | "ua-ru") => {
+    setTrBusy(true);
+    setTrErr(null);
+    try {
+      const from = dir === "ru-ua" ? "RU" : "UK";
+      const to = dir === "ru-ua" ? "UK" : "RU";
+      const [d] = await translateTexts([dir === "ru-ua" ? desc : descTr], from, to, { html: true });
+      const [k] = await translateTexts([dir === "ru-ua" ? kw : kwUa], from, to, { keywords: true });
+      if (dir === "ru-ua") {
+        if (d) setDescTr(d);
+        if (k) setKwUa(k);
+      } else {
+        if (d) setDesc(d);
+        if (k) setKw(k);
+      }
+    } catch (e) {
+      setTrErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTrBusy(false);
+    }
+  };
 
   const formValues = () => {
     const form = ref.current?.closest("form");
@@ -116,6 +141,17 @@ export default function DetailsFields({
           синхронізуйтесь — інакше збережений тут опис замінить той, що є в CRM.
         </div>
       )}
+      <div className="row" style={{ gap: 6 }}>
+        <span className="small muted">Опис і пошукові запити:</span>
+        <button type="button" className="btn sm" disabled={trBusy} onClick={() => tr("ru-ua")}>
+          🌐 перекласти RU → UA
+        </button>
+        <button type="button" className="btn sm" disabled={trBusy} onClick={() => tr("ua-ru")}>
+          🌐 перекласти UA → RU
+        </button>
+        {trBusy && <span className="small muted">перекладаю…</span>}
+        {trErr && <span className="small" style={{ color: "var(--err)" }}>{trErr}</span>}
+      </div>
       <label>
         Опис російською (RU; можна HTML)
         <textarea
@@ -130,7 +166,7 @@ export default function DetailsFields({
       </label>
       <label>
         <span className="row" style={{ justifyContent: "space-between" }}>
-          <span>Опис українською (UA) — порожньо: такий самий, як російський</span>
+          <span>Опис українською (UA) — порожньо: перекладеться при збереженні</span>
           <button type="button" className="btn sm" onClick={() => setDescTr(desc)} disabled={!desc}>
             скопіювати з RU
           </button>

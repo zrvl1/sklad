@@ -3,6 +3,7 @@ import { dateInput } from "@/lib/util";
 import { parseParams } from "@/lib/salesdrive";
 import DetailsFields, { type ClientTemplate } from "@/components/DetailsFields";
 import CodeInput from "@/components/CodeInput";
+import NameTranslate from "@/components/NameTranslate";
 import { saveProduct } from "./actions";
 
 export default function ProductForm({
@@ -35,8 +36,11 @@ export default function ProductForm({
           <input name="name" defaultValue={p?.name} required minLength={2} maxLength={255} autoFocus={!p} />
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
-          Назва українською (UA)
-          <input name="nameTranslate" defaultValue={p?.nameTranslate ?? ""} maxLength={255} placeholder="порожньо — піде така сама, як російська" />
+          <span className="row" style={{ justifyContent: "space-between" }}>
+            <span>Назва українською (UA)</span>
+            <NameTranslate />
+          </span>
+          <input name="nameTranslate" defaultValue={p?.nameTranslate ?? ""} maxLength={255} placeholder="порожньо — перекладеться автоматично при збереженні" />
         </label>
         <label>
           Категорія

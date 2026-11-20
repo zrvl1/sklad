@@ -91,6 +91,27 @@ export async function saveProduct(formData: FormData) {
     country: str(formData.get("country")),
     params: normParams(String(formData.get("params") ?? "[]")) as string | null,
   };
+  // Новий товар: порожня українська версія перекладається автоматично (DeepL; ключові слова без DeepL — за словником).
+  // В наявних товарах не чіпаємо: українська назва з SalesDrive може не приходити в YML, і ми б її затерли.
+  if (!id) {
+    const { translate, translateConfigured } = await import("@/lib/translate");
+    const { translateKeywords } = await import("@/lib/ruua");
+    if (translateConfigured()) {
+      try {
+        const need = [!data.nameTranslate ? name : "", !data.descriptionTranslate && data.description ? data.description : "", !data.keywordsUa && data.keywords ? data.keywords : ""];
+        if (need.some(Boolean)) {
+          const [n] = need[0] ? await translate([need[0]], "RU", "UK") : [""];
+          const [d] = need[1] ? await translate([need[1]], "RU", "UK", true) : [""];
+          const [k] = need[2] ? await translate([need[2]], "RU", "UK") : [""];
+          if (n) data.nameTranslate = n;
+          if (d) data.descriptionTranslate = d;
+          if (k) data.keywordsUa = k;
+        }
+      } catch {
+        /* перекладач недоступний — збережемо як є */
+      }
+    } else if (!data.keywordsUa && data.keywords) data.keywordsUa = translateKeywords(data.keywords);
+  }
   // Собівартість: у гривні або у валюті закупівлі (тоді в гривні рахуємо за курсом SalesDrive)
   const costInput = num(formData.get("cost"));
   const costCurrency = str(formData.get("costCurrency")) ?? "UAH";
