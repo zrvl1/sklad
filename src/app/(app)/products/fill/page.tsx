@@ -17,6 +17,7 @@ const FILTERS: Record<string, string> = {
   kwua: "Ключові UA = RU",
   lang: "Змішана мова (RU/UA)",
   cell: "Без комірки (є залишок)",
+  photo: "Без фото",
   all: "Усі основні товари",
 };
 
@@ -54,6 +55,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
           ? { ...base, OR: [{ keywords: null }, { keywords: "" }] }
         : f === "cell"
           ? { ...base, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } }
+        : f === "photo"
+          ? { ...base, OR: [{ images: null }, { images: "" }, { images: "[]" }] }
           : base;
 
   const [counts, total, rows, cells, mans] = await Promise.all([
@@ -65,6 +68,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       Promise.resolve(kwuaIds.length),
       Promise.resolve(langIds.length),
       db.product.count({ where: { deletedAt: null, baseProductId: null, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } } }),
+      db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ images: null }, { images: "" }, { images: "[]" }] } }),
     ]),
     db.product.count({ where }),
     db.product.findMany({
@@ -94,7 +98,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>
             {t}
-            {i < 7 ? ` (${counts[i]})` : ""}
+            {i < 8 ? ` (${counts[i]})` : ""}
           </Link>
         ))}
         <form className="row" style={{ gap: 6 }}>

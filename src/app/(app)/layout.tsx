@@ -15,12 +15,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="shell">
       <nav className="side no-print">
         <div className="brand">📦 Склад</div>
-        <Link href="/">Головна</Link>
+        <Link href="/">Сьогодні</Link>
         <Link href="/warehouse">Склад і комірки</Link>
         <Link href="/products">Товари</Link>
         {can(user, "products.edit") && <Link href="/products/kits">Комплекти (картки)</Link>}
         {can(user, "products.edit") && <Link href="/products/fill">Заповнення даних</Link>}
         {can(user, "products.edit") && <Link href="/products/bulk-params">Характеристики масово</Link>}
+        {can(user, "products.edit") && <Link href="/products/reorder">Що дозамовити</Link>}
         {can(user, "receipts") && <Link href="/receipts">Прихід товару</Link>}
         {can(user, "writeoffs") && <Link href="/writeoffs">Списання</Link>}
         {can(user, "picking") && <Link href="/picking">Збирання замовлень</Link>}
@@ -42,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {can(user, "reports") && <Link href="/reports">Звіт: приходи</Link>}
         {can(user, "reports") && <Link href="/reports/expenses">Гроші за місяць</Link>}
         {can(user, "reports") && <Link href="/reports/channels">Канали й реклама</Link>}
+        {can(user, "reports") && <Link href="/reports/abc">ABC-аналіз</Link>}
         <Link href="/settings">{can(user, "settings") ? "Налаштування" : "Мій профіль"}</Link>
         <div className="bottom">
           <div>{user.name}</div>

@@ -89,6 +89,7 @@ model Product {
   deletedAt        DateTime?      // видалено (у CRM або з додатку) — у списках не показується, історія зберігається
   baseProductId    Int?           // картка-комплект (вітрина для SEO): посилається на основний фізичний товар
   kitQty           Float          @default(1) // скільки штук основного товару в одній картці
+  minStock         Float?         // мінімальний залишок (порожньо — додаток підказує за продажами)
   sdKitPending     Boolean        @default(false) // картку створено в додатку — у SalesDrive ще треба позначити «Комплект» і додати основний
   base             Product?       @relation("KitBase", fields: [baseProductId], references: [id], onDelete: SetNull)
   kits             Product[]      @relation("KitBase")

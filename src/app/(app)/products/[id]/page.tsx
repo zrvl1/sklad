@@ -13,7 +13,7 @@ import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
-import { addProductCell, addProductCode, checkFromYml, promProductForm, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
+import { addProductCell, addProductCode, checkFromYml, promProductForm, setMinStock, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -388,6 +388,17 @@ export default async function ProductPage({ params, searchParams }: Props) {
             <input name="qty" type="number" step="any" placeholder="К-сть" style={{ width: 80 }} />
             <button className="btn sm">Встановити</button>
           </form>
+          {!product.baseProductId && (
+            <form action={setMinStock} className="row" style={{ marginTop: 14 }}>
+              <input type="hidden" name="id" value={product.id} />
+              <span className="small">Мінімальний залишок:</span>
+              <input name="minStock" defaultValue={product.minStock ?? ""} placeholder="авто" inputMode="decimal" style={{ width: 80 }} />
+              <button className="btn sm">Зберегти</button>
+              <Link className="small" href="/products/reorder?f=sold">
+                що дозамовити →
+              </Link>
+            </form>
+          )}
         </div>
 
         <div className="panel">

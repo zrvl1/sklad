@@ -742,3 +742,16 @@ export async function promProductForm(formData: FormData) {
   revalidatePath(`/products/${id}`);
   redirect(`/products/${id}#prom`);
 }
+
+/** Мінімальний залишок товару (порожньо — підказка додатку за продажами) */
+export async function setMinStock(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const id = Number(formData.get("id"));
+  const raw = String(formData.get("minStock") ?? "").trim().replace(",", ".");
+  const val = raw === "" ? null : Number(raw);
+  if (val !== null && (!Number.isFinite(val) || val < 0)) redirect(`/products/${id}`);
+  await db.product.update({ where: { id }, data: { minStock: val } });
+  await logAction(user.id, "min-stock", "product", id, val === null ? "авто" : String(val));
+  revalidatePath(`/products/${id}`);
+  redirect(`/products/${id}`);
+}
