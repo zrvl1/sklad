@@ -10,7 +10,7 @@ import { isSalesDriveConfigured, parseParams, productToSd, sdUpdateProducts } fr
 import { applyTemplate } from "@/lib/templates";
 import { moneyProblem, validateCodes } from "@/lib/validate";
 import { setCellQty } from "@/lib/stock";
-import { buildSearch, getSetting, logAction, num, str } from "@/lib/util";
+import { buildSearch, getSetting, logAction, num, setSetting, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
 import { nextSku } from "@/lib/nextcodes";
 
@@ -359,7 +359,6 @@ export async function bulkGenerate(formData: FormData) {
 
 export async function saveSkuSettings(formData: FormData) {
   const user = await requirePerm("products.edit");
-  const { setSetting } = await import("@/lib/util");
   const prefix = (str(formData.get("prefix")) ?? "ART").toUpperCase().replace(/[^A-ZА-ЯІЇЄҐ0-9-]/g, "");
   const digits = Math.min(8, Math.max(3, Number(formData.get("digits")) || 4));
   await setSetting("skuPrefix", prefix);
@@ -659,4 +658,46 @@ export async function confirmKitSd(formData: FormData) {
   const back = String(formData.get("back") ?? "/products/kits");
   revalidatePath("/products/kits");
   redirect(back.startsWith("/") ? back : "/products/kits");
+}
+
+/**
+ * Перевірити товар у YML SalesDrive і одразу оновити з нього назви, описи, фото, ключові слова.
+ * Показує, що саме SalesDrive віддає в тегах name / name_ua / description / description_ua.
+ */
+export async function checkFromYml(formData: FormData) {
+  await requirePerm("products.edit");
+  const id = Number(formData.get("id"));
+  const p = await db.product.findUniqueOrThrow({ where: { id } });
+  const { fetchYmlText } = await import("@/lib/salesdrive");
+  const xml = await fetchYmlText();
+  // сирий фрагмент offer — щоб бачити теги як є
+  const start = p.sdId ? xml.indexOf(`<offer id="${p.sdId}"`) : -1;
+  const raw = start >= 0 ? xml.slice(start, xml.indexOf("</offer>", start) + 8) : "";
+  const tag = (t: string) => {
+    const m = new RegExp(`<${t}>([\\s\\S]*?)</${t}>`).exec(raw);
+    return m ? m[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim() : null;
+  };
+  const found = {
+    name: tag("name"),
+    name_ua: tag("name_ua"),
+    description: tag("description")?.slice(0, 300) ?? null,
+    description_ua: tag("description_ua")?.slice(0, 300) ?? null,
+    keywords: tag("keywords"),
+  };
+  if (raw) {
+    const full = { description: tag("description"), description_ua: tag("description_ua") };
+    await db.product.update({
+      where: { id },
+      data: {
+        ...(found.name ? { name: found.name } : {}),
+        ...(found.name_ua ? { nameTranslate: found.name_ua } : {}),
+        ...(full.description !== null ? { description: full.description } : {}),
+        ...(full.description_ua !== null ? { descriptionTranslate: full.description_ua } : {}),
+        ...(found.keywords !== null ? { keywords: found.keywords } : {}),
+      },
+    });
+  }
+  await setSetting(`ymlCheck:${id}`, JSON.stringify({ at: new Date().toISOString(), inYml: Boolean(raw), ...found }));
+  revalidatePath(`/products/${id}`);
+  redirect(`/products/${id}#yml`);
 }

@@ -1,6 +1,7 @@
 import PrintButton from "@/components/PrintButton";
 import ProductPhotos from "./ProductPhotos";
 import { productImages } from "@/lib/images";
+import { getSetting } from "@/lib/util";
 import { langIssues } from "@/lib/langcheck";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,7 +12,7 @@ import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
-import { addProductCell, addProductCode, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
+import { addProductCell, addProductCode, checkFromYml, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -136,6 +137,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const inCells = product.cells.reduce((s, c) => s + c.qty, 0);
 
   const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
+  const ymlCheckRaw = await getSetting(`ymlCheck:${product.id}`);
 
   return (
     <>
@@ -150,6 +152,31 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </Link>
       </div>
       <ProductPhotos productId={product.id} images={productImages(product.images)} canEdit={!product.deletedAt} />
+      {(() => {
+        const raw = ymlCheckRaw ? (JSON.parse(ymlCheckRaw) as Record<string, string | null | boolean>) : null;
+        return (
+          <details className="panel small" id="yml" open={Boolean(raw)}>
+            <summary>Що віддає SalesDrive для цього товару (YML)</summary>
+            <form action={checkFromYml} style={{ margin: "8px 0" }}>
+              <input type="hidden" name="id" value={product.id} />
+              <button className="btn sm">Перевірити й оновити з SalesDrive</button>
+            </form>
+            {raw && !raw.inYml && <div className="msg warn">Товару немає в YML (ID {product.sdId}).</div>}
+            {raw && raw.inYml && (
+              <table className="small">
+                <tbody>
+                  {["name", "name_ua", "description", "description_ua", "keywords"].map((k) => (
+                    <tr key={k}>
+                      <td className="muted">{k}</td>
+                      <td>{(raw[k] as string | null) ?? <span style={{ color: "var(--err)" }}>немає тегу</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </details>
+        );
+      })()}
       {langIssues(product).length > 0 && (
         <div className="msg warn small">
           <b>Змішана мова:</b>
