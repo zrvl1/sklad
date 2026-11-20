@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { saveFill } from "./actions";
+import { langIssues } from "@/lib/langcheck";
 import SelectAllButton from "@/components/SelectAllButton";
 
 type SP = Promise<{ f?: string; q?: string; page?: string; msg?: string; warn?: string }>;
@@ -11,6 +12,7 @@ const FILTERS: Record<string, string> = {
   man: "Без бренду",
   country: "Без країни",
   kw: "Без ключових слів",
+  lang: "Змішана мова (RU/UA)",
   cell: "Без комірки (є залишок)",
   all: "Усі основні товари",
 };
@@ -22,6 +24,12 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
   const q = (sp.q ?? "").trim().toLowerCase();
   const page = Math.max(1, Number(sp.page) || 1);
 
+  // змішана мова — перевіряємо в коді (усі товари, разом із картками: у них свої назви)
+  const langIds = (
+    await db.product.findMany({ where: { deletedAt: null }, select: { id: true, name: true, nameTranslate: true, description: true, descriptionTranslate: true } })
+  )
+    .filter((p) => langIssues(p).length > 0)
+    .map((p) => p.id);
   const base: Prisma.ProductWhereInput = { deletedAt: null, baseProductId: null, ...(q ? { search: { contains: q } } : {}) };
   const where: Prisma.ProductWhereInput =
     f === "cost"
@@ -30,6 +38,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         ? { ...base, OR: [{ manufacturer: null }, { manufacturer: "" }] }
         : f === "country"
           ? { ...base, OR: [{ country: null }, { country: "" }] }
+        : f === "lang"
+          ? { deletedAt: null, id: { in: langIds }, ...(q ? { search: { contains: q } } : {}) }
         : f === "kw"
           ? { ...base, OR: [{ keywords: null }, { keywords: "" }] }
         : f === "cell"
@@ -42,6 +52,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ manufacturer: null }, { manufacturer: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ country: null }, { country: "" }] } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ keywords: null }, { keywords: "" }] } }),
+      Promise.resolve(langIds.length),
       db.product.count({ where: { deletedAt: null, baseProductId: null, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } } }),
     ]),
     db.product.count({ where }),
@@ -72,7 +83,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>
             {t}
-            {i < 5 ? ` (${counts[i]})` : ""}
+            {i < 6 ? ` (${counts[i]})` : ""}
           </Link>
         ))}
         <form className="row" style={{ gap: 6 }}>
@@ -139,6 +150,12 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
                     </td>
                     <td>
                       <Link href={`/products/${p.id}`}>{p.name}</Link>
+                      {f === "lang" &&
+                        langIssues(p).map((x) => (
+                          <div key={x.field} className="small" style={{ color: "var(--err)" }}>
+                            {x.field}: {x.words.join(", ")}
+                          </div>
+                        ))}
                       <div className="muted">
                         {p.sku ?? "—"}
                         {p._count.kits ? ` · +${p._count.kits} карток` : ""}

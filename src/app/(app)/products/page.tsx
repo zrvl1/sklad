@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { mainImage } from "@/lib/images";
+import { langIssues } from "@/lib/langcheck";
 import ProductTable from "./ProductTable";
 import { can, requireUser } from "@/lib/auth";
 
@@ -84,6 +85,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
           keywords: p.keywords,
           keywordsUa: p.keywordsUa,
           image: mainImage(p.images) ?? mainImage(p.base?.images),
+          langIssues: langIssues(p).map((x) => `${x.field}: ${x.words.join(", ")}`),
           name: p.name,
           sku: p.sku,
           barcode: p.barcode,

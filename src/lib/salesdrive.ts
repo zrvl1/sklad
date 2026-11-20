@@ -336,7 +336,7 @@ export function parseYml(xml: string): YmlOffer[] {
         images: Array.isArray(o.picture) ? (o.picture as Node[]).map((x) => text(x)).filter((x): x is string => Boolean(x)) : undefined,
         keywords: "keywords" in o ? text(o.keywords as Node) : "search_queries" in o ? text(o.search_queries as Node) : undefined,
         keywordsUa: "keywords_ua" in o ? text(o.keywords_ua as Node) : "keywords_uk" in o ? text(o.keywords_uk as Node) : undefined,
-        country: text(o.country_of_origin as Node) ?? text(o.country as Node) ?? param("країна виробник", "страна производитель", "країна-виробник", "страна-производитель"),
+        country: param("країна виробник", "країна-виробник", "страна производитель", "страна-производитель") ?? text(o.country_of_origin as Node)?.split(/\s+/)[0] ?? text(o.country as Node),
         categoryId,
         categoryName: categoryId ? cats.get(categoryId) ?? null : null,
         qty: firstNum(

@@ -1,6 +1,7 @@
 import PrintButton from "@/components/PrintButton";
 import ProductPhotos from "./ProductPhotos";
 import { productImages } from "@/lib/images";
+import { langIssues } from "@/lib/langcheck";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -149,6 +150,17 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </Link>
       </div>
       <ProductPhotos productId={product.id} images={productImages(product.images)} canEdit={!product.deletedAt} />
+      {langIssues(product).length > 0 && (
+        <div className="msg warn small">
+          <b>Змішана мова:</b>
+          {langIssues(product).map((x) => (
+            <div key={x.field}>
+              {x.field}: {x.words.join(", ")}
+            </div>
+          ))}
+          <div className="muted">Виправте вручну або кнопками «🌐 перекласти» у формі нижче.</div>
+        </div>
+      )}
 
       {product.deletedAt && (
         <div className="msg err">

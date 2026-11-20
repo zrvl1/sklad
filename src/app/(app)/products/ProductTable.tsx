@@ -18,6 +18,7 @@ type Row = {
   keywords?: string | null;
   keywordsUa?: string | null;
   image?: string | null;
+  langIssues?: string[];
   price: number;
   cost: number;
   stock: number;
@@ -126,6 +127,11 @@ export default function ProductTable({ products, canEdit = true, showCost = true
                 </td>
                 <td>
                   <Link href={`/products/${p.id}`}>{p.name}</Link>
+                  {p.langIssues && p.langIssues.length > 0 && (
+                    <span className="badge warn" title={p.langIssues.join("\n")} style={{ marginLeft: 6 }}>
+                      ⚠ мова
+                    </span>
+                  )}
                   {p.syncError && (
                     <span className="badge err" title={p.syncError} style={{ marginLeft: 6 }}>
                       не в CRM
