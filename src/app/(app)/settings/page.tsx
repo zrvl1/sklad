@@ -23,7 +23,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     : [null, null, null, null];
   const promOn = promOnRaw === "1";
   const promKwAuto = isAdmin ? (await getSetting("promKwAuto")) === "1" : false;
-  const promNoKw = isAdmin ? await db.promLink.count({ where: { OR: [{ keywordsUa: null }, { keywordsUa: "" }] } }) : 0;
+  const promNoKw = isAdmin
+    ? await (async () => {
+        const { uaKeywordsMissing } = await import("@/lib/prom");
+        const prods = await db.product.findMany({ where: { deletedAt: null, sdId: { not: null } }, select: { sdId: true, keywords: true } });
+        const ru = new Map<string, string | null>(prods.map((p) => [p.sdId as string, p.keywords as string | null]));
+        const links = await db.promLink.findMany({ select: { externalId: true, keywordsUa: true } });
+        return links.filter((l) => l.externalId && ru.get(l.externalId)?.trim() && uaKeywordsMissing(l.keywordsUa, ru.get(l.externalId))).length;
+      })()
+    : 0;
   const promDupsRaw = isAdmin ? await getSetting("promDups") : null;
   const promDups = promDupsRaw ? (JSON.parse(promDupsRaw) as string[]) : null;
   type PromRes = { at: string; prom: number; matched: number; unmatched: number; changes: number; sent: number; errors: string[]; guard: boolean };

@@ -701,3 +701,33 @@ export async function checkFromYml(formData: FormData) {
   revalidatePath(`/products/${id}`);
   redirect(`/products/${id}#yml`);
 }
+
+/** Prom: перевірити товар (пошукові запити обома мовами) або записати українські запити саме для нього */
+export async function promProductForm(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const id = Number(formData.get("id"));
+  const mode = String(formData.get("mode") ?? "check");
+  const p = await db.product.findUniqueOrThrow({ where: { id } });
+  const { promConfigured, promProductInfo, promPushUaKeywords } = await import("@/lib/prom");
+  let result: Record<string, unknown>;
+  try {
+    if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN у Vercel");
+    let pushed: string | null = null;
+    if (mode === "push") {
+      if (!p.sdId) throw new Error("Товар ще не в SalesDrive");
+      if (!p.keywords?.trim() && !p.keywordsUa?.trim()) throw new Error("У товару немає ключових слів — заповніть їх у формі нижче");
+      await promProductInfo(p.sdId, p.sku); // переконатись, що товар є в списку Prom
+      const r = await promPushUaKeywords({ sdIds: [p.sdId], onlyMissing: false, limit: 1 });
+      if (r.errors.length) throw new Error(r.errors.join("; "));
+      pushed = r.sent ? "записано" : "товар не знайдено на Prom";
+      await logAction(user.id, "prom-kw", "product", id, pushed);
+    }
+    const info = await promProductInfo(p.sdId, p.sku);
+    result = info ? { ok: true, pushed, ...info } : { ok: false, error: "Товару ще немає на Prom (зʼявиться після імпорту YML на Prom)" };
+  } catch (e) {
+    result = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  await setSetting(`promCheck:${id}`, JSON.stringify({ at: new Date().toISOString(), ...result }));
+  revalidatePath(`/products/${id}`);
+  redirect(`/products/${id}#prom`);
+}

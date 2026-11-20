@@ -189,18 +189,23 @@ export async function hidePromDuplicates() {
  * збереженні товару. Тут: беремо російські з SalesDrive (через додаток), перекладаємо (DeepL або словник)
  * і записуємо в українську версію товару на Prom (запит з X-LANGUAGE: uk).
  */
-export async function promPushUaKeywords({ limit = 50, onlyMissing = true, test = false } = {}) {
+export async function promPushUaKeywords({
+  limit = 50,
+  onlyMissing = true,
+  test = false,
+  sdIds,
+}: { limit?: number; onlyMissing?: boolean; test?: boolean; sdIds?: string[] } = {}) {
   if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN");
-  await refreshPromMap();
+  if (!sdIds) await refreshPromMap();
   const products = await db.product.findMany({
-    where: { deletedAt: null, sdId: { not: null }, keywords: { not: null } },
+    where: { deletedAt: null, sdId: sdIds ? { in: sdIds } : { not: null }, keywords: { not: null } },
     select: { sdId: true, sku: true, keywords: true, keywordsUa: true, name: true },
   });
   const bySd = new Map(products.map((p) => [p.sdId!, p]));
   const links = await db.promLink.findMany();
   const todo = links
     .map((l) => ({ l, p: l.externalId ? bySd.get(l.externalId) : undefined }))
-    .filter((x) => x.p?.keywords?.trim() && (!onlyMissing || !x.l.keywordsUa?.trim()))
+    .filter((x) => x.p?.keywords?.trim() && (!onlyMissing || uaKeywordsMissing(x.l.keywordsUa, x.p.keywords)))
     .slice(0, test ? 1 : limit);
   if (!todo.length) return { candidates: 0, sent: 0, errors: [] as string[], sample: null as string | null };
 
@@ -246,4 +251,32 @@ export async function promPushUaKeywords({ limit = 50, onlyMissing = true, test 
     errors,
     sample: first ? `${first.p!.sku ?? ""} ${first.l.name ?? ""} (Prom ID ${first.l.promId}): ${values[0]}` : null,
   };
+}
+
+/** Українських запитів на Prom немає: порожньо, або Prom віддає російські замість українських */
+export function uaKeywordsMissing(onProm: string | null | undefined, ru: string | null | undefined) {
+  const v = onProm?.trim();
+  if (!v) return true;
+  if (ru && v.toLowerCase() === ru.trim().toLowerCase()) return true;
+  return /[ыэъё]/i.test(v);
+}
+
+/** Живий стан товару на Prom: пошукові запити обома мовами */
+export async function promProductInfo(sdId: string | null, sku: string | null) {
+  if (!promConfigured()) throw new Error("Немає PROM_API_TOKEN");
+  let link = sdId ? await db.promLink.findFirst({ where: { externalId: sdId } }) : null;
+  if (!link && sku) link = await db.promLink.findFirst({ where: { sku } });
+  if (!link) {
+    await refreshPromMap();
+    link = sdId ? await db.promLink.findFirst({ where: { externalId: sdId } }) : null;
+    if (!link && sku) link = await db.promLink.findFirst({ where: { sku } });
+  }
+  if (!link) return null;
+  const get = async (lang: "ru" | "uk") => {
+    const r = await promFetch(`/products/${link!.promId}`, { headers: { "X-LANGUAGE": lang } });
+    const p = (r.product ?? r) as { name?: string; keywords?: string; presence?: string; quantity_in_stock?: number };
+    return { name: p.name ?? null, keywords: p.keywords ?? null, presence: p.presence ?? null, qty: p.quantity_in_stock ?? null };
+  };
+  const [ru, uk] = await Promise.all([get("ru"), get("uk")]);
+  return { promId: link.promId, ru, uk, at: new Date().toISOString() };
 }

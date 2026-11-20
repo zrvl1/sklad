@@ -13,7 +13,7 @@ import ProductForm from "../ProductForm";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
-import { addProductCell, addProductCode, checkFromYml, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
+import { addProductCell, addProductCode, checkFromYml, promProductForm, confirmKitSd, makeBaseForm, deleteProductForm, linkKitForm, removeProductCell, removeProductCode, retryPush, unlinkKit } from "../actions";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; warn?: string }> };
 
@@ -139,6 +139,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
   const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
   const ymlCheckRaw = await getSetting(`ymlCheck:${product.id}`);
+  const promCheckRaw = await getSetting(`promCheck:${product.id}`);
 
   return (
     <>
@@ -172,6 +173,65 @@ export default async function ProductPage({ params, searchParams }: Props) {
                       <td>{(raw[k] as string | null) ?? <span style={{ color: "var(--err)" }}>немає тегу</span>}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            )}
+          </details>
+        );
+      })()}
+      {(() => {
+        type Side = { name: string | null; keywords: string | null; presence: string | null; qty: number | null };
+        const r = promCheckRaw
+          ? (JSON.parse(promCheckRaw) as { at: string; ok: boolean; error?: string; pushed?: string | null; promId?: string; ru?: Side; uk?: Side })
+          : null;
+        const empty = <span style={{ color: "var(--err)" }}>порожньо</span>;
+        return (
+          <details className="panel small" id="prom" open={Boolean(r)}>
+            <summary>Що зараз на Prom (назва, пошукові запити)</summary>
+            <div className="toolbar" style={{ margin: "8px 0" }}>
+              <form action={promProductForm}>
+                <input type="hidden" name="id" value={product.id} />
+                <input type="hidden" name="mode" value="check" />
+                <button className="btn sm">Перевірити на Prom</button>
+              </form>
+              <form action={promProductForm}>
+                <input type="hidden" name="id" value={product.id} />
+                <input type="hidden" name="mode" value="push" />
+                <button className="btn sm primary">Записати українські запити на Prom</button>
+              </form>
+            </div>
+            {r && !r.ok && <div className="msg warn">{r.error}</div>}
+            {r?.pushed && <div className="msg ok">Українські запити: {r.pushed}</div>}
+            {r?.ok && r.ru && r.uk && (
+              <table className="small">
+                <tbody>
+                  <tr>
+                    <td className="muted">Prom ID</td>
+                    <td>
+                      {r.promId} · {r.uk.presence === "available" ? "є" : "немає"}, {r.uk.qty ?? "—"} шт · перевірено {dateTimeUa(new Date(r.at))}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Назва RU</td>
+                    <td>{r.ru.name ?? empty}</td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Назва UA</td>
+                    <td>{r.uk.name ?? empty}</td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Запити RU</td>
+                    <td>{r.ru.keywords || empty}</td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Запити UA</td>
+                    <td>
+                      {r.uk.keywords || empty}
+                      {r.uk.keywords && r.ru.keywords && r.uk.keywords.trim() === r.ru.keywords.trim() && (
+                        <span style={{ color: "var(--err)" }}> — це російські, українських немає</span>
+                      )}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             )}
