@@ -196,3 +196,20 @@ export async function translateUaKeywords() {
   revalidatePath("/products/fill");
   redirect(`/products/fill?f=kwua&msg=${encodeURIComponent(msg)}`);
 }
+
+/** Відправити в SalesDrive українські ключові слова всіх товарів, де вони є (разом із назвами й описами) */
+export async function pushUaKeywordsAll() {
+  const user = await requirePerm("products.edit");
+  const ids = (
+    await db.product.findMany({ where: { deletedAt: null, sdId: { not: null }, keywordsUa: { not: null } }, select: { id: true, keywords: true, keywordsUa: true } })
+  )
+    .filter((p) => p.keywordsUa?.trim() && p.keywordsUa.trim().toLowerCase() !== (p.keywords ?? "").trim().toLowerCase())
+    .map((p) => p.id);
+  // не даємо синхронізації кілька годин перезаписати їх старими з YML
+  await db.product.updateMany({ where: { id: { in: ids } }, data: { textEditedAt: new Date() } });
+  const { sent, sdErr } = await sendTexts(ids);
+  const msg = `Українські ключові слова відправлено в SalesDrive: ${sent} товарів${sdErr ? `. SalesDrive: ${sdErr.slice(0, 200)}` : ""}`;
+  await logAction(user.id, "push-kw-ua", "product", null, msg);
+  revalidatePath("/products/fill");
+  redirect(`/products/fill?f=kwua&msg=${encodeURIComponent(msg)}`);
+}
