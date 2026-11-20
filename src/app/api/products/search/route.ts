@@ -1,3 +1,4 @@
+import { ua } from "@/lib/names";
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -11,7 +12,8 @@ export async function GET(req: Request) {
   const q = (params.get("q") ?? "").trim().slice(0, 100);
   if (!q) return NextResponse.json([]);
   // у документах (прихід, інвентаризація, списання) картки-комплекти завжди замінюються основним товаром
-  const found = await searchProducts(q, 20, true);
+  // у вікнах документів показуємо українську назву
+  const found = (await searchProducts(q, 20, true)).map((f) => ({ ...f, name: ua(f) }));
   const wh = Number(params.get("wh"));
   if (!wh || !found.length) return NextResponse.json(found);
   const stocks = await db.stockBalance.findMany({ where: { warehouseId: wh, productId: { in: found.map((f) => f.id) } } });
