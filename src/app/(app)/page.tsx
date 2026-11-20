@@ -103,7 +103,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
 
   return (
     <>
-      <h1>Сьогодні</h1>
+      <div className="toolbar">
+        <h1 style={{ margin: 0 }}>Сьогодні</h1>
+        <span className="spacer" />
+        <Link className="btn sm" href="/insights">
+          💡 Поради: що покращити
+        </Link>
+      </div>
       {deniedMsg}
       <div className="stats">
         <Link className="stat" href="/picking">

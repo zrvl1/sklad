@@ -16,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <nav className="side no-print">
         <div className="brand">📦 Склад</div>
         <Link href="/">Сьогодні</Link>
+        {can(user, "reports") && <Link href="/insights">Поради</Link>}
         <Link href="/warehouse">Склад і комірки</Link>
         <Link href="/products">Товари</Link>
         {can(user, "products.edit") && <Link href="/products/kits">Комплекти (картки)</Link>}
