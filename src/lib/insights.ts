@@ -230,6 +230,7 @@ export async function buildInsights(): Promise<Insight[]> {
       title: `Однакові назви в різних товарів: ${dupGroups.length} груп (${dupGroups.reduce((s, g) => s + g.length, 0)} товарів)`,
       detail:
         "На сайті такі товари отримують адреси-дублі з номером у кінці, і Google індексує лише одну сторінку з групи — решта не потрапляє в пошук. Зробіть назви унікальними: бренд деталі, оригінал/аналог або кількість у комплекті.",
+      href: "/products/dupes",
       items: dupGroups.slice(0, 10).map((g) => ({ label: `${ua(g[0])} — ${g.map((p) => p.sku).join(", ")}`, href: `/products/${g[0].id}` })),
     });
 
