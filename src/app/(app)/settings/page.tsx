@@ -3,7 +3,7 @@ import { PROM_UA_KW_ENABLED } from "@/lib/prom";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
 import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -24,6 +24,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     : [null, null, null, null];
   const promOn = promOnRaw === "1";
   const promKwAuto = isAdmin ? (await getSetting("promKwAuto")) === "1" : false;
+  const promFeedKey = isAdmin ? await getSetting("promFeedKey") : null;
+  const promFeedUrl = promFeedKey ? `${process.env.APP_URL || "https://sklad-tau.vercel.app"}/api/feed/prom?key=${promFeedKey}` : null;
   const promNoKw = isAdmin
     ? await (async () => {
         const { uaKeywordsMissing } = await import("@/lib/prom");
@@ -158,8 +160,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </form>
               </div>
               ) : (
+                <>
+                <div style={{ marginTop: 8 }}>
+                  <div className="small">
+                    <b>Фід для Prom з українськими пошуковими запитами</b> — те саме, що YML SalesDrive, плюс українські запити з карток
+                    (порожні перекладаються автоматично). Вставте це посилання в імпорт Prom <b>замість</b> посилання SalesDrive.
+                    Посилання секретне — нікому не пересилайте.
+                  </div>
+                  {promFeedUrl && (
+                    <input readOnly className="input" style={{ width: "100%", margin: "6px 0", fontFamily: "monospace", fontSize: 12 }} value={promFeedUrl} />
+                  )}
+                  <form action={promFeedKeyAction}>
+                    <input type="hidden" name="mode" value={promFeedUrl ? "regen" : "new"} />
+                    <button className={`btn sm ${promFeedUrl ? "" : "primary"}`}>{promFeedUrl ? "Створити нове посилання (старе перестане працювати)" : "Створити посилання"}</button>
+                  </form>
+                </div>
                 <div className="toolbar" style={{ marginTop: 8 }}>
-                  <span className="small">Українські пошукові запити на Prom (API Prom їх не приймає — лише файлом):</span>
+                  <span className="small">Або файлом:</span>
                   <a className="btn sm" href="/api/prom/ua-keywords">
                     ⬇ Файл для імпорту на Prom (CSV)
                   </a>
@@ -167,6 +184,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     Prom → Імпорт → «з компʼютера» → «Тільки оновлення», відмітити лише «Пошукові запити (українською)»
                   </span>
                 </div>
+                </>
               )}
               <div className="toolbar" style={{ marginTop: 8 }}>
                 <span className="small">Дублі товарів на Prom:</span>

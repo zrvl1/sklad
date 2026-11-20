@@ -251,3 +251,14 @@ export async function promKw(formData: FormData) {
   await logAction(user.id, "prom-kw", "settings", null, msg);
   done(msg);
 }
+
+/** Секретне посилання на YML для Prom (SalesDrive + українські пошукові запити) */
+export async function promFeedKeyAction(formData: FormData) {
+  const user = await requirePerm("settings");
+  if (user.role !== "admin") done("Лише адміністратор");
+  const { setSetting } = await import("@/lib/util");
+  const crypto = await import("node:crypto");
+  await setSetting("promFeedKey", crypto.randomBytes(24).toString("base64url"));
+  await logAction(user.id, "prom-feed-key", "settings", null, String(formData.get("mode") ?? "new"));
+  done("Створено нове посилання на фід для Prom. Вставте його в імпорт Prom замість посилання SalesDrive.");
+}
