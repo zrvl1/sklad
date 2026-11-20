@@ -1,3 +1,4 @@
+import { mainImage } from "./images";
 import { db } from "./db";
 import { cachedStatuses, normTtn } from "./orders";
 import { getSetting } from "./util";
@@ -51,6 +52,7 @@ export type PackLine = {
   cells: string[];
   physical: string | null; // для картки-комплекту: який фізичний товар брати (назва й артикул основного)
   labelId: number | null; // товар, наліпку якого друкувати (основний для картки-комплекту)
+  image: string | null; // головне фото (картки або основного товару)
 };
 
 /** Заявка для екрана пакування: товари з усіма кодами й комірками */
@@ -87,6 +89,7 @@ export async function orderForPacking(orderId: number) {
       codes: [...new Set(codes)],
       cells: (b ?? p)?.cells.sort((x, y) => y.qty - x.qty).map((c) => c.cell.code) ?? [],
       labelId: (b ?? p)?.id ?? null,
+      image: mainImage(p?.images) ?? mainImage(b?.images),
       physical: b ? `${b.name}${b.manufacturer ? ` [${b.manufacturer}]` : ""} (${b.sku ?? b.barcode ?? "основний"})` : null,
     });
   }

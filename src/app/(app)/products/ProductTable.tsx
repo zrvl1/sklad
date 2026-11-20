@@ -17,6 +17,7 @@ type Row = {
   country?: string | null;
   keywords?: string | null;
   keywordsUa?: string | null;
+  image?: string | null;
   price: number;
   cost: number;
   stock: number;
@@ -93,6 +94,7 @@ export default function ProductTable({ products, canEdit = true, showCost = true
               <th style={{ width: 30 }}>
                 <input type="checkbox" checked={count > 0 && count === products.length} onChange={toggleAll} />
               </th>
+              <th />
               <th>Назва</th>
               <th>SKU</th>
               <th>Бренд · країна</th>
@@ -109,6 +111,18 @@ export default function ProductTable({ products, canEdit = true, showCost = true
               <tr key={p.id}>
                 <td>
                   <input type="checkbox" checked={!!selected[p.id]} onChange={() => toggle(p.id)} />
+                </td>
+                <td style={{ width: 52, paddingRight: 0 }}>
+                  <Link href={`/products/${p.id}`}>
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image} alt="" loading="lazy" style={{ width: 44, height: 44, objectFit: "contain", background: "#fff", borderRadius: 6, border: "1px solid var(--line)" }} />
+                    ) : (
+                      <span className="muted small" style={{ display: "inline-block", width: 44, height: 44, lineHeight: "44px", textAlign: "center", border: "1px dashed var(--line)", borderRadius: 6 }}>
+                        фото
+                      </span>
+                    )}
+                  </Link>
                 </td>
                 <td>
                   <Link href={`/products/${p.id}`}>{p.name}</Link>
@@ -170,7 +184,7 @@ export default function ProductTable({ products, canEdit = true, showCost = true
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={11} className="muted">
                   Нічого не знайдено. Якщо база порожня — зробіть синхронізацію в Налаштуваннях.
                 </td>
               </tr>

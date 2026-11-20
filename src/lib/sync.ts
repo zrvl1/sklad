@@ -26,8 +26,17 @@ export async function syncFromYml() {
   const now = new Date();
 
   // Один запит замість сотень: які товари вже є в базі
-  const existing = new Map<string, number>(
-    (await db.product.findMany({ where: { sdId: { not: null } }, select: { id: true, sdId: true } })).map((p) => [p.sdId as string, p.id])
+  const existingRows = await db.product.findMany({ where: { sdId: { not: null } }, select: { id: true, sdId: true, images: true } });
+  const existing = new Map<string, number>(existingRows.map((p) => [p.sdId as string, p.id]));
+  // скільки фото в товару в додатку: якщо в YML менше (наші щойно завантажені SalesDrive ще не забрав) — не затираємо
+  const localImages = new Map<string, number>(
+    existingRows.map((p) => {
+      let n = 0;
+      try {
+        n = p.images ? (JSON.parse(p.images) as unknown[]).length : 0;
+      } catch {}
+      return [p.sdId as string, n];
+    })
   );
   // Додаткові коди (артикули постачальників), щоб вони не випали з пошуку після оновлення
   const codesByProduct = new Map<number, string[]>();
@@ -57,6 +66,7 @@ export async function syncFromYml() {
             manufacturer: o.manufacturer,
             ...(o.country ? { country: o.country } : {}),
             ...(o.keywords !== undefined ? { keywords: o.keywords } : {}),
+            ...(o.images !== undefined && o.images.length && o.images.length >= (localImages.get(o.sdId) ?? 0) ? { images: JSON.stringify(o.images) } : {}),
             ...(o.keywordsUa !== undefined ? { keywordsUa: o.keywordsUa } : {}),
             categorySdId: o.categoryId,
             categoryName: o.categoryName,

@@ -61,6 +61,7 @@ model Product {
   sdId             String?        @unique // поле "ID" у SalesDrive
   name             String
   nameForDocuments String?
+  images           String?        // фото: JSON-масив URL (перше — головне); з YML SalesDrive або завантажені в додаток
   keywords         String?        // пошукові запити (з YML SalesDrive), основна мова
   keywordsUa       String?        // пошукові запити українською, якщо YML їх віддає
   country          String?        // країна виробник (з YML SalesDrive: country_of_origin)
@@ -459,4 +460,15 @@ model PromLink {
 
   @@index([externalId])
   @@index([sku])
+}
+
+// Фото, завантажені в додаток (віддаються публічно за адресою /img/<id>, щоб SalesDrive і сайти могли їх забрати)
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId Int
+  mime      String
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([productId])
 }

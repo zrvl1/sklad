@@ -25,7 +25,8 @@ export type SdProductPayload = {
   // назва поля країни в API SalesDrive не задокументована — передаємо поширені варіанти, зайві SalesDrive ігнорує
   countryManufacturer?: string;
   keywords?: string;
-  keywordsTranslate?: string; // українською (якщо SalesDrive двомовний)
+  keywordsTranslate?: string;
+  images?: { fullUrl: string }[]; // фото за посиланнями — SalesDrive завантажує їх сам // українською (якщо SalesDrive двомовний)
   manufacturerCountry?: string;
   country?: string;
   supplier?: string;
@@ -87,11 +88,18 @@ export function productToSd(
     withDetails?: boolean;
     paramsMode?: "add" | "replace";
     set?: { id: string; quantity: number }[];
+    withImages?: boolean;
   } = {}
 ): SdProductPayload {
   if (!p.sdId) throw new Error(`У товару "${p.name}" немає ID для SalesDrive`);
   const payload: SdProductPayload = { id: p.sdId };
   if (opts.set?.length) payload.set = opts.set;
+  if (opts.withImages && p.images) {
+    try {
+      const urls = (JSON.parse(p.images) as string[]).filter((u) => /^https?:\/\//.test(u));
+      if (urls.length) payload.images = urls.map((fullUrl) => ({ fullUrl }));
+    } catch {}
+  }
   if (opts.withName) {
     // в обидва мовні поля (UA і RU) — для нових товарів або коли назву змінили
     payload.name = p.name;
@@ -226,6 +234,7 @@ export type YmlOffer = {
   barcode: string | null;
   manufacturer: string | null;
   country: string | null;
+  images: string[] | undefined; // фото з YML (undefined — тегів picture немає взагалі)
   keywords: string | null | undefined; // undefined — у YML немає тегу
   keywordsUa: string | null | undefined;
   categoryId: string | null;
@@ -324,6 +333,7 @@ export function parseYml(xml: string): YmlOffer[] {
         sku: text(o.vendorCode as Node) ?? text(o.sku as Node) ?? text(o.article as Node) ?? param("sku", "артикул"),
         barcode: text(o.barcode as Node) ?? param("штрихкод", "штрих-код", "barcode"),
         manufacturer: text(o.vendor as Node) ?? param("виробник", "производитель"),
+        images: Array.isArray(o.picture) ? (o.picture as Node[]).map((x) => text(x)).filter((x): x is string => Boolean(x)) : undefined,
         keywords: "keywords" in o ? text(o.keywords as Node) : "search_queries" in o ? text(o.search_queries as Node) : undefined,
         keywordsUa: "keywords_ua" in o ? text(o.keywords_ua as Node) : "keywords_uk" in o ? text(o.keywords_uk as Node) : undefined,
         country: text(o.country_of_origin as Node) ?? text(o.country as Node) ?? param("країна виробник", "страна производитель", "країна-виробник", "страна-производитель"),

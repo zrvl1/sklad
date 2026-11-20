@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { mainImage } from "@/lib/images";
 import ProductTable from "./ProductTable";
 import { can, requireUser } from "@/lib/auth";
 
@@ -31,7 +32,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
       include: {
         stocks: true,
         cells: { include: { cell: true } },
-        base: { select: { id: true, name: true, sku: true, cells: { where: { qty: { gt: 0 } }, include: { cell: true } } } },
+        base: { select: { id: true, name: true, sku: true, images: true, cells: { where: { qty: { gt: 0 } }, include: { cell: true } } } },
         _count: { select: { kits: { where: { deletedAt: null } } } },
       },
     }),
@@ -82,6 +83,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
           country: p.country,
           keywords: p.keywords,
           keywordsUa: p.keywordsUa,
+          image: mainImage(p.images) ?? mainImage(p.base?.images),
           name: p.name,
           sku: p.sku,
           barcode: p.barcode,

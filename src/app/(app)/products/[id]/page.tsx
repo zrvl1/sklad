@@ -1,4 +1,6 @@
 import PrintButton from "@/components/PrintButton";
+import ProductPhotos from "./ProductPhotos";
+import { productImages } from "@/lib/images";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -58,6 +60,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
             До списку
           </Link>
         </div>
+        <ProductPhotos productId={product.id} images={productImages(product.images ?? physical.images)} canEdit={false} />
         {product.base && (
           <div className="msg warn">
             Картка-комплект. Фізично на складі — <b>{product.base.name}</b> ({product.base.sku ?? "—"}): шукайте й скануйте наліпку основного товару.
@@ -145,6 +148,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           До списку
         </Link>
       </div>
+      <ProductPhotos productId={product.id} images={productImages(product.images)} canEdit={!product.deletedAt} />
 
       {product.deletedAt && (
         <div className="msg err">

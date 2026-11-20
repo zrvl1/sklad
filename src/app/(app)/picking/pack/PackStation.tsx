@@ -206,6 +206,10 @@ export default function PackStation() {
                 return (
                   <tr key={l.key} style={{ background: ok ? "var(--ok-bg)" : flash === l.key ? "#eef5ff" : undefined }}>
                     <td style={{ fontSize: 16 }}>
+                      {l.image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={l.image} alt="" style={{ width: 64, height: 64, objectFit: "contain", float: "left", marginRight: 10, background: "#fff", borderRadius: 6, border: "1px solid var(--line)" }} />
+                      )}
                       {ok ? "✅ " : ""}
                       {l.name}
                       <div className="muted small">{l.sku ?? ""}</div>

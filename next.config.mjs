@@ -6,7 +6,7 @@ const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https:", // фото товарів з SalesDrive / Prom
   "font-src 'self' data:",
   `connect-src 'self'${isDev ? " ws:" : ""}`,
   "frame-ancestors 'self'",
