@@ -92,7 +92,7 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
  */
 export async function postReceipt(id: number) {
   const user = await requirePerm("receipts");
-  const r = await db.receipt.findUnique({ where: { id }, include: { lines: true, warehouse: true } });
+  const r = await db.receipt.findUnique({ where: { id }, include: { lines: true, warehouse: true, supplier: true } });
   if (!r) return { ok: false as const, error: "Документ не знайдено" };
   if (r.status !== "draft") return { ok: false as const, error: "Документ уже проведено" };
   if (r.lines.length === 0) return { ok: false as const, error: "Додайте хоча б один товар" };
@@ -168,6 +168,8 @@ export async function postReceipt(id: number) {
         // нова ціна продажу вводиться в гривні
         price: a.newPrice ?? p.price,
         priceCurrency: a.newPrice ? "UAH" : p.priceCurrency,
+        // постачальник товару — з приходу (останній, у кого купили)
+        supplierName: r.supplier?.name ?? p.supplierName,
       },
       withPrice: a.newPrice !== null,
       newQty: (curQty.get(p.id) ?? 0) + a.qty,
@@ -211,6 +213,7 @@ export async function postReceipt(id: number) {
           costOriginal: x.product.costOriginal,
           price: x.product.price,
           priceCurrency: x.product.priceCurrency,
+          supplierName: x.product.supplierName,
           ...(sdOn ? { syncError: null, syncedAt: now } : {}),
         },
       });

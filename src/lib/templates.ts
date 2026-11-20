@@ -43,28 +43,16 @@ export async function templateFor(categoryName: string | null | undefined) {
  * Те, що вже заповнено вручну, не чіпаємо.
  */
 export async function applyTemplate(productId: number) {
+  // Шаблони описів прибрано (описи в кожного товару свої). Лише значення за замовчуванням:
+  // характеристика «Стан: Новий» і країна «Китай», якщо не вказано інше.
   const p = await db.product.findUniqueOrThrow({ where: { id: productId } });
-  const t = await templateFor(p.categoryName);
-  if (!t) return p;
   const data: Partial<Product> = {};
-  if (!p.manufacturer && t.manufacturer) data.manufacturer = t.manufacturer;
-  if (!p.supplierName && t.supplierName) data.supplierName = t.supplierName;
-  const ctx = { ...p, ...data };
-  if (!p.description?.trim() && t.description) data.description = renderTemplate(t.description, ctx);
-  if (!p.descriptionTranslate?.trim() && t.descriptionTranslate) data.descriptionTranslate = renderTemplate(t.descriptionTranslate, { ...ctx, name: p.nameTranslate || p.name });
-  if (!p.country && t.country) data.country = t.country;
-  if (!p.keywords?.trim() && t.keywords) data.keywords = renderTemplate(t.keywords, ctx);
-  if (!p.keywordsUa?.trim() && (t.keywordsUa || t.keywords)) {
-    const { translateKeywords } = await import("./ruua");
-    data.keywordsUa = t.keywordsUa ? renderTemplate(t.keywordsUa, { ...ctx, name: p.nameTranslate || p.name }) : translateKeywords(String(data.keywords ?? p.keywords ?? ""));
+  const params = parseParams(p.params);
+  if (!params.some((x) => x.name.trim().toLowerCase() === "стан")) {
+    params.push({ name: "Стан", type: "text", value: "Новий" });
+    data.params = JSON.stringify(params);
   }
-  const own = parseParams(p.params);
-  if (t.params.length) {
-    // характеристики шаблону + вже введені (введені мають пріоритет)
-    const merged = [...own];
-    for (const tp of t.params) if (!merged.some((x) => x.name.toLowerCase() === tp.name.toLowerCase())) merged.push({ ...tp, value: renderTemplate(tp.value, ctx) });
-    data.params = JSON.stringify(merged);
-  }
+  if (!p.country) data.country = "Китай";
   if (!Object.keys(data).length) return p;
   return db.product.update({ where: { id: productId }, data });
 }

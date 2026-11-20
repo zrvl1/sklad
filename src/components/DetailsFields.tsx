@@ -74,7 +74,7 @@ export default function DetailsFields({
   const apply = (force: boolean) => {
     const f = formValues();
     const t = pick(f.categoryName ?? "");
-    if (!t) return setInfo("Для цієї категорії немає шаблону. Створіть його в «Шаблони опису».");
+    if (!t) return;
     if (t.description && (force || !desc.trim())) setDesc(render(t.description, f));
     if (t.descriptionTranslate && (force || !descTr.trim())) setDescTr(render(t.descriptionTranslate, { ...f, name: f.nameTranslate || f.name }));
     let k = kw;
@@ -153,9 +153,6 @@ export default function DetailsFields({
       <div>
         <div className="toolbar" style={{ marginBottom: 6 }}>
           <span style={{ fontSize: 13, color: "var(--muted)" }}>Характеристики</span>
-          <button type="button" className="btn sm" onClick={() => apply(true)}>
-            Підставити з шаблону
-          </button>
           {info && <span className="muted small">{info}</span>}
         </div>
         <ParamsEditor
