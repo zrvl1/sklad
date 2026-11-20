@@ -215,6 +215,24 @@ export async function buildInsights(): Promise<Insight[]> {
       items: shortDesc.slice(0, 8).map((p) => plink(p)),
     });
 
+  // ── Однакові назви: Хорошоп робить сторінки-дублі з /ID/, Google індексує лише одну ──
+  const all = await db.product.findMany({ where: { deletedAt: null }, select: { id: true, name: true, nameTranslate: true, sku: true } });
+  const byName = new Map<string, typeof all>();
+  for (const p of all) {
+    const k = ua(p).trim().toLowerCase().replace(/\s+/g, " ");
+    byName.set(k, [...(byName.get(k) ?? []), p]);
+  }
+  const dupGroups = [...byName.values()].filter((g) => g.length > 1);
+  if (dupGroups.length)
+    out.push({
+      level: "mid",
+      area: "Картки",
+      title: `Однакові назви в різних товарів: ${dupGroups.length} груп (${dupGroups.reduce((s, g) => s + g.length, 0)} товарів)`,
+      detail:
+        "На сайті такі товари отримують адреси-дублі з номером у кінці, і Google індексує лише одну сторінку з групи — решта не потрапляє в пошук. Зробіть назви унікальними: бренд деталі, оригінал/аналог або кількість у комплекті.",
+      items: dupGroups.slice(0, 10).map((g) => ({ label: `${ua(g[0])} — ${g.map((p) => p.sku).join(", ")}`, href: `/products/${g[0].id}` })),
+    });
+
   // ── Prom: товари, яких немає на Prom ──
   const promLinks = await db.promLink.findMany({ select: { externalId: true } });
   if (promLinks.length) {
