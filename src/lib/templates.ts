@@ -48,9 +48,15 @@ export async function applyTemplate(productId: number) {
   const p = await db.product.findUniqueOrThrow({ where: { id: productId } });
   const data: Partial<Product> = {};
   const params = parseParams(p.params);
-  if (!params.some((x) => x.name.trim().toLowerCase() === "стан")) {
-    params.push({ name: "Стан", type: "text", value: "Новий" });
-    data.params = JSON.stringify(params);
+  // характеристики за замовчуванням (змінюються вручну в товарі)
+  for (const [name, value] of [
+    ["Стан", "Новий"],
+    ["Тип запчастини", "Оригінал"],
+  ]) {
+    if (!params.some((x) => x.name.trim().toLowerCase() === name.toLowerCase())) {
+      params.push({ name, type: "text", value });
+      data.params = JSON.stringify(params);
+    }
   }
   if (!p.country) data.country = "Китай";
   if (!Object.keys(data).length) return p;

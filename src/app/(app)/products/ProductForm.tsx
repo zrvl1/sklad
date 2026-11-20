@@ -159,7 +159,14 @@ export default function ProductForm({
           descriptionTranslate={p?.descriptionTranslate ?? null}
           keywords={p?.keywords ?? null}
           keywordsUa={p?.keywordsUa ?? null}
-          params={p ? parseParams(p.params) : [{ name: "Стан", type: "text", value: "Новий" }]}
+          params={
+            p
+              ? parseParams(p.params)
+              : [
+                  { name: "Стан", type: "text", value: "Новий" },
+                  { name: "Тип запчастини", type: "text", value: "Оригінал" },
+                ]
+          }
           templates={[]}
           isNew={!p}
           notLoaded={Boolean(p && p.description === null && p.params === null && p.sdId && !p.sdId.startsWith("W"))}
