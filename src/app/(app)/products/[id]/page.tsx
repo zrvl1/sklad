@@ -230,25 +230,13 @@ export default async function ProductPage({ params, searchParams }: Props) {
                     <td>{r.uk.name ?? empty}</td>
                   </tr>
                   <tr>
-                    <td className="muted">Запити RU</td>
-                    <td>{r.ru.keywords || empty}</td>
-                  </tr>
-                  <tr>
-                    <td className="muted">Запити UA</td>
+                    <td className="muted">Запити</td>
                     <td>
-                      {r.uk.keywords || empty}
-                      {r.uk.keywords && r.ru.keywords && r.uk.keywords.trim() === r.ru.keywords.trim() && (
-                        <span style={{ color: "var(--err)" }}> — це російські, українських немає</span>
-                      )}
+                      {r.ru.keywords || empty}
+                      <div className="muted">
+                        API Prom віддає й приймає пошукові запити лише однією мовою (російською). Українські — файлом з Налаштувань.
+                      </div>
                     </td>
-                  </tr>
-                  <tr>
-                    <td className="muted">Поля Prom</td>
-                    <td style={{ wordBreak: "break-all" }}>{r.fields}</td>
-                  </tr>
-                  <tr>
-                    <td className="muted">Мовні поля</td>
-                    <td style={{ wordBreak: "break-all" }}>{r.multilang && r.multilang !== "{}" ? r.multilang : "немає"}</td>
                   </tr>
                 </tbody>
               </table>

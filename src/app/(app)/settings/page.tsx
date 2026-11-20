@@ -158,10 +158,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </form>
               </div>
               ) : (
-                <p className="small muted" style={{ marginTop: 8 }}>
-                  Українські пошукові запити на Prom (без них ≈ {promNoKw}): запис через API тимчасово вимкнено — Prom записує їх у
-                  російську версію.
-                </p>
+                <div className="toolbar" style={{ marginTop: 8 }}>
+                  <span className="small">Українські пошукові запити на Prom (API Prom їх не приймає — лише файлом):</span>
+                  <a className="btn sm" href="/api/prom/ua-keywords">
+                    ⬇ Файл для імпорту на Prom (CSV)
+                  </a>
+                  <span className="small muted">
+                    Prom → Імпорт → «з компʼютера» → «Тільки оновлення», відмітити лише «Пошукові запити (українською)»
+                  </span>
+                </div>
               )}
               <div className="toolbar" style={{ marginTop: 8 }}>
                 <span className="small">Дублі товарів на Prom:</span>

@@ -287,8 +287,17 @@ export async function promProductInfo(sdId: string | null, sku: string | null) {
   const fields = Object.keys(raw).sort().join(", ");
   const multilang: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) if (/multilang|_uk$|_ua$|_ru$|lang/i.test(k)) multilang[k] = v;
-  const strip = (x: typeof ru) => ({ name: x.name, keywords: x.keywords, presence: x.presence, qty: x.qty });
-  return { promId: link.promId, ru: strip(ru), uk: strip(uk), fields, multilang: JSON.stringify(multilang).slice(0, 3000), at: new Date().toISOString() };
+  const ml = (k: string, lang: "ru" | "uk") => {
+    const v = raw[k] as Record<string, string> | undefined;
+    return v && typeof v === "object" ? (v[lang] ?? null) : null;
+  };
+  const strip = (x: typeof ru, lang: "ru" | "uk") => ({
+    name: ml("name_multilang", lang) ?? x.name,
+    keywords: lang === "ru" ? x.keywords : null, // API Prom віддає запити лише однією мовою
+    presence: x.presence,
+    qty: x.qty,
+  });
+  return { promId: link.promId, ru: strip(ru, "ru"), uk: strip(uk, "uk"), fields, multilang: JSON.stringify(multilang).slice(0, 3000), at: new Date().toISOString() };
 }
 
 /** Записати російські пошукові запити (з SalesDrive) назад на Prom — для відновлення */
