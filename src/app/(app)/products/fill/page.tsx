@@ -3,7 +3,7 @@ import { mainImage } from "@/lib/images";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import { pushUaKeywordsAll, saveFill, translateRuFromUa, translateUaKeywords } from "./actions";
+import { saveFill, translateRuFromUa, translateUaKeywords } from "./actions";
 import { langIssues, uaKwMissing } from "@/lib/langcheck";
 import SelectAllButton from "@/components/SelectAllButton";
 
@@ -111,11 +111,8 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       {f === "kwua" && (
         <form action={translateUaKeywords} className="panel small" style={{ marginBottom: 12 }}>
           <b>Українські ключові слова</b> — там, де їх немає або там копія російських: перекласти російські через DeepL, зберегти й
-          відправити в SalesDrive. Звідти вони підуть у YML і на Prom з наступним імпортом. По 150 товарів за раз.{" "}
-          <button className="btn sm primary">🌐 Перекласти ключові RU → UA</button>{" "}
-          <button className="btn sm" formAction={pushUaKeywordsAll}>
-            ⇪ Відправити українські ключові всіх товарів у SalesDrive
-          </button>
+          зберегти в картках. На Prom — файлом з Налаштувань (SalesDrive має лише одне поле ключових слів). По 150 товарів за раз.{" "}
+          <button className="btn sm primary">🌐 Перекласти ключові RU → UA</button>
         </form>
       )}
       {f === "lang" && (
