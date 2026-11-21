@@ -35,6 +35,7 @@ type PromProduct = {
   presence?: string | null;
   quantity_in_stock?: number | null;
   keywords?: string | null;
+  category?: { id?: number | string | null; caption?: string | null } | null;
 };
 
 /** Повний список товарів Prom → таблиця PromLink (поточна наявність на Prom) */
@@ -58,6 +59,7 @@ export async function refreshPromMap() {
         presence: p.presence ?? null,
         qty: typeof p.quantity_in_stock === "number" ? Math.round(p.quantity_in_stock) : null,
         ...(p.keywords !== undefined ? { keywordsUa: p.keywords ? String(p.keywords) : null } : {}),
+        ...(p.category?.id ? { catId: String(p.category.id), catName: p.category.caption ? String(p.category.caption).slice(0, 255) : null } : {}),
       };
       await db.promLink.upsert({ where: { promId }, update: data, create: { promId, ...data } });
     }

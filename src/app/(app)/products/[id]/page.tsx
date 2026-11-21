@@ -299,9 +299,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
             <span
               className="small"
               style={{ display: "block" }}
-              title={promC.own ? `Середня комісія Prom із ${promC.orders} заявок цього товару за рік` : "Цей товар ще не продавався на Prom — середня комісія по всіх заявках Prom"}
+              title={`Комісія Prom за категорією «${promC.catName ?? "?"}» (Налаштування → Комісії Prom)`}
             >
-              з комісією Prom {Math.round(promC.pct * 10) / 10}%{promC.own ? ` (${promC.orders} зам.)` : " (сер.)"}: маржа{" "}
+              з комісією Prom {promC.pct}%: маржа{" "}
               {Math.round(((product.price - product.cost - (product.price * promC.pct) / 100) / product.price) * 100)}% ·{" "}
               {money(product.price - product.cost - (product.price * promC.pct) / 100)} грн
             </span>

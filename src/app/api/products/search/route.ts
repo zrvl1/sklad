@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const { byProduct } = await promCommissions(ids);
   const enriched = found.map((f) => {
     const c = byProduct.get(f.id);
-    return { ...f, image: imgMap.get(f.id) ?? null, stockTotal: totMap.get(f.id) ?? 0, promPct: c ? Math.round(c.pct * 10) / 10 : null, promOwn: c?.own ?? false };
+    return { ...f, image: imgMap.get(f.id) ?? null, stockTotal: totMap.get(f.id) ?? 0, promPct: c ? c.pct : null, promCat: c?.catName ?? null };
   });
   const wh = Number(params.get("wh"));
   if (!wh) return NextResponse.json(enriched);

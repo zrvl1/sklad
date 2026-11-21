@@ -76,8 +76,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               cellId: l.cellId,
               image: mainImage(l.product.images),
               stockTotal: stockOf.get(l.productId) ?? 0,
-              promPct: prom.get(l.productId) ? Math.round(prom.get(l.productId)!.pct * 10) / 10 : null,
-              promOwn: prom.get(l.productId)?.own ?? false,
+              promPct: prom.get(l.productId)?.pct ?? null,
+              promCat: prom.get(l.productId)?.catName ?? null,
             })),
           }}
           warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}

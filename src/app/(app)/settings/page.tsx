@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { PROM_UA_KW_ENABLED } from "@/lib/prom";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
@@ -210,6 +211,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <a className="btn sm" href="/api/prom/ua-keywords">
                     ⬇ Файл для імпорту на Prom (CSV)
                   </a>
+                  <Link className="btn sm" href="/settings/prom-commission">
+                    % Комісії Prom по категоріях
+                  </Link>
                   <form method="get" action="/api/prom/ua-keywords" className="toolbar">
                     <input name="sku" className="input" placeholder="CM0001" style={{ width: 110 }} />
                     <button className="btn sm">⬇ лише ці артикули</button>

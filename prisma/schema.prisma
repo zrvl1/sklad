@@ -459,6 +459,8 @@ model PromLink {
   qty        Int?      // quantity_in_stock на Prom
   keywordsUa String?   // пошукові запити українською на Prom (список читаємо з X-LANGUAGE: uk)
   kwPushedAt DateTime? // коли додаток записав українські запити
+  catId      String?   // категорія порталу Prom (від неї залежить комісія)
+  catName    String?
   pushedAt   DateTime? // коли додаток востаннє змінив наявність
   updatedAt  DateTime  @updatedAt
 

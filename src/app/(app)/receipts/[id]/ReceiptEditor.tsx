@@ -19,8 +19,8 @@ type Line = {
   cellId: number | null;
   image?: string | null;
   stockTotal?: number; // зараз на складі (до проведення цього приходу)
-  promPct?: number | null; // середня комісія Prom з заявок (% від ціни)
-  promOwn?: boolean; // true — з заявок саме цього товару, false — середня по Prom
+  promPct?: number | null; // комісія Prom за категорією товару (% від ціни)
+  promCat?: string | null; // категорія товару на Prom
 };
 
 /** Попередження по рядку приходу: ловимо типові помилки введення до проведення */
@@ -37,7 +37,7 @@ function lineWarnings(l: Line, rate: number) {
   return w;
 }
 
-type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string; image?: string | null; stockTotal?: number; promPct?: number | null; promOwn?: boolean };
+type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string; image?: string | null; stockTotal?: number; promPct?: number | null; promCat?: string | null };
 
 type Props = {
   receiptId: number;
@@ -119,7 +119,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           image: p.image ?? null,
           stockTotal: p.stockTotal,
           promPct: p.promPct ?? null,
-          promOwn: p.promOwn ?? false,
+          promCat: p.promCat ?? null,
           newPrice: null,
           cellId: activeCellId,
         },
@@ -407,10 +407,10 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                           <div
                             className="small"
                             style={{ color: color(mp) }}
-                            title={`Якщо продати через Prom: комісія ${l.promPct}% (${l.promOwn ? "з заявок цього товару" : "середня по Prom — цей товар там ще не продавався"}) ≈ ${fmt(pc)} грн`}
+                            title={`Якщо продати через Prom: комісія ${l.promPct}% (категорія Prom: ${l.promCat ?? "?"}) ≈ ${fmt(pc)} грн`}
                           >
                             з Prom {mp}% · {fmt(sale - c - pc)} грн
-                            <span className="muted"> (−{l.promPct}%{l.promOwn ? "" : " сер."})</span>
+                            <span className="muted"> (−{l.promPct}%)</span>
                           </div>
                         ) : null}
                       </>

@@ -1,51 +1,47 @@
 import { db } from "./db";
+import { getSetting } from "./util";
 
-export type PromCommission = { pct: number; orders: number; own: boolean };
+export type PromCommission = { pct: number; catName: string | null };
+
+/** Ставки комісії Prom по категоріях порталу: { "<catId>": 7.5 } — вписуються вручну з таблиці Prom */
+export async function promRates(): Promise<Record<string, number>> {
+  try {
+    return JSON.parse((await getSetting("promCommissionRates")) ?? "{}") as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
 
 /**
- * Комісія Prom по товарах — з реальних заявок SalesDrive за рік.
- * Комісія заявки ділиться між товарами пропорційно сумі рядка; % = комісія / виручка товару на Prom.
- * Заявки Prom без комісії (напр. повторні клієнти) теж рахуються — це справжній середній відсоток.
- * Для товарів без продажів на Prom повертаємо середній % по всьому Prom (own = false).
+ * Комісія Prom для товарів: категорія товару на Prom → ставка з таблиці Prom (Налаштування → Комісії Prom).
+ * Товари, яких немає на Prom або для категорії яких ставку не вписано, — без комісії (не в Map).
  */
-export async function promCommissions(productIds?: number[]): Promise<{ byProduct: Map<number, PromCommission>; avg: PromCommission | null }> {
-  const since = new Date(Date.now() - 365 * 864e5);
-  const orders = await db.sdOrder.findMany({
-    where: { orderTime: { gte: since }, OR: [{ commission: { gt: 0 } }, { site: { contains: "prom", mode: "insensitive" } }] },
-    select: { commission: true, lines: { select: { productId: true, qty: true, price: true } } },
-  });
-  // картки-комплекти рахуємо на основний товар
-  const lineIds = [...new Set(orders.flatMap((o) => o.lines.map((l) => l.productId)).filter((x): x is number => x !== null))];
-  const kits = await db.product.findMany({ where: { id: { in: lineIds }, baseProductId: { not: null } }, select: { id: true, baseProductId: true } });
-  const toBase = new Map(kits.map((k) => [k.id, k.baseProductId!]));
-
-  const rev = new Map<number, number>();
-  const com = new Map<number, number>();
-  const cnt = new Map<number, number>();
-  let totalRev = 0;
-  let totalCom = 0;
-  for (const o of orders) {
-    const sum = o.lines.reduce((s, l) => s + l.qty * l.price, 0);
-    if (!(sum > 0)) continue;
-    totalRev += sum;
-    totalCom += o.commission;
-    const seen = new Set<number>();
-    for (const l of o.lines) {
-      if (l.productId === null) continue;
-      const id = toBase.get(l.productId) ?? l.productId;
-      const r = l.qty * l.price;
-      rev.set(id, (rev.get(id) ?? 0) + r);
-      com.set(id, (com.get(id) ?? 0) + (o.commission * r) / sum);
-      if (!seen.has(id)) cnt.set(id, (cnt.get(id) ?? 0) + 1);
-      seen.add(id);
-    }
-  }
-  const avg = totalRev > 0 ? { pct: (totalCom / totalRev) * 100, orders: orders.length, own: false } : null;
+export async function promCommissions(productIds: number[]): Promise<{ byProduct: Map<number, PromCommission> }> {
   const byProduct = new Map<number, PromCommission>();
-  for (const [id, r] of rev) {
-    if (productIds && !productIds.includes(id)) continue;
-    if (r > 0) byProduct.set(id, { pct: ((com.get(id) ?? 0) / r) * 100, orders: cnt.get(id) ?? 0, own: true });
+  if (!productIds.length) return { byProduct };
+  const rates = await promRates();
+  if (!Object.keys(rates).length) return { byProduct };
+  const products = await db.product.findMany({ where: { id: { in: productIds } }, select: { id: true, sdId: true, sku: true, baseProductId: true } });
+  // картки-комплекти — за основним товаром
+  const baseIds = products.map((p) => p.baseProductId).filter((x): x is number => x !== null);
+  const bases = baseIds.length ? await db.product.findMany({ where: { id: { in: baseIds } }, select: { id: true, sdId: true, sku: true } }) : [];
+  const baseOf = new Map(bases.map((b) => [b.id, b]));
+  const keyOf = (p: { sdId: string | null; sku: string | null }) => p;
+  const all = products.map((p) => ({ id: p.id, ...keyOf(p.baseProductId ? (baseOf.get(p.baseProductId) ?? p) : p) }));
+  const links = await db.promLink.findMany({
+    where: {
+      catId: { not: null },
+      OR: [{ externalId: { in: all.map((p) => p.sdId).filter((x): x is string => !!x) } }, { sku: { in: all.map((p) => p.sku).filter((x): x is string => !!x) } }],
+    },
+    select: { externalId: true, sku: true, catId: true, catName: true },
+  });
+  const byExt = new Map(links.filter((l) => l.externalId).map((l) => [l.externalId!, l]));
+  const bySku = new Map(links.filter((l) => l.sku).map((l) => [l.sku!, l]));
+  for (const p of all) {
+    const l = (p.sdId && byExt.get(p.sdId)) || (p.sku && bySku.get(p.sku)) || null;
+    if (!l?.catId) continue;
+    const pct = rates[l.catId];
+    if (typeof pct === "number" && pct > 0) byProduct.set(p.id, { pct, catName: l.catName });
   }
-  if (productIds && avg) for (const id of productIds) if (!byProduct.has(id)) byProduct.set(id, avg);
-  return { byProduct, avg };
+  return { byProduct };
 }
