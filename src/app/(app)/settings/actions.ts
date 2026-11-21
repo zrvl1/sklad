@@ -262,3 +262,11 @@ export async function promFeedKeyAction(formData: FormData) {
   await logAction(user.id, "prom-feed-key", "settings", null, String(formData.get("mode") ?? "new"));
   done("Створено нове посилання на фід для Prom. Вставте його в імпорт Prom замість посилання SalesDrive.");
 }
+
+export async function saveCustomCategories(formData: FormData) {
+  await requirePerm("sync");
+  const list = [...new Set(String(formData.get("cats") ?? "").split("\n").map((x) => x.trim()).filter(Boolean))];
+  await db.setting.upsert({ where: { key: "customCategories" }, update: { value: JSON.stringify(list) }, create: { key: "customCategories", value: JSON.stringify(list) } });
+  revalidatePath("/products/new");
+  done(`Збережено категорій: ${list.length}`);
+}

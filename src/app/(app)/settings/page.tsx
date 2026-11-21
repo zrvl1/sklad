@@ -3,7 +3,7 @@ import { PROM_UA_KW_ENABLED } from "@/lib/prom";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveCustomCategories, saveSupplier, saveWarehouse, syncNow } from "./actions";
 import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -19,6 +19,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     isAdmin ? db.loginAttempt.findMany({ orderBy: { createdAt: "desc" }, take: 20 }) : Promise.resolve([]),
   ]);
   const costMethod = (await getSetting("costMethod")) ?? "avg";
+  const parseList = (v: string | null) => { try { return JSON.parse(v ?? "[]") as string[]; } catch { return []; } };
+  const ymlCats = parseList(await getSetting("ymlCategories"));
+  const customCats = parseList(await getSetting("customCategories"));
   const [promOnRaw, promLastRaw, promDryRaw, promLogRaw] = isAdmin
     ? await Promise.all([getSetting("promEnabled"), getSetting("promLast"), getSetting("promDry"), getSetting("promLog")])
     : [null, null, null, null];
@@ -71,6 +74,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </button>
         </form>
       </div>
+      )}
+
+      {can(user, "sync") && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Категорії для нових товарів</h2>
+          <p className="small muted">
+            SalesDrive у YML віддає лише категорії, де вже є товари ({ymlCats.length} шт.). Нові порожні категорії впишіть сюди — по одній на рядок, назва точно як у SalesDrive. Вони з&apos;являться у списку поля «Категорія».
+          </p>
+          <form action={saveCustomCategories}>
+            <textarea name="cats" rows={5} style={{ width: "100%" }} defaultValue={customCats.join("\n")} placeholder={"Моторна олива\nОлива для амортизаторів (вилки)"} />
+            <button className="btn primary">Зберегти категорії</button>
+          </form>
+        </div>
       )}
 
       {isAdmin && (
