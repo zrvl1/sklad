@@ -3,7 +3,7 @@ import { PROM_UA_KW_ENABLED } from "@/lib/prom";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveCustomCategories, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveCustomCategories, resendOwnPhotos, saveSupplier, saveWarehouse, syncNow } from "./actions";
 import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -71,6 +71,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={syncNow}>
           <button className="btn primary" disabled={!ymlOn}>
             ⟳ Завантажити товари з SalesDrive
+          </button>
+        </form>
+        <form action={resendOwnPhotos} style={{ marginTop: 8 }}>
+          <button className="btn" disabled={!isSalesDriveConfigured()}>
+            🖼 Відправити в SalesDrive фото, додані в додатку
           </button>
         </form>
       </div>

@@ -270,3 +270,20 @@ export async function saveCustomCategories(formData: FormData) {
   revalidatePath("/products/new");
   done(`Збережено категорій: ${list.length}`);
 }
+
+/** Повторно відправити в SalesDrive фото, завантажені в додаток (раніше йшли в неправильному полі) */
+export async function resendOwnPhotos() {
+  const user = await requirePerm("sync");
+  const { productToSd, sdUpdateProducts, isSalesDriveConfigured } = await import("@/lib/salesdrive");
+  if (!isSalesDriveConfigured()) return done("SalesDrive не налаштовано");
+  const list = await db.product.findMany({ where: { deletedAt: null, sdId: { not: null }, images: { contains: "/img/" } } });
+  let message: string;
+  try {
+    await sdUpdateProducts(list.map((p) => productToSd(p, null, { withImages: true })));
+    await logAction(user.id, "photos-resend", "products", null, { count: list.length });
+    message = `Фото відправлено в SalesDrive: товарів ${list.length}`;
+  } catch (e) {
+    message = `Помилка: ${e instanceof Error ? e.message : e}`;
+  }
+  done(message);
+}
