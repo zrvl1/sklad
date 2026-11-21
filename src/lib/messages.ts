@@ -45,6 +45,23 @@ ${ASK}`,
 ${ASK}`,
   },
   {
+    key: "acceptedLate",
+    title: "2а. Прийнято після робочого часу — відправка завтра",
+    text: `Crane-Moto | Замовлення №{номер} прийнято ✅
+
+Добрий день, {ім'я}! Дякуємо за замовлення.
+
+{товари}
+Сума: {сума} грн{оплата_рядок}
+Доставка: {доставка}
+Отримувач: {піб}, {телефон}
+
+🚚 Відправимо завтра до 12:00 і надішлемо ТТН.
+⚠️ Під час повітряної тривоги відділення Нової пошти зачиняються, тому відправка може перенестися.
+
+Якщо є питання або хочете змінити чи скасувати замовлення — напишіть у цей чат або зателефонуйте в робочий час: Пн-Пт 10-17, Сб-Нд 10-16.`,
+  },
+  {
     key: "shipped",
     title: "3. Відправлено",
     text: `Crane-Moto | Замовлення №{номер} відправлено 📦
@@ -196,6 +213,7 @@ export function fill(text: string, o: OrderInfo, shop: Record<string, string>) {
     оплата: o.payment || "—",
     доставка: o.delivery,
     ттн: o.ttn || "(ще немає ТТН)",
+    оплата_рядок: o.cod > 0 || /наклад|післяплат|при отрим/i.test(o.payment) ? " — оплата при отриманні" : o.payment ? ` — ${o.payment}` : "",
     до_сплати: o.cod > 0 ? `До сплати при отриманні: ${money(o.cod)} грн\n` : "",
     відгук: (isProm ? shop["ВІДГУК_PROM"] : shop["ВІДГУК_GOOGLE"]) || shop["ВІДГУК_GOOGLE"] || shop["ВІДГУК_PROM"] || "",
     ...shop,
@@ -216,7 +234,13 @@ export async function listStatusIds(all: { id: number; name: string }[]): Promis
 }
 
 /** Який шаблон підтвердження пропонувати: оплачено онлайн чи накладений платіж */
-export function suggestTemplate(o: OrderInfo): string {
+export function suggestTemplate(o: OrderInfo, now = new Date()): string {
+  const kyiv = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
+  const h = kyiv.getHours() + kyiv.getMinutes() / 60;
+  const weekend = kyiv.getDay() === 0 || kyiv.getDay() === 6;
+  const close = weekend ? 16 : 17;
+  // після 16:00 уже не встигаємо на вечірню відправку; до 10:00 — ще неробочий час, але відправка сьогодні
+  if (h >= 16 || h >= close) return "acceptedLate";
   if (o.cod > 0 || /наклад|післяплат|при отрим|cash|cod/i.test(o.payment)) return "acceptedCod";
   if (/оплачен|monobank|plata|карт|онлайн|liqpay|передоплат/i.test(o.payment)) return "acceptedPaid";
   return "acceptedCod";
