@@ -3,35 +3,49 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LABEL_TEMPLATES } from "@/lib/labels";
+import { saveLabelOffset } from "@/app/print/labels/actions";
 
 /**
  * Панель над етикетками (на папері не друкується): шаблон, комірка на наліпці, калібрування зсуву, друк.
- * Зсув X/Y зберігається у браузері окремо для кожного шаблону — налаштовується один раз під принтер.
+ * Зсув X/Y зберігається на сервері окремо для кожного шаблону — налаштовується один раз під принтер і діє в будь-якому браузері.
  */
-export default function PrintToolbar({ count, showTemplates = true, truncated = false }: { count: number; showTemplates?: boolean; truncated?: boolean }) {
+export default function PrintToolbar({
+  count,
+  showTemplates = true,
+  truncated = false,
+  offset,
+}: {
+  count: number;
+  showTemplates?: boolean;
+  truncated?: boolean;
+  offset?: { x: number; y: number };
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   const tpl = sp.get("tpl") ?? "40x25";
-  const [ox, setOx] = useState(0);
-  const [oy, setOy] = useState(0);
+  const [ox, setOx] = useState(offset?.x ?? 0);
+  const [oy, setOy] = useState(offset?.y ?? 0);
+  const [saved, setSaved] = useState(true);
   const [frame, setFrame] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`labelOffset:${tpl}`) ?? "{}");
-      setOx(Number(saved.x) || 0);
-      setOy(Number(saved.y) || 0);
-    } catch {}
-  }, [tpl]);
+    setOx(offset?.x ?? 0);
+    setOy(offset?.y ?? 0);
+  }, [offset?.x, offset?.y, tpl]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--ox", `${ox}mm`);
     document.documentElement.style.setProperty("--oy", `${oy}mm`);
-    try {
-      localStorage.setItem(`labelOffset:${tpl}`, JSON.stringify({ x: ox, y: oy }));
-    } catch {}
-  }, [ox, oy, tpl]);
+    if (ox === (offset?.x ?? 0) && oy === (offset?.y ?? 0)) return;
+    setSaved(false);
+    const t = setTimeout(() => {
+      saveLabelOffset(tpl, ox, oy)
+        .then(() => setSaved(true))
+        .catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [ox, oy, tpl, offset?.x, offset?.y]);
 
   useEffect(() => {
     document.body.classList.toggle("print-frame", frame);
@@ -95,6 +109,7 @@ export default function PrintToolbar({ count, showTemplates = true, truncated = 
         <label className="check">
           <input type="checkbox" checked={frame} onChange={(e) => setFrame(e.target.checked)} /> друкувати рамку (для перевірки)
         </label>
+        <span className="muted">{saved ? "зсув збережено для всіх браузерів" : "зберігаю…"}</span>
         <span className="muted">У вікні друку: принтер етикеток, папір {LABEL_TEMPLATES[tpl as keyof typeof LABEL_TEMPLATES]?.title ?? tpl}, поля «Немає», масштаб 100%.</span>
       </div>
       {truncated && <div className="msg warn small">Показано перші 2000 етикеток — друкуйте частинами (за категорією).</div>}

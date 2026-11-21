@@ -4,7 +4,7 @@ import type { Product } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getTemplate } from "@/lib/labels";
-import { finalPrice } from "@/lib/util";
+import { finalPrice, getSetting } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
 import Barcode from "@/components/Barcode";
 import PrintToolbar from "@/components/PrintToolbar";
@@ -102,6 +102,16 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
     }
   }
 
+  // зсув друку з сервера (однаковий для всіх браузерів/ярликів)
+  const tplKey = (sp.tpl ?? "40x25").replace(/[^\w-]/g, "");
+  let offset = { x: 0, y: 0 };
+  try {
+    const o = JSON.parse((await getSetting(`labelOffset:${tplKey}`)) ?? "{}");
+    offset = { x: Number(o.x) || 0, y: Number(o.y) || 0 };
+  } catch {}
+
+  const pad = t.compact ? { t: 1, r: 1.5, b: 1, l: 3.5 } : { t: 1.5, r: 2, b: 1.5, l: 2 };
+
   const pageCss = t.sheet
     ? `@page { size: A4; margin: 8mm 0 0 0; }
        .labels { display: grid; grid-template-columns: repeat(3, ${t.w}mm); grid-auto-rows: ${t.h}mm; justify-content: center; }
@@ -121,11 +131,17 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
   return (
     <div style={{ background: "#fff", minHeight: "100vh" }}>
       <style>{`
+        :root { --ox: ${offset.x}mm; --oy: ${offset.y}mm; }
         body { background: #fff; }
         ${pageCss}
-        .label { width: ${t.w}mm; height: ${t.h}mm; padding: ${t.compact ? "1mm 1.5mm 1mm 3.5mm" : "1.5mm 2mm"}; overflow: hidden; box-sizing: border-box;
-                 display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; color: #000;
-                 transform: translate(var(--ox, 0mm), var(--oy, 0mm)); }
+        /* зсув = перерозподіл внутрішніх відступів: вміст не виходить за межі наліпки, тож Chrome не зменшує сторінку */
+        .label { width: ${t.w}mm; height: ${t.h}mm; overflow: hidden; box-sizing: border-box;
+                 padding-top: max(0mm, calc(${pad.t}mm + var(--oy, 0mm)));
+                 padding-bottom: max(0mm, calc(${pad.b}mm - var(--oy, 0mm)));
+                 padding-left: max(0mm, calc(${pad.l}mm + var(--ox, 0mm)));
+                 padding-right: max(0mm, calc(${pad.r}mm - var(--ox, 0mm)));
+                 display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; color: #000; }
+        @media print { html, body { overflow: hidden !important; } }
         @media print { body.print-frame .label { border: 0.2mm solid #000 !important; } }
         .label .name { font-size: ${t.nameSize}pt; line-height: 1.12; font-weight: 600;
                        display: -webkit-box; -webkit-line-clamp: ${t.compact ? 3 : 2}; -webkit-box-orient: vertical; overflow: hidden; }
@@ -142,7 +158,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
       `}</style>
 
       <Suspense>
-        <PrintToolbar count={labels.length} truncated={truncated} />
+        <PrintToolbar count={labels.length} truncated={truncated} offset={offset} />
       </Suspense>
 
       {labels.length === 0 && <p style={{ padding: 20 }}>Немає товарів для друку.</p>}
