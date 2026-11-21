@@ -2,7 +2,7 @@ import { ua } from "@/lib/names";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { detectKits } from "@/lib/kits";
-import { applyKitLinks, confirmKitSd, makeBaseForm, unlinkKit } from "../actions";
+import { alignKitPrices, applyKitLinks, confirmKitSd, makeBaseForm, unlinkKit } from "../actions";
 
 // Основні товари та їхні картки-комплекти (вітрини під різні моделі для SEO)
 export default async function KitsPage({ searchParams }: { searchParams: Promise<{ msg?: string; warn?: string }> }) {
@@ -27,6 +27,11 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>Основні товари й картки-комплекти</h1>
         <span className="spacer" />
+        <form action={alignKitPrices}>
+          <button className="btn" title="Ціна кожної картки = ціна основного товару × кількість у картці; передається в SalesDrive">
+            Вирівняти ціни карток за основними
+          </button>
+        </form>
         <Link className="btn primary" href="/products/import">
           Звірити з Excel SalesDrive
         </Link>

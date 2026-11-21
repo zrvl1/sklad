@@ -242,7 +242,7 @@ export async function saveProduct(formData: FormData) {
 
   const res = await pushProduct(productId, opts);
   // ціна основного товару → на всі його картки-комплекти (якщо не зняли галочку)
-  if (opts.withPrice && formData.get("applyKits")) {
+  if (formData.get("applyKits")) {
     const { propagatePriceToKits } = await import("@/lib/kits");
     const kitErr = await propagatePriceToKits([productId]);
     if (kitErr) warn = [warn, `Ціни карток не оновлено в SalesDrive: ${kitErr}`].filter(Boolean).join("; ");
@@ -806,4 +806,18 @@ export async function setMinStock(formData: FormData) {
   await logAction(user.id, "min-stock", "product", id, val === null ? "авто" : String(val));
   revalidatePath(`/products/${id}`);
   redirect(`/products/${id}`);
+}
+
+/** Вирівняти ціни всіх карток-комплектів за основними товарами (ціна основного × кількість у картці) */
+export async function alignKitPrices() {
+  const user = await requirePerm("products.edit");
+  const bases = await db.product.findMany({ where: { deletedAt: null, kits: { some: { deletedAt: null } } }, select: { id: true } });
+  const before = await db.product.count({ where: { deletedAt: null, baseProductId: { not: null } } });
+  const { propagatePriceToKits } = await import("@/lib/kits");
+  const err = await propagatePriceToKits(bases.map((b) => b.id));
+  await logAction(user.id, "align-kit-prices", "products", null, { bases: bases.length });
+  revalidatePath("/products");
+  redirect(
+    `/products/kits?${err ? `warn=${encodeURIComponent(`Ціни в додатку вирівняно, але SalesDrive не прийняв: ${err}`)}` : `msg=${encodeURIComponent(`Ціни карток вирівняно за основними (основних: ${bases.length}, карток: ${before})`)}`}`
+  );
 }

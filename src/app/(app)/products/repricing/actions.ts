@@ -27,7 +27,11 @@ export async function savePrices(changes: { id: number; price: number }[]) {
       sdNote = `, але SalesDrive не прийняв: ${e instanceof Error ? e.message : e}`;
     }
   }
+  // ціна основного товару → на всі його картки-комплекти
+  const { propagatePriceToKits } = await import("@/lib/kits");
+  const kitErr = await propagatePriceToKits(valid.map((c) => c.id));
+  if (kitErr) sdNote += `; ціни карток не передано в SalesDrive: ${kitErr}`;
   revalidatePath("/products/repricing");
   revalidatePath("/products");
-  return { ok: !sdNote.includes("не прийняв"), text: `Змінено цін: ${valid.length}${sdNote}` };
+  return { ok: !sdNote.includes("не прийняв") && !kitErr, text: `Змінено цін: ${valid.length}${sdNote}` };
 }

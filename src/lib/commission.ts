@@ -25,9 +25,12 @@ export async function promCommissions(productIds: number[]): Promise<{ byProduct
   // картки-комплекти — за основним товаром
   const baseIds = products.map((p) => p.baseProductId).filter((x): x is number => x !== null);
   const bases = baseIds.length ? await db.product.findMany({ where: { id: { in: baseIds } }, select: { id: true, sdId: true, sku: true } }) : [];
-  const baseOf = new Map(bases.map((b) => [b.id, b]));
-  const keyOf = (p: { sdId: string | null; sku: string | null }) => p;
-  const all = products.map((p) => ({ id: p.id, ...keyOf(p.baseProductId ? (baseOf.get(p.baseProductId) ?? p) : p) }));
+  const baseOf = new Map<number, { sdId: string | null; sku: string | null }>(bases.map((b) => [b.id, { sdId: b.sdId, sku: b.sku }]));
+  // спершу власна картка на Prom, якщо її там немає — основний товар
+  const all = products.flatMap((p): { id: number; sdId: string | null; sku: string | null }[] => {
+    const b = p.baseProductId ? baseOf.get(p.baseProductId) : undefined;
+    return [{ id: p.id, sdId: p.sdId, sku: p.sku }, ...(b ? [{ id: p.id, sdId: b.sdId, sku: b.sku }] : [])];
+  });
   const links = await db.promLink.findMany({
     where: {
       catId: { not: null },
@@ -38,6 +41,7 @@ export async function promCommissions(productIds: number[]): Promise<{ byProduct
   const byExt = new Map(links.filter((l) => l.externalId).map((l) => [l.externalId!, l]));
   const bySku = new Map(links.filter((l) => l.sku).map((l) => [l.sku!, l]));
   for (const p of all) {
+    if (byProduct.has(p.id)) continue;
     const l = (p.sdId && byExt.get(p.sdId)) || (p.sku && bySku.get(p.sku)) || null;
     if (!l?.catId) continue;
     const pct = rates[l.catId];

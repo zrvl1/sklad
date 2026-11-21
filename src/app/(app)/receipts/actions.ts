@@ -235,7 +235,8 @@ export async function postReceipt(id: number) {
   }
 
   // нова ціна основного товару — на всі його картки-комплекти
-  const kitErr = await propagatePriceToKits(plan.filter((x) => x.withPrice).map((x) => x.product.id));
+  // (для всіх товарів приходу — заодно вирівнюються картки, ціна яких раніше розійшлася з основним)
+  const kitErr = await propagatePriceToKits(plan.map((x) => x.product.id));
   if (kitErr) warning = [warning, `Ціни карток-комплектів не оновлено в SalesDrive: ${kitErr}`].filter(Boolean).join(" ");
   await logAction(user.id, "post", "receipt", id, { products: plan.length, total: r.total });
   revalidatePath(`/receipts/${id}`);
