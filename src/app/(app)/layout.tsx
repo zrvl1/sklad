@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {can(user, "reports") && <Link href="/insights">Поради</Link>}
         <Link href="/warehouse">Склад і комірки</Link>
         <Link href="/products">Товари</Link>
+        {can(user, "products.edit") && <Link href="/categories">Категорії</Link>}
         {can(user, "products.edit") && <Link href="/products/kits">Комплекти (картки)</Link>}
         {can(user, "products.edit") && <Link href="/products/fill">Заповнення даних</Link>}
         {can(user, "products.edit") && <Link href="/products/bulk-params">Характеристики масово</Link>}

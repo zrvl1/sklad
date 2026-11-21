@@ -205,6 +205,18 @@ export async function saveProduct(formData: FormData) {
     await applyTemplate(created.id); // порожні опис/характеристики/виробник — із шаблону категорії
     productId = created.id;
     await logAction(user.id, "create", "product", created.id, data);
+    // фото з форми нового товару — зберігаємо до першої передачі, щоб пішли в SalesDrive разом із товаром
+    const photos = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0 && /^image\/(jpeg|png|webp)$/.test(f.type)).slice(0, 8);
+    if (photos.length) {
+      const { ownImageUrl, warmImages } = await import("@/lib/images");
+      const urls: string[] = [];
+      for (const f of photos) {
+        const img = await db.productImage.create({ data: { productId, mime: f.type, data: Buffer.from(await f.arrayBuffer()) } });
+        urls.push(ownImageUrl(img.id));
+      }
+      await db.product.update({ where: { id: productId }, data: { images: JSON.stringify(urls) } });
+      await warmImages(urls);
+    }
   }
 
   // Артикул постачальника з форми (необов'язково)

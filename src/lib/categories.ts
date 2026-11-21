@@ -18,20 +18,26 @@ export function parseCustomLine(line: string): { name: string; id: string | null
   return m ? { name: m[1].trim(), id: m[2] } : { name: line.trim(), id: null };
 }
 
-export type CatOption = { id: string; name: string; path: string };
+export type CatOption = { id: string; name: string; path: string; parentId: string | null; depth: number };
 
 /** Усі відомі категорії SalesDrive: з YML + створені з додатку + вписані вручну з ID */
 export async function allCategories(): Promise<CatOption[]> {
   const [treeRaw, createdRaw, customRaw] = await Promise.all([getSetting("ymlCategoryTree"), getSetting("createdCategories"), getSetting("customCategories")]);
   const byId = new Map<string, SdCategory>();
   for (const c of parse<SdCategory[]>(treeRaw, [])) byId.set(c.id, c);
-  for (const c of parse<SdCategory[]>(createdRaw, [])) if (!byId.has(c.id)) byId.set(c.id, c);
+  // створені/змінені в додатку — мають пріоритет (до наступної синхронізації, де їх уже віддасть SalesDrive)
+  for (const c of parse<SdCategory[]>(createdRaw, [])) byId.set(c.id, c);
   for (const l of parse<string[]>(customRaw, []).map(parseCustomLine)) if (l.id && !byId.has(l.id)) byId.set(l.id, { id: l.id, name: l.name, parentId: null });
   const pathOf = (c: SdCategory, depth = 0): string => {
     const parent = c.parentId ? byId.get(c.parentId) : undefined;
     return parent && depth < 10 ? pathOf(parent, depth + 1) + PATH_SEP + c.name : c.name;
   };
-  return [...byId.values()].map((c) => ({ id: c.id, name: c.name, path: pathOf(c) })).sort((a, b) => a.path.localeCompare(b.path, "uk"));
+  return [...byId.values()]
+    .map((c) => {
+      const path = pathOf(c);
+      return { id: c.id, name: c.name, path, parentId: c.parentId, depth: path.split(PATH_SEP).length - 1 };
+    })
+    .sort((a, b) => a.path.localeCompare(b.path, "uk"));
 }
 
 /** Знайти категорію за повним шляхом або за назвою (якщо така назва одна) */
@@ -67,5 +73,15 @@ export async function createCategory(name: string, parentId: string | null): Pro
   const created = parse<SdCategory[]>(await getSetting("createdCategories"), []);
   await setSetting("createdCategories", JSON.stringify([...created, cat]));
   const all = await allCategories();
-  return all.find((c) => c.id === id) ?? { id, name: cat.name, path: cat.name };
+  return all.find((c) => c.id === id) ?? { id, name: cat.name, path: cat.name, parentId: cat.parentId, depth: 0 };
+}
+
+/** Перейменувати / перенести категорію (в SalesDrive і в додатку) */
+export async function updateCategory(id: string, name: string, parentId: string | null) {
+  const { sdUpsertCategories } = await import("./salesdrive");
+  const cat: SdCategory = { id, name: name.trim(), parentId: parentId || null };
+  await sdUpsertCategories([cat]);
+  const created = parse<SdCategory[]>(await getSetting("createdCategories"), []).filter((c) => c.id !== id);
+  await setSetting("createdCategories", JSON.stringify([...created, cat]));
+  await db.product.updateMany({ where: { categorySdId: id }, data: { categoryName: cat.name } });
 }

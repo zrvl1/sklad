@@ -7,6 +7,7 @@ import NameTranslate from "@/components/NameTranslate";
 import { saveProduct } from "./actions";
 import { isAppSdId } from "@/lib/sdid";
 import CategoryPicker from "@/components/CategoryPicker";
+import NewPhotos from "@/components/NewPhotos";
 import type { CatOption } from "@/lib/categories";
 
 export default function ProductForm({
@@ -36,6 +37,7 @@ export default function ProductForm({
     <form action={saveProduct} className="panel">
       {p && <input type="hidden" name="id" value={p.id} />}
       <div className="grid2">
+        {!p && <NewPhotos />}
         <label style={{ gridColumn: "1 / -1" }}>
           Назва російською (RU, основна в SalesDrive) *
           <input name="name" defaultValue={p?.name} required minLength={2} maxLength={255} autoFocus={!p} />

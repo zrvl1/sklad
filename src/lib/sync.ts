@@ -1,7 +1,7 @@
 import { uaKwMissing } from "./langcheck";
 import { db } from "./db";
 import { fetchYmlText, parseYml, parseYmlCategories } from "./salesdrive";
-import { buildSearch, setSetting } from "./util";
+import { buildSearch, getSetting, setSetting } from "./util";
 import { reconcileCells } from "./stock";
 import { refreshRates } from "./currency";
 import { recordDeletion } from "./deleted";
@@ -20,6 +20,14 @@ export async function syncFromYml() {
   try {
     const tree = parseYmlCategories(ymlText);
     await setSetting("ymlCategoryTree", JSON.stringify(tree));
+    // категорії, створені/змінені в додатку, які SalesDrive уже віддає в YML, — далі беремо з YML
+    try {
+      const ids = new Set(tree.map((c) => c.id));
+      const created = JSON.parse((await getSetting("createdCategories")) ?? "[]") as { id: string; name: string; parentId: string | null }[];
+      const byId = new Map(tree.map((c) => [c.id, c]));
+      const keep = created.filter((c) => !ids.has(c.id) || byId.get(c.id)!.name !== c.name || (byId.get(c.id)!.parentId ?? null) !== (c.parentId ?? null));
+      if (keep.length !== created.length) await setSetting("createdCategories", JSON.stringify(keep));
+    } catch {}
     await setSetting("ymlCategories", JSON.stringify([...new Set(tree.map((c) => c.name))]));
   } catch {}
   if (currencyEnabled()) {
