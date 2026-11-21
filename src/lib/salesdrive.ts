@@ -143,9 +143,9 @@ export function productToSd(
   if (p.supplierName) payload.supplier = p.supplierName;
   if (p.categorySdId || p.categoryName) {
     payload.category = {};
-    // є ID — шлемо тільки його (за назвою SalesDrive може створити нову категорію-дублікат)
+    // ID + назва (лише ID SalesDrive не приймає: 422 "name - required field")
     if (p.categorySdId) payload.category.id = p.categorySdId;
-    else if (p.categoryName) payload.category.name = p.categoryName;
+    if (p.categoryName) payload.category.name = p.categoryName;
   }
   if (p.discountValue && p.discountValue > 0) {
     payload.discount = {
