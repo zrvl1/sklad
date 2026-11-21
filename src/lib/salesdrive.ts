@@ -26,7 +26,7 @@ export type SdProductPayload = {
   countryManufacturer?: string;
   keywords?: string;
   keywordsTranslate?: string;
-  images?: { fullUrl: string }[]; // фото за посиланнями — SalesDrive завантажує їх сам // українською (якщо SalesDrive двомовний)
+  images?: { fullsize: string; thumbnail: string }[]; // фото за посиланнями — SalesDrive завантажує їх сам // українською (якщо SalesDrive двомовний)
   manufacturerCountry?: string;
   country?: string;
   supplier?: string;
@@ -99,7 +99,7 @@ export function productToSd(
       const urls = (JSON.parse(p.images) as string[]).filter((u) => /^https?:\/\//.test(u));
       // власні фото додатку (/img/<id>) — з розширенням, інакше SalesDrive може їх не завантажити
       const withExt = (u: string) => (/\/img\/[a-z0-9]+$/i.test(u) ? `${u}.jpg` : u);
-      if (urls.length) payload.images = urls.map((u) => ({ fullUrl: withExt(u) }));
+      if (urls.length) payload.images = urls.map((u) => ({ fullsize: withExt(u), thumbnail: withExt(u) }));
     } catch {}
   }
   if (opts.withName) {
