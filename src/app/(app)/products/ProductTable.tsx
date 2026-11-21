@@ -21,12 +21,35 @@ type Row = {
   langIssues?: string[];
   price: number;
   cost: number;
+  promPct?: number | null; // комісія Prom за категорією товару
   stock: number;
   cells: string;
   syncError: string | null;
   kitsCount?: number;
   base?: { id: number; sku: string | null } | null;
 };
+
+const mColor = (m: number) => (m < 15 ? "var(--err)" : m < 30 ? "var(--warn)" : "var(--ok)");
+
+/** Маржа: звичайна і з комісією Prom (якщо товар на Prom і для його категорії вписана ставка) */
+function marginCell(p: { price: number; cost: number; promPct?: number | null }) {
+  if (!(p.price > 0) || !(p.cost > 0)) return <span className="muted">—</span>;
+  const m = Math.round(((p.price - p.cost) / p.price) * 100);
+  const pc = p.promPct ? (p.price * p.promPct) / 100 : 0;
+  const mp = Math.round(((p.price - p.cost - pc) / p.price) * 100);
+  return (
+    <>
+      <div style={{ color: mColor(m), whiteSpace: "nowrap" }}>
+        {m}% · {Math.round(p.price - p.cost)} грн
+      </div>
+      {p.promPct ? (
+        <div style={{ color: mColor(mp), whiteSpace: "nowrap" }} title={`Через Prom: комісія ${p.promPct}% ≈ ${Math.round(pc)} грн`}>
+          Prom {mp}% · {Math.round(p.price - p.cost - pc)} грн
+        </div>
+      ) : null}
+    </>
+  );
+}
 
 const fmt = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -104,6 +127,11 @@ export default function ProductTable({ products, canEdit = true, showCost = true
               <th className="num">Залишок</th>
               {showCost && <th className="num">Собівартість</th>}
               <th className="num">Ціна</th>
+              {showCost && (
+                <th className="num" title="Маржа = (ціна − собівартість) / ціна. Другий рядок — якщо продати через Prom, з комісією за категорією (Налаштування → Комісії Prom)">
+                  Маржа
+                </th>
+              )}
               <th style={{ width: 90 }}>Цінників</th>
             </tr>
           </thead>
@@ -168,6 +196,7 @@ export default function ProductTable({ products, canEdit = true, showCost = true
                 <td className="num">
                   <b>{fmt(p.price)}</b>
                 </td>
+                {showCost && <td className="num small">{marginCell(p)}</td>}
                 <td>
                   <input
                     className="short"
@@ -190,7 +219,7 @@ export default function ProductTable({ products, canEdit = true, showCost = true
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={11} className="muted">
+                <td colSpan={12} className="muted">
                   Нічого не знайдено. Якщо база порожня — зробіть синхронізацію в Налаштуваннях.
                 </td>
               </tr>

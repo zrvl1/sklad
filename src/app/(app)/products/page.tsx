@@ -6,6 +6,7 @@ import { searchWords } from "@/lib/util";
 import { mainImage } from "@/lib/images";
 import { langIssues } from "@/lib/langcheck";
 import ProductTable from "./ProductTable";
+import { promCommissions } from "@/lib/commission";
 import { can, requireUser } from "@/lib/auth";
 
 const PAGE = 50;
@@ -40,6 +41,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
       },
     }),
   ]);
+  const promMap = can(user, "costs") ? (await promCommissions(products.map((p) => p.id))).byProduct : new Map<number, { pct: number }>();
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const qs = (p: number) => {
     const s = new URLSearchParams();
@@ -82,6 +84,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
       </form>
       {sp.print && <p className="muted small">Позначте товари, вкажіть кількість цінників і натисніть «Друкувати».</p>}
 
+      {/* комісія Prom за категорією — для колонки «Маржа» */}
       <ProductTable
         canEdit={can(user, "products.edit")}
         showCost={can(user, "costs")}
@@ -98,6 +101,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
           sku: p.sku,
           barcode: p.barcode,
           price: p.price,
+          promPct: promMap.get(p.id)?.pct ?? null,
           cost: can(user, "costs") ? p.cost : 0,
           stock: p.stocks.reduce((s, x) => s + x.qty, 0),
           // для картки-комплекту комірки показуємо основного товару
