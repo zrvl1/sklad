@@ -1,6 +1,6 @@
 import { uaKwMissing } from "./langcheck";
 import { db } from "./db";
-import { fetchYmlText, parseYml } from "./salesdrive";
+import { fetchYmlText, parseYml, parseYmlCategories } from "./salesdrive";
 import { buildSearch, setSetting } from "./util";
 import { reconcileCells } from "./stock";
 import { refreshRates } from "./currency";
@@ -15,7 +15,11 @@ export const currencyEnabled = () => process.env.ENABLE_CURRENCY === "true";
  * - комірки, приходи та інші наші дані не чіпає.
  */
 export async function syncFromYml() {
-  const offers = parseYml(await fetchYmlText());
+  const ymlText = await fetchYmlText();
+  const offers = parseYml(ymlText);
+  try {
+    await setSetting("ymlCategories", JSON.stringify(parseYmlCategories(ymlText)));
+  } catch {}
   if (currencyEnabled()) {
     try {
       await refreshRates();

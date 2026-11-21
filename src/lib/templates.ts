@@ -71,7 +71,10 @@ export async function productFormContext() {
     db.product.findMany({ where: { categoryName: { not: null }, deletedAt: null }, distinct: ["categoryName"], select: { categoryName: true } }),
     db.currency.findMany(),
   ]);
-  const categories = [...new Set([...cats.map((c) => c.categoryName!), ...templates.map((t) => t.categoryName).filter((x): x is string => Boolean(x))])].sort();
+  const ymlCats = await ymlCategoryNames();
+  const categories = [
+    ...new Set([...cats.map((c) => c.categoryName!), ...templates.map((t) => t.categoryName).filter((x): x is string => Boolean(x)), ...ymlCats]),
+  ].sort();
   return {
     suppliers,
     templates: templates.map((t) => ({
@@ -96,5 +99,15 @@ export async function listCategories() {
     db.product.findMany({ where: { categoryName: { not: null }, deletedAt: null }, distinct: ["categoryName"], select: { categoryName: true } }),
     db.productTemplate.findMany({ where: { categoryName: { not: null } }, select: { categoryName: true } }),
   ]);
-  return [...new Set([...cats, ...tpls].map((c) => c.categoryName!))].sort();
+  return [...new Set([...[...cats, ...tpls].map((c) => c.categoryName!), ...(await ymlCategoryNames())])].sort();
+}
+
+/** Категорії з YML SalesDrive (зберігаються під час синхронізації) — щоб нові порожні категорії теж були у списку */
+async function ymlCategoryNames(): Promise<string[]> {
+  try {
+    const { getSetting } = await import("./util");
+    return JSON.parse((await getSetting("ymlCategories")) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
 }

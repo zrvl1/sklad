@@ -288,6 +288,18 @@ export async function fetchYmlText() {
  * Розбір YML. Назви тегів у різних CRM трохи відрізняються, тому перевіряємо кілька варіантів.
  * Якщо якесь поле не підтягується — запустіть `npm run yml:inspect` і допишіть потрібний тег тут.
  */
+/** Усі категорії з YML (зокрема порожні, ще без товарів) */
+export function parseYmlCategories(xml: string): string[] {
+  const doc = ymlParser.parse(xml);
+  const shop = doc?.yml_catalog?.shop ?? doc?.shop ?? {};
+  const out: string[] = [];
+  for (const c of (shop.categories?.category ?? []) as Record<string, unknown>[]) {
+    const name = text(c as Node)?.trim();
+    if (name) out.push(name);
+  }
+  return [...new Set(out)];
+}
+
 export function parseYml(xml: string): YmlOffer[] {
   const doc = ymlParser.parse(xml);
   const shop = doc?.yml_catalog?.shop ?? doc?.shop ?? {};
