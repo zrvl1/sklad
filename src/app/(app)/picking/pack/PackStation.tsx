@@ -178,6 +178,9 @@ export default function PackStation() {
         <div className="panel">
           <div className="toolbar">
             <h2 style={{ margin: 0 }}>Заявка №{order.id}</h2>
+            <a className="btn sm" href={`/messages?order=${order.id}`} target="_blank" rel="noreferrer" title="Шаблони повідомлень клієнту з даними цієї заявки">
+              💬 Повідомлення клієнту
+            </a>
             <span className="badge">{order.status}</span>
             {order.ttns.map((t) => (
               <span key={t} className="badge">

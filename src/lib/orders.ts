@@ -245,3 +245,14 @@ async function fetchOrderPages(filter: Record<string, string>, firstPage: number
   } while (page <= pageCount && fetched < maxPages);
   return { saved, nextPage: page, pageCount, done: page > pageCount };
 }
+
+/**
+ * Одна заявка з контактами — ЛИШЕ для показу менеджеру (шаблон повідомлення клієнту).
+ * Нічого з контактних даних не зберігаємо в базі.
+ */
+export async function fetchOrderLive(id: number): Promise<Record<string, unknown> | null> {
+  if (!ordersEnabled()) throw new Error("Не налаштовано SALESDRIVE_ORDERS_KEY");
+  const r = await sdGetList({ "filter[id]": String(id), "filter[statusId]": "__NOTDELETED__", limit: "1" });
+  const list = (r?.data ?? []) as Record<string, unknown>[];
+  return list.find((o) => Number(o.id) === id) ?? list[0] ?? null;
+}
