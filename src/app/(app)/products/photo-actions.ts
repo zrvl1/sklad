@@ -7,9 +7,19 @@ import { ownImageUrl, productImages } from "@/lib/images";
 import { isSalesDriveConfigured, productToSd, sdUpdateProducts } from "@/lib/salesdrive";
 import { logAction } from "@/lib/util";
 
+/** «Розігріти» адреси фото (так, як їх забере SalesDrive), щоб він не отримав тайм-аут на першому запиті */
+async function warm(urls: string[]) {
+  await Promise.all(
+    urls.map((u) =>
+      fetch(/\/img\/[a-z0-9]+$/i.test(u) ? `${u}.jpg` : u, { cache: "no-store", signal: AbortSignal.timeout(15000) }).catch(() => null)
+    )
+  );
+}
+
 async function saveAndPush(productId: number, urls: string[]) {
   const p = await db.product.update({ where: { id: productId }, data: { images: JSON.stringify(urls) } });
   if (!p.sdId || !isSalesDriveConfigured()) return null;
+  await warm(urls);
   try {
     await sdUpdateProducts([productToSd(p, null, { withImages: true, withName: !p.syncedAt })]);
     return null;

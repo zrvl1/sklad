@@ -7,6 +7,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const img = /^[a-z0-9]{10,40}$/i.test(id) ? await db.productImage.findUnique({ where: { id } }) : null;
   if (!img) return new Response("not found", { status: 404 });
   return new Response(new Uint8Array(img.data), {
-    headers: { "Content-Type": img.mime, "Cache-Control": "public, max-age=31536000, immutable", "X-Robots-Tag": "noindex" },
+    headers: { "Content-Type": img.mime, "Cache-Control": "public, max-age=31536000, immutable",
+      // кеш на CDN Vercel — SalesDrive/Prom отримують фото миттєво, без «холодного» старту
+      "CDN-Cache-Control": "public, max-age=31536000, immutable", "X-Robots-Tag": "noindex" },
   });
 }
