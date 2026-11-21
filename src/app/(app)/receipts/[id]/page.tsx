@@ -1,3 +1,4 @@
+import { mainImage } from "@/lib/images";
 import { ua } from "@/lib/names";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -26,6 +27,9 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
     },
   });
   if (!r) notFound();
+  // загальний залишок товарів приходу (по всіх складах)
+  const totals = await db.stockBalance.groupBy({ by: ["productId"], where: { productId: { in: r.lines.map((l) => l.productId) } }, _sum: { qty: true } });
+  const stockOf = new Map(totals.map((t) => [t.productId, t._sum.qty ?? 0]));
 
   if (r.status === "draft") {
     const showCurrency = process.env.ENABLE_CURRENCY === "true";
@@ -68,6 +72,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               prevCost: l.product.cost,
               newPrice: l.newPrice,
               cellId: l.cellId,
+              image: mainImage(l.product.images),
+              stockTotal: stockOf.get(l.productId) ?? 0,
             })),
           }}
           warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
@@ -127,7 +133,9 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
           <thead>
             <tr>
               <th>#</th>
+              <th>Фото</th>
               <th>Товар</th>
+              <th className="num">Зараз на складі</th>
               <th>Штрихкод</th>
               <th>Комірка</th>
               <th className="num">К-сть</th>
@@ -141,8 +149,17 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               <tr key={l.id}>
                 <td>{i + 1}</td>
                 <td>
+                  {mainImage(l.product.images) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={mainImage(l.product.images)!} alt="" loading="lazy" style={{ width: 44, height: 44, objectFit: "contain", background: "#fff", border: "1px solid var(--line)", borderRadius: 4 }} />
+                  ) : (
+                    <span className="muted small">—</span>
+                  )}
+                </td>
+                <td>
                   <Link href={`/products/${l.productId}`}>{ua(l.product)}</Link>
                 </td>
+                <td className="num">{stockOf.get(l.productId) ?? 0}</td>
                 <td>{l.product.barcode}</td>
                 <td>{l.cell?.code ?? "—"}</td>
                 <td className="num">{l.qty}</td>
@@ -152,7 +169,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               </tr>
             ))}
             <tr>
-              <td colSpan={6} className="num">
+              <td colSpan={8} className="num">
                 <b>Разом</b>
               </td>
               <td className="num">

@@ -17,6 +17,8 @@ type Line = {
   prevCost: number; // попередня собівартість товару — для перевірки помилок введення
   newPrice: number | null;
   cellId: number | null;
+  image?: string | null;
+  stockTotal?: number; // зараз на складі (до проведення цього приходу)
 };
 
 /** Попередження по рядку приходу: ловимо типові помилки введення до проведення */
@@ -33,7 +35,7 @@ function lineWarnings(l: Line, rate: number) {
   return w;
 }
 
-type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string };
+type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string; image?: string | null; stockTotal?: number };
 
 type Props = {
   receiptId: number;
@@ -112,6 +114,8 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           qty: 1,
           cost: p.cost,
           prevCost: p.cost,
+          image: p.image ?? null,
+          stockTotal: p.stockTotal,
           newPrice: null,
           cellId: activeCellId,
         },
@@ -324,7 +328,9 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
         <table>
           <thead>
             <tr>
+              <th style={{ width: 52 }}>Фото</th>
               <th>Товар</th>
+              <th style={{ width: 80 }} className="num">На складі</th>
               <th style={{ width: 90 }}>К-сть</th>
               <th style={{ width: 110 }}>Закупівля, {cur === "UAH" ? "грн" : cur}</th>
               <th className="num">Сума, {cur === "UAH" ? "грн" : cur}</th>
@@ -337,6 +343,14 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             {lines.map((l) => (
               <tr key={l.key}>
                 <td>
+                  {l.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={l.image} alt="" loading="lazy" style={{ width: 44, height: 44, objectFit: "contain", background: "#fff", border: "1px solid var(--line)", borderRadius: 4 }} />
+                  ) : (
+                    <span className="muted small">—</span>
+                  )}
+                </td>
+                <td>
                   {l.name}
                   <div className="muted small">
                     {[l.sku, l.barcode].filter(Boolean).join(" · ")}
@@ -347,6 +361,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                     </div>
                   ))}
                 </td>
+                <td className="num">{l.stockTotal === undefined ? "—" : <b style={{ color: l.stockTotal > 0 ? undefined : "var(--muted, #888)" }}>{l.stockTotal}</b>}</td>
                 <td>
                   <input type="number" min={0} step="any" value={l.qty} onChange={(e) => update(l.key, { qty: n(e.target.value) })} />
                 </td>
@@ -409,7 +424,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={9} className="muted">
                   Відскануйте перший товар
                 </td>
               </tr>
