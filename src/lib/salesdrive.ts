@@ -97,7 +97,9 @@ export function productToSd(
   if (opts.withImages && p.images) {
     try {
       const urls = (JSON.parse(p.images) as string[]).filter((u) => /^https?:\/\//.test(u));
-      if (urls.length) payload.images = urls.map((fullUrl) => ({ fullUrl }));
+      // власні фото додатку (/img/<id>) — з розширенням, інакше SalesDrive може їх не завантажити
+      const withExt = (u: string) => (/\/img\/[a-z0-9]+$/i.test(u) ? `${u}.jpg` : u);
+      if (urls.length) payload.images = urls.map((u) => ({ fullUrl: withExt(u) }));
     } catch {}
   }
   if (opts.withName) {

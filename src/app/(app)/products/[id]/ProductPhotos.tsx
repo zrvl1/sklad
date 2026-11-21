@@ -40,7 +40,8 @@ export default function ProductPhotos({ productId, images, canEdit }: { productI
       for (const f of [...files].slice(0, 10)) fd.append("files", await shrink(f));
       const r = await uploadPhotos(productId, fd);
       setMsg("error" in r ? r.error! : (r.warn ?? "Фото додано й відправлено в SalesDrive"));
-      if (!("error" in r)) location.reload();
+      // з попередженням SalesDrive не перезавантажуємо — інакше повідомлення зникне
+      if (!("error" in r) && !r.warn) location.reload();
     });
   };
 
@@ -49,6 +50,11 @@ export default function ProductPhotos({ productId, images, canEdit }: { productI
       <div className="toolbar" style={{ marginBottom: 8 }}>
         <b>Фото ({list.length})</b>
         <span className="spacer" />
+        {canEdit && list.length > 0 && (
+          <button type="button" className="btn sm" disabled={pending} onClick={() => save(list)} title="Ще раз відправити всі фото в SalesDrive">
+            ⟳ Відправити в SalesDrive
+          </button>
+        )}
         {canEdit && (
           <label className="btn sm" style={{ cursor: "pointer" }}>
             ＋ Додати фото
