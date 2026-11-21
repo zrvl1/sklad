@@ -67,10 +67,8 @@ ${ASK}`,
     title: "5. Немає в наявності — скасування",
     text: `Crane-Moto | Замовлення №{номер}
 
-Добрий день, {ім'я}! На жаль, товару [назва] зараз немає в наявності, тому замовлення буде скасовано.
-Перепрошуємо за незручності!
-
-${ASK}`,
+Добрий день, {ім'я}! На жаль, товару «{назви}» зараз немає в наявності, тому замовлення буде скасовано.
+Перепрошуємо за незручності!`,
   },
   {
     key: "nocall",
@@ -82,15 +80,30 @@ ${ASK}`,
   },
   {
     key: "returnInfo",
-    title: "7. Повернення / обмін",
+    title: "7. Повернення — інструкція (Легке повернення)",
     text: `Crane-Moto | Повернення за замовленням №{номер}
 
-{ім'я}, як оформити повернення або обмін (зі скріншотами, як створити «Легке повернення» в застосунку Нової пошти):
+{ім'я}, як оформити повернення через «Легке повернення» в застосунку Нової пошти — покроково зі скріншотами:
 {ПОВЕРНЕННЯ}
 
-Доставку повернення оплачує покупець, крім випадків браку — тоді доставку беремо на себе.
-Кошти повертаємо після отримання й перевірки товару.
-${ASK}`,
+Хто оплачує доставку повернення:
+• брак або помилка в сумісності з нашого боку — ми;
+• товар не підійшов або передумали — покупець.
+Кошти повертаємо після отримання й перевірки товару.`,
+  },
+  {
+    key: "returnAddress",
+    title: "8. Повернення — дані для відправки (без застосунку)",
+    text: `Crane-Moto | Повернення за замовленням №{номер}
+
+{ім'я}, надішліть, будь ласка, товар Новою поштою на:
+{АДРЕСА_ПОВЕРНЕННЯ}
+
+Після відправки напишіть у цей чат номер ТТН.
+Хто оплачує доставку повернення:
+• брак або помилка в сумісності з нашого боку — ми;
+• товар не підійшов або передумали — покупець.
+Кошти повертаємо після отримання й перевірки товару.`,
   },
 ];
 
@@ -102,6 +115,7 @@ export const SHOP_FIELDS = [
   { key: "ВІДГУК_PROM", label: "Посилання на відгуки Prom", ph: "https://prom.ua/c…-crane-moto.html#reviews" },
   { key: "САЙТ", label: "Сайт", ph: "https://crane-moto.com" },
   { key: "ПОВЕРНЕННЯ", label: "Сторінка на сайті «Повернення та обмін»", ph: "https://crane-moto.com/povernennya/" },
+  { key: "АДРЕСА_ПОВЕРНЕННЯ", label: "Куди надсилати повернення (ПІБ, телефон, місто, відділення)", ph: "Прізвище Ім'я, 0XXXXXXXXX, м. …, відділення №…" },
 ] as const;
 
 export async function loadTemplates(): Promise<MsgTemplate[]> {
@@ -146,6 +160,7 @@ export type OrderInfo = {
   firstName: string;
   phone: string;
   items: string;
+  titles: string;
   total: number;
   payment: string;
   delivery: string;
@@ -164,6 +179,7 @@ export function parseOrder(o: Record<string, unknown>): OrderInfo {
   const items = products
     .map((p) => `• ${str(p.text ?? p.name)} × ${num(p.amount) || 1} — ${money(num(p.price) * (num(p.amount) || 1) - num(p.discount))} грн`)
     .join("\n");
+  const titles = products.map((p) => str(p.text ?? p.name)).filter(Boolean).join("», «");
   const total = num(o.paymentAmount) || products.reduce((s, p) => s + num(p.price) * (num(p.amount) || 1) - num(p.discount), 0);
   const dd = ((o.ord_delivery_data ?? []) as Record<string, unknown>[])[0] ?? {};
   const city = str(dd.cityName ?? dd.city);
@@ -174,7 +190,7 @@ export function parseOrder(o: Record<string, unknown>): OrderInfo {
   const cod = num(dd.cashOnDeliveryAmount ?? dd.cod ?? dd.backwardDeliveryAmount);
   const keys = Object.keys(o);
   const site = str(o.sajt ?? keys.filter((k) => /^(sait|site|shop|sayt)$/i.test(k)).map((k) => o[k])[0]);
-  return { id: Number(o.id), time: str(o.orderTime), statusId: Number(o.statusId) || 0, name, firstName: shortName || firstName, phone, items, total, payment: str(o.payment_method ?? o.paymentMethod), delivery, ttn, cod, site };
+  return { id: Number(o.id), time: str(o.orderTime), statusId: Number(o.statusId) || 0, name, firstName: shortName || firstName, phone, items, titles, total, payment: str(o.payment_method ?? o.paymentMethod), delivery, ttn, cod, site };
 }
 
 /** Підставити дані заявки й контакти магазину в шаблон */
@@ -186,6 +202,7 @@ export function fill(text: string, o: OrderInfo, shop: Record<string, string>) {
     піб: o.name,
     телефон: o.phone,
     товари: o.items,
+    назви: o.titles,
     сума: money(o.total),
     оплата: o.payment || "—",
     доставка: o.delivery,
