@@ -164,10 +164,15 @@ export function productToSd(
 async function saveSdDebug(sent: unknown, status: number, response: string) {
   try {
     const { setSetting } = await import("./util");
-    await setSetting(
-      "lastSdResponse",
-      JSON.stringify({ at: new Date().toISOString(), status, sent: JSON.stringify(sent).slice(0, 3000), response: response.slice(0, 3000) })
-    );
+    const { getSetting } = await import("./util");
+    const entry = { at: new Date().toISOString(), status, sent: JSON.stringify(sent).slice(0, 3000), response: response.slice(0, 3000) };
+    let log: unknown[] = [];
+    try {
+      const prev = JSON.parse((await getSetting("sdResponseLog")) ?? "[]");
+      if (Array.isArray(prev)) log = prev;
+    } catch {}
+    await setSetting("sdResponseLog", JSON.stringify([entry, ...log].slice(0, 8)));
+    await setSetting("lastSdResponse", JSON.stringify(entry));
   } catch {
     /* діагностика не повинна ламати роботу */
   }

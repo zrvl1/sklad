@@ -46,8 +46,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     ? (JSON.parse(promDryRaw) as PromRes & { sample: { name: string | null; from: string; to: string }[]; unmatchedSample: string[] })
     : null;
   const promLog = promLogRaw ? (JSON.parse(promLogRaw) as { at: string; name: string | null; from: string; to: string }[]) : [];
-  const sdDebugRaw = isAdmin ? await getSetting("lastSdResponse") : null;
-  const sdDebug = sdDebugRaw ? (JSON.parse(sdDebugRaw) as { at: string; status: number; sent: string; response: string }) : null;
+  type SdDbg = { at: string; status: number; sent: string; response: string };
+  const sdLogRaw = isAdmin ? await getSetting("sdResponseLog") : null;
+  let sdLog: SdDbg[] = [];
+  try {
+    sdLog = sdLogRaw ? (JSON.parse(sdLogRaw) as SdDbg[]) : [];
+  } catch {}
+  if (!sdLog.length && isAdmin) {
+    const one = await getSetting("lastSdResponse");
+    if (one) sdLog = [JSON.parse(one) as SdDbg];
+  }
+  const sdDebug = sdLog[0] ?? null;
   const lastSync = lastSyncRaw ? (JSON.parse(lastSyncRaw) as { at: string; total: number; created: number; updated: number }) : null;
   const ymlOn = Boolean(process.env.SALESDRIVE_YML_URL);
 
@@ -422,16 +431,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       {isAdmin && sdDebug && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Остання відповідь SalesDrive</h2>
-          <p className="small muted">
-            {dateTimeUa(new Date(sdDebug.at))} · статус {sdDebug.status}
-          </p>
-          <div className="small">
-            <b>Відправлено:</b>
-            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", background: "#f7f8fa", padding: 8, borderRadius: 6 }}>{sdDebug.sent}</pre>
-            <b>Відповідь:</b>
-            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", background: "#f7f8fa", padding: 8, borderRadius: 6 }}>{sdDebug.response || "(порожня)"}</pre>
-          </div>
+          <h2 style={{ marginTop: 0 }}>Останні відповіді SalesDrive ({sdLog.length})</h2>
+          {sdLog.map((d, i) => (
+            <div key={i} className="small" style={{ borderTop: i ? "1px solid var(--line)" : undefined, paddingTop: i ? 8 : 0, marginTop: i ? 8 : 0 }}>
+              <p className="muted" style={{ margin: "0 0 4px" }}>
+                {dateTimeUa(new Date(d.at))} · статус {d.status}
+              </p>
+              <b>Відправлено:</b>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", background: "#f7f8fa", padding: 8, borderRadius: 6 }}>{d.sent}</pre>
+              <b>Відповідь:</b>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", background: "#f7f8fa", padding: 8, borderRadius: 6 }}>{d.response || "(порожня)"}</pre>
+            </div>
+          ))}
         </div>
       )}
 
