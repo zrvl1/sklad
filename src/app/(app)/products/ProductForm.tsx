@@ -5,12 +5,15 @@ import DetailsFields, { type ClientTemplate } from "@/components/DetailsFields";
 import CodeInput from "@/components/CodeInput";
 import NameTranslate from "@/components/NameTranslate";
 import { saveProduct } from "./actions";
+import CategoryPicker from "@/components/CategoryPicker";
+import type { CatOption } from "@/lib/categories";
 
 export default function ProductForm({
   product,
   suppliers,
   templates = [],
   categories = [],
+  catOptions = [],
   currencies = ["UAH"],
   showCurrency = false,
   kitsCount = 0,
@@ -22,6 +25,7 @@ export default function ProductForm({
   suppliers: Supplier[];
   templates?: ClientTemplate[];
   categories?: string[];
+  catOptions?: CatOption[];
   currencies?: string[];
   showCurrency?: boolean;
 }) {
@@ -42,15 +46,11 @@ export default function ProductForm({
           </span>
           <input name="nameTranslate" defaultValue={p?.nameTranslate ?? ""} maxLength={255} placeholder="порожньо — перекладеться автоматично при збереженні" />
         </label>
-        <label>
-          Категорія
-          <input name="categoryName" list="categories" defaultValue={p?.categoryName ?? ""} placeholder="оберіть або впишіть" autoComplete="off" />
-          <datalist id="categories">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </label>
+        <CategoryPicker
+          options={catOptions}
+          extraNames={categories}
+          initial={(p?.categorySdId && catOptions.find((c) => c.id === p.categorySdId)?.path) || p?.categoryName || ""}
+        />
         <label>
           Назва для документів
           <input name="nameForDocuments" defaultValue={p?.nameForDocuments ?? ""} />

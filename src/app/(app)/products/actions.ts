@@ -13,7 +13,7 @@ import { setCellQty } from "@/lib/stock";
 import { buildSearch, getSetting, logAction, num, setSetting, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
 import { nextSku } from "@/lib/nextcodes";
-import { categoryIdFor } from "@/lib/categories";
+import { PATH_SEP, categoryIdFor, createCategory, findCategory } from "@/lib/categories";
 
 /** Характеристики як стабільний JSON (для порівняння "чи змінилося") */
 function normParams(json: string) {
@@ -28,7 +28,8 @@ export async function pushProduct(productId: number, opts: PushOpts) {
   const p = await db.product.findUniqueOrThrow({ where: { id: productId } });
   if (!isSalesDriveConfigured()) return { ok: false, error: "SalesDrive не налаштовано в .env" };
   try {
-    await sdUpdateProducts([productToSd(p, null, opts)]);
+    // перша успішна передача (або повтор після помилки) — разом з фото
+    await sdUpdateProducts([productToSd(p, null, { ...opts, withImages: !p.syncedAt })]);
     await db.product.update({ where: { id: p.id }, data: { syncError: null, syncedAt: new Date() } });
     return { ok: true as const };
   } catch (e) {
@@ -74,7 +75,7 @@ export async function saveProduct(formData: FormData) {
     name,
     nameTranslate: str(formData.get("nameTranslate")),
     nameForDocuments: str(formData.get("nameForDocuments")),
-    categoryName: str(formData.get("categoryName")),
+    categoryName: str(formData.get("categoryName")) as string | null,
     price: num(formData.get("price")),
     discountValue: num(formData.get("discountValue")) || null,
     discountType: str(formData.get("discountType")) ?? "percent",
@@ -93,7 +94,32 @@ export async function saveProduct(formData: FormData) {
     params: normParams(String(formData.get("params") ?? "[]")) as string | null,
     categorySdId: null as string | null,
   };
-  data.categorySdId = await categoryIdFor(data.categoryName);
+  // Категорія: наявна в SalesDrive (за шляхом/назвою) або нова — створюємо її в SalesDrive
+  const catInput = str(formData.get("categoryPath"));
+  if (formData.has("categoryPath")) {
+    const found = await findCategory(catInput);
+    if (found) {
+      data.categoryName = found.name;
+      data.categorySdId = found.id;
+    } else if (catInput) {
+      const leaf = catInput.split(PATH_SEP).pop()!.trim();
+      const known = await categoryIdFor(leaf);
+      if (known) {
+        data.categoryName = leaf;
+        data.categorySdId = known;
+      } else {
+        try {
+          const c = await createCategory(leaf, str(formData.get("categoryParent")));
+          data.categoryName = c.name;
+          data.categorySdId = c.id;
+        } catch {
+          data.categoryName = leaf; // не вдалося створити — передасться за назвою
+        }
+      }
+    } else data.categoryName = null;
+  } else {
+    data.categorySdId = await categoryIdFor(data.categoryName);
+  }
   // Новий товар: порожня українська версія перекладається автоматично (DeepL; ключові слова без DeepL — за словником).
   // В наявних товарах не чіпаємо: українська назва з SalesDrive може не приходити в YML, і ми б її затерли.
   if (!id) {

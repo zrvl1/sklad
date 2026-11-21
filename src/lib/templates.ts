@@ -89,6 +89,7 @@ export async function productFormContext() {
       params: t.params,
     })),
     categories,
+    catOptions: await (await import("./categories")).allCategories(),
     currencies: currencies.map((c) => c.code),
     showCurrency: process.env.ENABLE_CURRENCY === "true",
   };
@@ -107,6 +108,8 @@ async function ymlCategoryNames(): Promise<string[]> {
   try {
     const { getSetting } = await import("./util");
     const yml = JSON.parse((await getSetting("ymlCategories")) ?? "[]") as string[];
+    const created = (JSON.parse((await getSetting("createdCategories")) ?? "[]") as { name: string }[]).map((c) => c.name);
+    yml.push(...created);
     const custom = JSON.parse((await getSetting("customCategories")) ?? "[]") as string[];
     const { parseCustomLine } = await import("./categories");
     return [...yml, ...custom.map((l) => parseCustomLine(l).name)];

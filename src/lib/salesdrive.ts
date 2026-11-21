@@ -291,21 +291,40 @@ export async function fetchYmlText() {
  * Розбір YML. Назви тегів у різних CRM трохи відрізняються, тому перевіряємо кілька варіантів.
  * Якщо якесь поле не підтягується — запустіть `npm run yml:inspect` і допишіть потрібний тег тут.
  */
-/** Усі категорії з YML: назви і ID (ID лише для назв, що не повторюються) */
-export function parseYmlCategories(xml: string): { names: string[]; ids: Record<string, string> } {
+export type SdCategory = { id: string; name: string; parentId: string | null };
+
+/** Усі категорії з YML: дерево (id, назва, батьківська) */
+export function parseYmlCategories(xml: string): SdCategory[] {
   const doc = ymlParser.parse(xml);
   const shop = doc?.yml_catalog?.shop ?? doc?.shop ?? {};
-  const byName = new Map<string, Set<string>>();
+  const out: SdCategory[] = [];
   for (const c of (shop.categories?.category ?? []) as Record<string, unknown>[]) {
     const name = text(c as Node)?.trim();
     const id = text(c["@_id"] as Node);
-    if (!name) continue;
-    if (!byName.has(name)) byName.set(name, new Set());
-    if (id) byName.get(name)!.add(id);
+    const parentId = text(c["@_parentId"] as Node) ?? null;
+    if (name && id) out.push({ id, name, parentId });
   }
-  const ids: Record<string, string> = {};
-  for (const [n, set] of byName) if (set.size === 1) ids[n] = [...set][0];
-  return { names: [...byName.keys()], ids };
+  return out;
+}
+
+/** Створити/оновити категорії в SalesDrive */
+export async function sdUpsertCategories(cats: SdCategory[]) {
+  const { url, key } = config();
+  const res = await fetch(`${url}/category-handler/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Api-Key": key },
+    body: JSON.stringify({ form: key, action: "update", category: cats.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? "" })) }),
+    cache: "no-store",
+  });
+  const text = await res.text();
+  await saveSdDebug(cats, res.status, text);
+  if (!res.ok) throw new Error(`SalesDrive відповів ${res.status}: ${text.slice(0, 300)}`);
+  try {
+    const d = JSON.parse(text) as { status?: string; errors?: unknown; message?: string };
+    if (d.status === "error") throw new Error(`SalesDrive: ${JSON.stringify(d.errors ?? d.message).slice(0, 300)}`);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("SalesDrive")) throw e;
+  }
 }
 
 export function parseYml(xml: string): YmlOffer[] {

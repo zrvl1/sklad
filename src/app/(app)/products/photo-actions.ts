@@ -11,7 +11,7 @@ async function saveAndPush(productId: number, urls: string[]) {
   const p = await db.product.update({ where: { id: productId }, data: { images: JSON.stringify(urls) } });
   if (!p.sdId || !isSalesDriveConfigured()) return null;
   try {
-    await sdUpdateProducts([productToSd(p, null, { withImages: true })]);
+    await sdUpdateProducts([productToSd(p, null, { withImages: true, withName: !p.syncedAt })]);
     return null;
   } catch (e) {
     return e instanceof Error ? e.message : String(e);
