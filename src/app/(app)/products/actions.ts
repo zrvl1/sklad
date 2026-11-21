@@ -13,6 +13,7 @@ import { setCellQty } from "@/lib/stock";
 import { buildSearch, getSetting, logAction, num, setSetting, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
 import { nextSku } from "@/lib/nextcodes";
+import { appSdId, isAppSdId } from "@/lib/sdid";
 import { PATH_SEP, categoryIdFor, createCategory, findCategory } from "@/lib/categories";
 
 /** Характеристики як стабільний JSON (для порівняння "чи змінилося") */
@@ -42,7 +43,8 @@ export async function pushProduct(productId: number, opts: PushOpts) {
 /** Призначаємо ID для SalesDrive, штрихкод і артикул, якщо їх немає */
 async function finalizeNewProduct(id: number, opts: { genBarcode: boolean; genSku?: boolean }) {
   const p = await db.product.findUniqueOrThrow({ where: { id } });
-  const sdId = p.sdId ?? `W${String(id).padStart(6, "0")}`;
+  // ID для SalesDrive — числовий, як у SalesDrive (10 цифр, починається з 9, щоб не збігся з їхніми)
+  const sdId = p.sdId ?? appSdId(id);
   let barcode = p.barcode;
   if (!barcode && opts.genBarcode) {
     barcode = internalEan13(id);
@@ -328,7 +330,7 @@ export async function retryPush(formData: FormData) {
   const id = Number(formData.get("id"));
   const p = await db.product.findUniqueOrThrow({ where: { id }, select: { sdId: true } });
   // повтор для товару, створеного в нашому додатку (ID на W…), — з назвою; для товарів із CRM — без
-  const res = await pushProduct(id, p.sdId?.startsWith("W") ? { ...ALL, withDetails: true } : {});
+  const res = await pushProduct(id, isAppSdId(p.sdId) ? { ...ALL, withDetails: true } : {});
   revalidatePath(`/products/${id}`);
   redirect(`/products/${id}?saved=${res.ok ? 1 : 0}`);
 }

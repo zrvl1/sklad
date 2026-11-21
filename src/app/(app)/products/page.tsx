@@ -9,7 +9,7 @@ import { can, requireUser } from "@/lib/auth";
 
 const PAGE = 50;
 
-type SP = Promise<{ q?: string; page?: string; print?: string; nobarcode?: string; errors?: string; kits?: string }>;
+type SP = Promise<{ sort?: string; q?: string; page?: string; print?: string; nobarcode?: string; errors?: string; kits?: string }>;
 
 export default async function ProductsPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
@@ -28,7 +28,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
     db.product.count({ where }),
     db.product.findMany({
       where,
-      orderBy: { name: "asc" },
+      orderBy: sp.sort === "new" ? [{ createdAt: "desc" }, { id: "desc" }] : sp.sort === "old" ? [{ createdAt: "asc" }, { id: "asc" }] : { name: "asc" },
       skip: (page - 1) * PAGE,
       take: PAGE,
       include: {
@@ -47,6 +47,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
     if (sp.nobarcode) s.set("nobarcode", "1");
     if (sp.errors) s.set("errors", "1");
     if (sp.kits) s.set("kits", "1");
+    if (sp.sort) s.set("sort", sp.sort);
     s.set("page", String(p));
     return `?${s}`;
   };
@@ -57,6 +58,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
       <form className="toolbar">
         <input name="q" defaultValue={sp.q} placeholder="Назва, SKU, штрихкод, ID…" style={{ width: 340 }} autoFocus />
         {sp.print && <input type="hidden" name="print" value="1" />}
+        <select name="sort" defaultValue={sp.sort ?? ""} title="Сортування">
+          <option value="">За назвою</option>
+          <option value="new">Спочатку нові</option>
+          <option value="old">Спочатку старі</option>
+        </select>
         <button className="btn">Знайти</button>
         <Link className="btn sm" href={sp.kits ? "/products" : "/products?kits=1"}>
           {sp.kits ? "Сховати картки-комплекти" : "Показати й картки-комплекти"}

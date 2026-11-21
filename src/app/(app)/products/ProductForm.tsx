@@ -5,6 +5,7 @@ import DetailsFields, { type ClientTemplate } from "@/components/DetailsFields";
 import CodeInput from "@/components/CodeInput";
 import NameTranslate from "@/components/NameTranslate";
 import { saveProduct } from "./actions";
+import { isAppSdId } from "@/lib/sdid";
 import CategoryPicker from "@/components/CategoryPicker";
 import type { CatOption } from "@/lib/categories";
 
@@ -169,7 +170,7 @@ export default function ProductForm({
           }
           templates={[]}
           isNew={!p}
-          notLoaded={Boolean(p && p.description === null && p.params === null && p.sdId && !p.sdId.startsWith("W"))}
+          notLoaded={Boolean(p && p.description === null && p.params === null && p.sdId && !isAppSdId(p.sdId))}
         />
       </div>
       <div className="toolbar" style={{ marginTop: 16, marginBottom: 0 }}>
