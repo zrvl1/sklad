@@ -12,7 +12,13 @@ async function saveAndPush(productId: number, urls: string[]) {
   if (!p.sdId || !isSalesDriveConfigured()) return null;
   await warmImages(urls);
   try {
-    await sdUpdateProducts([productToSd(p, null, { withImages: true, withName: !p.syncedAt })]);
+    try {
+      await sdUpdateProducts([productToSd(p, null, { withImages: true, withName: !p.syncedAt })]);
+    } catch (e) {
+      // товару ще немає в SalesDrive — створюємо повністю
+      if (!(e instanceof Error && /required field/i.test(e.message))) throw e;
+      await sdUpdateProducts([productToSd(p, null, { withImages: true, withName: true, withPrice: true, withCost: true, withDetails: true })]);
+    }
     return null;
   } catch (e) {
     return e instanceof Error ? e.message : String(e);

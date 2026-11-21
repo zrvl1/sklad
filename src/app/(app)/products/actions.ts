@@ -29,8 +29,16 @@ export async function pushProduct(productId: number, opts: PushOpts) {
   const p = await db.product.findUniqueOrThrow({ where: { id: productId } });
   if (!isSalesDriveConfigured()) return { ok: false, error: "SalesDrive не налаштовано в .env" };
   try {
-    // перша успішна передача (або повтор після помилки) — разом з фото
-    await sdUpdateProducts([productToSd(p, null, { ...opts, withImages: !p.syncedAt })]);
+    // перша успішна передача (або повтор після помилки) — повністю, разом з назвою й фото
+    const first = !p.syncedAt;
+    const full = { ...ALL, withDetails: true, withImages: true };
+    try {
+      await sdUpdateProducts([productToSd(p, null, first ? { ...opts, ...full } : opts)]);
+    } catch (e) {
+      // SalesDrive не знайшов товар (вважає його новим і вимагає назву) — відправляємо повністю
+      if (!(e instanceof Error && /required field/i.test(e.message))) throw e;
+      await sdUpdateProducts([productToSd(p, null, { ...opts, ...full })]);
+    }
     await db.product.update({ where: { id: p.id }, data: { syncError: null, syncedAt: new Date() } });
     return { ok: true as const };
   } catch (e) {
