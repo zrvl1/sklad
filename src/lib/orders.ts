@@ -256,3 +256,17 @@ export async function fetchOrderLive(id: number): Promise<Record<string, unknown
   const list = (r?.data ?? []) as Record<string, unknown>[];
   return list.find((o) => Number(o.id) === id) ?? list[0] ?? null;
 }
+
+/**
+ * Заявки з вибраними статусами — наживо з SalesDrive (для списку «Повідомлення клієнту»).
+ * Видалені або переведені в інший статус заявки зникають самі. Контакти не зберігаємо.
+ */
+export async function fetchOrdersByStatusLive(statusIds: number[]): Promise<Record<string, unknown>[]> {
+  if (!ordersEnabled()) throw new Error("Не налаштовано SALESDRIVE_ORDERS_KEY");
+  const out: Record<string, unknown>[] = [];
+  for (const st of statusIds.slice(0, 3)) {
+    const r = await sdGetList({ "filter[statusId]": String(st), limit: "100", page: "1" });
+    out.push(...((r?.data ?? []) as Record<string, unknown>[]));
+  }
+  return out;
+}

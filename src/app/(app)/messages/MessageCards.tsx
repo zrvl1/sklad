@@ -4,7 +4,9 @@ import { useState } from "react";
 
 const digits = (p: string) => p.replace(/\D/g, "").replace(/^0/, "380");
 
-export default function MessageCards({ cards, phone }: { cards: { key: string; title: string; text: string }[]; phone: string }) {
+export default function MessageCards({ cards: all, phone, suggested }: { cards: { key: string; title: string; text: string }[]; phone: string; suggested?: string | null }) {
+  // рекомендований шаблон — першим
+  const cards = suggested ? [...all.filter((c) => c.key === suggested), ...all.filter((c) => c.key !== suggested)] : all;
   const [texts, setTexts] = useState<Record<string, string>>(Object.fromEntries(cards.map((c) => [c.key, c.text])));
   const [copied, setCopied] = useState<string | null>(null);
   const num = digits(phone);
@@ -22,8 +24,9 @@ export default function MessageCards({ cards, phone }: { cards: { key: string; t
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: 12 }}>
       {cards.map((c) => (
-        <div key={c.key} className="panel" style={{ margin: 0 }}>
+        <div key={c.key} className="panel" style={{ margin: 0, ...(c.key === suggested ? { borderColor: "#2563eb", boxShadow: "0 0 0 1px #2563eb" } : {}) }}>
           <b>{c.title}</b>
+          {c.key === suggested && <span className="badge" style={{ marginLeft: 6 }}>рекомендовано</span>}
           <textarea
             value={texts[c.key]}
             onChange={(e) => setTexts({ ...texts, [c.key]: e.target.value })}

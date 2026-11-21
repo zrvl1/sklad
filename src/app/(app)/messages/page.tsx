@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { can, requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { fetchOrderLive, normTtn } from "@/lib/orders";
-import { fill, loadShop, loadTemplates, parseOrder } from "@/lib/messages";
+import { cachedStatuses, fetchOrderLive, fetchOrdersByStatusLive, fetchStatuses, normTtn } from "@/lib/orders";
+import { fill, listStatusIds, loadShop, loadTemplates, parseOrder, suggestTemplate } from "@/lib/messages";
+import { saveListStatuses } from "./settings/actions";
 import MessageCards from "./MessageCards";
 
 export default async function MessagesPage({ searchParams }: { searchParams: Promise<{ order?: string; debug?: string }> }) {
@@ -37,6 +38,26 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
     }
   }
 
+  // список заявок у вибраних статусах — наживо з SalesDrive (лише коли не відкрита конкретна заявка)
+  let statuses = await cachedStatuses();
+  if (!statuses.length) {
+    try {
+      statuses = await fetchStatuses();
+    } catch {}
+  }
+  const listIds = await listStatusIds(statuses);
+  let list: ReturnType<typeof parseOrder>[] = [];
+  let listError: string | null = null;
+  if (!q && listIds.length) {
+    try {
+      list = (await fetchOrdersByStatusLive(listIds)).map(parseOrder).sort((a, b) => b.time.localeCompare(a.time));
+    } catch (e) {
+      listError = `SalesDrive: ${e instanceof Error ? e.message : e}`;
+    }
+  }
+  const stName = (id: number) => statuses.find((s) => s.id === id)?.name ?? `статус ${id}`;
+  const suggested = info ? suggestTemplate(info) : null;
+
   return (
     <>
       <div className="toolbar">
@@ -57,6 +78,73 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
         <button className="btn primary">Заповнити</button>
       </form>
       {error && <div className="msg err">{error}</div>}
+      {q && (
+        <p>
+          <Link href="/messages">← До списку заявок</Link>
+        </p>
+      )}
+      {!q && (
+        <div className="panel">
+          <div className="toolbar" style={{ marginTop: 0, flexWrap: "wrap" }}>
+            <b>Заявки: {listIds.map(stName).join(", ") || "статус не вибрано"}</b>
+            <span className="small muted">({list.length}) — оновлюються з SalesDrive при кожному відкритті сторінки</span>
+            <span className="spacer" />
+            {can(user, "settings") && statuses.length > 0 && (
+              <form action={saveListStatuses} className="toolbar" style={{ margin: 0 }}>
+                <select name="st" multiple defaultValue={listIds.map(String)} size={4} style={{ minWidth: 200 }} title="Ctrl+клік — кілька статусів (до 3)">
+                  {statuses.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn sm">Показувати ці статуси</button>
+              </form>
+            )}
+          </div>
+          {listError && <div className="msg err">{listError}</div>}
+          {list.length === 0 && !listError ? (
+            <p className="muted">Заявок у цьому статусі немає.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>№</th>
+                  <th>Дата</th>
+                  <th>Клієнт</th>
+                  <th className="num">Сума</th>
+                  <th>Оплата</th>
+                  <th>Доставка</th>
+                  <th>Звідки</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((o) => (
+                  <tr key={o.id}>
+                    <td>
+                      <Link href={`/messages?order=${o.id}`}>
+                        <b>{o.id}</b>
+                      </Link>
+                    </td>
+                    <td className="small">{o.time.slice(0, 16)}</td>
+                    <td>
+                      <Link href={`/messages?order=${o.id}`}>{o.name || "—"}</Link>
+                      <div className="small muted">{o.phone}</div>
+                    </td>
+                    <td className="num">{o.total.toLocaleString("uk-UA")}</td>
+                    <td className="small">
+                      {o.payment || "—"}
+                      {o.cod > 0 && <div className="badge warn">накладений</div>}
+                    </td>
+                    <td className="small">{o.delivery}</td>
+                    <td className="small">{o.site || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       {info && (
         <>
           <div className="panel">
@@ -67,7 +155,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
             {info.ttn ? ` · ТТН ${info.ttn}` : ""}
             {sp.debug && <div className="small muted">Поля заявки: {keys.join(", ")}</div>}
           </div>
-          <MessageCards cards={cards} phone={info.phone} />
+          <MessageCards cards={cards} phone={info.phone} suggested={suggested} />
         </>
       )}
     </>

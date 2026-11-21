@@ -186,6 +186,8 @@ const money = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 
 
 export type OrderInfo = {
   id: number;
+  time: string;
+  statusId: number;
   name: string;
   firstName: string;
   phone: string;
@@ -217,7 +219,7 @@ export function parseOrder(o: Record<string, unknown>): OrderInfo {
   const cod = num(dd.cashOnDeliveryAmount ?? dd.cod ?? dd.backwardDeliveryAmount);
   const keys = Object.keys(o);
   const site = str(o.sajt ?? keys.filter((k) => /^(sait|site|shop|sayt)$/i.test(k)).map((k) => o[k])[0]);
-  return { id: Number(o.id), name, firstName, phone, items, total, payment: str(o.payment_method ?? o.paymentMethod), delivery, ttn, cod, site };
+  return { id: Number(o.id), time: str(o.orderTime), statusId: Number(o.statusId) || 0, name, firstName, phone, items, total, payment: str(o.payment_method ?? o.paymentMethod), delivery, ttn, cod, site };
 }
 
 /** Підставити дані заявки й контакти магазину в шаблон */
@@ -241,4 +243,20 @@ export function fill(text: string, o: OrderInfo, shop: Record<string, string>) {
     .replace(/\{([^{}\n]+)\}/g, (m, k: string) => (k in vars ? vars[k] : m))
     .replace(/Добрий день, !/g, "Добрий день!")
     .replace(/\n{3,}/g, "\n\n");
+}
+
+/** Статуси SalesDrive, заявки в яких показуються в списку (за замовчуванням — «Прийнято…») */
+export async function listStatusIds(all: { id: number; name: string }[]): Promise<number[]> {
+  try {
+    const saved = JSON.parse((await getSetting("msgStatusIds")) ?? "[]") as number[];
+    if (saved.length) return saved;
+  } catch {}
+  return all.filter((s) => /прийнят|принят/i.test(s.name)).map((s) => s.id).slice(0, 1);
+}
+
+/** Який шаблон підтвердження пропонувати: оплачено онлайн чи накладений платіж */
+export function suggestTemplate(o: OrderInfo): string {
+  if (o.cod > 0 || /наклад|післяплат|при отрим|cash|cod/i.test(o.payment)) return "acceptedCod";
+  if (/оплачен|monobank|plata|карт|онлайн|liqpay|передоплат/i.test(o.payment)) return "acceptedPaid";
+  return "acceptedCod";
 }

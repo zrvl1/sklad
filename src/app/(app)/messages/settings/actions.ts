@@ -20,3 +20,10 @@ export async function saveMsgSettings(formData: FormData) {
   await put("msgTemplates", JSON.stringify(tpls));
   redirect("/messages/settings?saved=1");
 }
+
+export async function saveListStatuses(formData: FormData) {
+  await requirePerm("settings");
+  const ids = formData.getAll("st").map(Number).filter((n) => Number.isFinite(n) && n > 0).slice(0, 3);
+  await put("msgStatusIds", JSON.stringify(ids));
+  redirect("/messages");
+}
