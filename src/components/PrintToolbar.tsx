@@ -14,11 +14,13 @@ export default function PrintToolbar({
   showTemplates = true,
   truncated = false,
   offset,
+  pageW,
 }: {
   count: number;
   showTemplates?: boolean;
   truncated?: boolean;
   offset?: { x: number; y: number };
+  pageW?: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -109,7 +111,13 @@ export default function PrintToolbar({
         <label className="check">
           <input type="checkbox" checked={frame} onChange={(e) => setFrame(e.target.checked)} /> друкувати рамку (для перевірки)
         </label>
-        <span className="muted">{saved ? "зсув збережено для всіх браузерів" : "зберігаю…"}</span>
+        <span className="muted">{saved ? "зсув збережено для всіх браузерів" : "зберігаю… (оновіть сторінку після зміни X більше 1,5 мм)"}</span>
+        {pageW && (
+          <div className="msg warn small" style={{ width: "100%" }}>
+            Великий зсув X: у драйвері принтера (Настройки печати) розмір паперу має бути <b>{pageW} × 25 мм</b>, а у вікні друку Chrome — той самий
+            папір, поля «Немає», масштаб 100%.
+          </div>
+        )}
         <span className="muted">У вікні друку: принтер етикеток, папір {LABEL_TEMPLATES[tpl as keyof typeof LABEL_TEMPLATES]?.title ?? tpl}, поля «Немає», масштаб 100%.</span>
       </div>
       {truncated && <div className="msg warn small">Показано перші 2000 етикеток — друкуйте частинами (за категорією).</div>}

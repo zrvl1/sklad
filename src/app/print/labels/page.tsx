@@ -111,17 +111,22 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
   } catch {}
 
   const pad = t.compact ? { t: 1, r: 1.5, b: 1, l: 3.5 } : { t: 1.5, r: 2, b: 1.5, l: 2 };
+  // Великий зсув вправо (рулон стоїть не біля краю головки): сторінка ширша на X, наліпка з відступом зліва.
+  // У драйвері принтера ширина паперу має бути така сама: t.w + X мм. Малий зсув — через внутрішні відступи.
+  const bigX = !t.sheet && offset.x > pad.r ? offset.x : 0;
+  const pageW = t.w + bigX;
 
   const pageCss = t.sheet
     ? `@page { size: A4; margin: 8mm 0 0 0; }
        .labels { display: grid; grid-template-columns: repeat(3, ${t.w}mm); grid-auto-rows: ${t.h}mm; justify-content: center; }
        .label { border: 0.2mm dashed #ccc; }
        @media print { .label { border-color: transparent; } }`
-    : `@page { size: ${t.w}mm ${t.h}mm; margin: 0; }
+    : `@page { size: ${pageW}mm ${t.h}mm; margin: 0; }
        .labels { display: flex; flex-wrap: wrap; gap: 4mm; padding: 4mm; }
        .label { border: 0.2mm solid #ccc; }
        @media print {
-         html, body { margin: 0 !important; padding: 0 !important; width: ${t.w}mm; }
+         html, body { margin: 0 !important; padding: 0 !important; width: ${pageW}mm; }
+         .label { margin-left: ${bigX}mm; }
          .labels { display: block; padding: 0; }
          .label { border: 0; page-break-after: always; break-after: page; }
          /* остання наліпка — без розриву сторінки, інакше принтер проганяє ще одну порожню */
@@ -138,8 +143,8 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
         .label { width: ${t.w}mm; height: ${t.h}mm; overflow: hidden; box-sizing: border-box;
                  padding-top: max(0mm, calc(${pad.t}mm + var(--oy, 0mm)));
                  padding-bottom: max(0mm, calc(${pad.b}mm - var(--oy, 0mm)));
-                 padding-left: max(0mm, calc(${pad.l}mm + var(--ox, 0mm)));
-                 padding-right: max(0mm, calc(${pad.r}mm - var(--ox, 0mm)));
+                 padding-left: ${bigX ? `${pad.l}mm` : `max(0mm, calc(${pad.l}mm + var(--ox, 0mm)))`};
+                 padding-right: ${bigX ? `${pad.r}mm` : `max(0mm, calc(${pad.r}mm - var(--ox, 0mm)))`};
                  display: flex; flex-direction: column; justify-content: space-between; font-family: Arial, sans-serif; color: #000; }
         @media print { html, body { overflow: hidden !important; } }
         @media print { body.print-frame .label { border: 0.2mm solid #000 !important; } }
@@ -158,7 +163,7 @@ export default async function PrintLabels({ searchParams }: { searchParams: SP }
       `}</style>
 
       <Suspense>
-        <PrintToolbar count={labels.length} truncated={truncated} offset={offset} />
+        <PrintToolbar count={labels.length} truncated={truncated} offset={offset} pageW={bigX ? pageW : undefined} />
       </Suspense>
 
       {labels.length === 0 && <p style={{ padding: 20 }}>Немає товарів для друку.</p>}
