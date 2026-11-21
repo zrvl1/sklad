@@ -4,6 +4,7 @@ import { getUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { searchProducts } from "@/lib/codes";
 import { mainImage } from "@/lib/images";
+import { promCommissions } from "@/lib/commission";
 
 // Пошук товару для сканера: штрихкод, артикул, артикул постачальника, ID, або частина назви.
 // ?wh=ID — додати залишок товару на цьому складі (для інвентаризації).
@@ -24,7 +25,11 @@ export async function GET(req: Request) {
   ]);
   const imgMap = new Map(imgs.map((p) => [p.id, mainImage(p.images)]));
   const totMap = new Map(totals.map((t) => [t.productId, t._sum.qty ?? 0]));
-  const enriched = found.map((f) => ({ ...f, image: imgMap.get(f.id) ?? null, stockTotal: totMap.get(f.id) ?? 0 }));
+  const { byProduct } = await promCommissions(ids);
+  const enriched = found.map((f) => {
+    const c = byProduct.get(f.id);
+    return { ...f, image: imgMap.get(f.id) ?? null, stockTotal: totMap.get(f.id) ?? 0, promPct: c ? Math.round(c.pct * 10) / 10 : null, promOwn: c?.own ?? false };
+  });
   const wh = Number(params.get("wh"));
   if (!wh) return NextResponse.json(enriched);
   const stocks = await db.stockBalance.findMany({ where: { warehouseId: wh, productId: { in: found.map((f) => f.id) } } });

@@ -1,3 +1,4 @@
+import { promCommissions } from "@/lib/commission";
 import { mainImage } from "@/lib/images";
 import { ua } from "@/lib/names";
 import Link from "next/link";
@@ -30,6 +31,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
   // загальний залишок товарів приходу (по всіх складах)
   const totals = await db.stockBalance.groupBy({ by: ["productId"], where: { productId: { in: r.lines.map((l) => l.productId) } }, _sum: { qty: true } });
   const stockOf = new Map(totals.map((t) => [t.productId, t._sum.qty ?? 0]));
+  const prom = r.status === "draft" ? (await promCommissions(r.lines.map((l) => l.productId))).byProduct : new Map();
 
   if (r.status === "draft") {
     const showCurrency = process.env.ENABLE_CURRENCY === "true";
@@ -74,6 +76,8 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
               cellId: l.cellId,
               image: mainImage(l.product.images),
               stockTotal: stockOf.get(l.productId) ?? 0,
+              promPct: prom.get(l.productId) ? Math.round(prom.get(l.productId)!.pct * 10) / 10 : null,
+              promOwn: prom.get(l.productId)?.own ?? false,
             })),
           }}
           warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}

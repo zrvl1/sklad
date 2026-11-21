@@ -2,6 +2,7 @@ import { ua } from "@/lib/names";
 import { mainImage } from "@/lib/images";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { searchWords } from "@/lib/util";
 import type { Prisma } from "@prisma/client";
 import { saveFill, translateRuFromUa, translateUaKeywords } from "./actions";
 import { langIssues, uaKwMissing } from "@/lib/langcheck";
@@ -39,7 +40,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
   )
     .filter((p) => p.keywords?.trim() && uaKwMissing(p.keywordsUa, p.keywords))
     .map((p) => p.id);
-  const base: Prisma.ProductWhereInput = { deletedAt: null, baseProductId: null, ...(q ? { search: { contains: q } } : {}) };
+  const base: Prisma.ProductWhereInput = { deletedAt: null, baseProductId: null, ...(q ? searchWords(q) : {}) };
   const where: Prisma.ProductWhereInput =
     f === "cost"
       ? { ...base, cost: { lte: 0 } }
@@ -48,9 +49,9 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         : f === "country"
           ? { ...base, OR: [{ country: null }, { country: "" }] }
         : f === "kwua"
-          ? { deletedAt: null, id: { in: kwuaIds }, ...(q ? { search: { contains: q } } : {}) }
+          ? { deletedAt: null, id: { in: kwuaIds }, ...(q ? searchWords(q) : {}) }
         : f === "lang"
-          ? { deletedAt: null, id: { in: langIds }, ...(q ? { search: { contains: q } } : {}) }
+          ? { deletedAt: null, id: { in: langIds }, ...(q ? searchWords(q) : {}) }
         : f === "kw"
           ? { ...base, OR: [{ keywords: null }, { keywords: "" }] }
         : f === "cell"

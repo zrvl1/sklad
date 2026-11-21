@@ -2,6 +2,7 @@ import { ua } from "@/lib/names";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { searchWords } from "@/lib/util";
 import { mainImage } from "@/lib/images";
 import { langIssues } from "@/lib/langcheck";
 import ProductTable from "./ProductTable";
@@ -18,7 +19,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
   const page = Math.max(1, Number(sp.page) || 1);
 
   const where: Prisma.ProductWhereInput = { deletedAt: null };
-  if (q) where.OR = [{ search: { contains: q } }, { barcode: q }];
+  if (q) where.OR = [searchWords(q), { barcode: q }];
   if (sp.nobarcode) where.AND = [{ OR: [{ barcode: null }, { barcode: "" }] }];
   if (sp.errors) where.syncError = { not: null };
   // картки-комплекти без пошуку ховаємо: менеджер бачить лише фізичні товари (у пошуку — показуємо з позначкою)

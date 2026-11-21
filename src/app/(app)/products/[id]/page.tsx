@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { dateTimeUa, dateUa, money } from "@/lib/util";
 import { MOVE_TYPES } from "@/lib/labels";
 import ProductForm from "../ProductForm";
+import { promCommissions } from "@/lib/commission";
 import { productFormContext } from "@/lib/templates";
 import { can, requireUser } from "@/lib/auth";
 import { parseParams } from "@/lib/salesdrive";
@@ -135,6 +136,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
     }),
   ]);
   const suppliers = ctx.suppliers;
+  const promC = (await promCommissions([product.id])).byProduct.get(product.id) ?? null;
   const inCells = product.cells.reduce((s, c) => s + c.qty, 0);
 
   const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
@@ -293,6 +295,17 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <span className="muted small">
             {money(product.cost)} грн{product.costCurrency ? ` (${product.costOriginal} ${product.costCurrency})` : ""} · маржа {product.price > 0 ? Math.round(((product.price - product.cost) / product.price) * 100) : 0}%
           </span>
+          {promC && product.price > 0 && (
+            <span
+              className="small"
+              style={{ display: "block" }}
+              title={promC.own ? `Середня комісія Prom із ${promC.orders} заявок цього товару за рік` : "Цей товар ще не продавався на Prom — середня комісія по всіх заявках Prom"}
+            >
+              з комісією Prom {Math.round(promC.pct * 10) / 10}%{promC.own ? ` (${promC.orders} зам.)` : " (сер.)"}: маржа{" "}
+              {Math.round(((product.price - product.cost - (product.price * promC.pct) / 100) / product.price) * 100)}% ·{" "}
+              {money(product.price - product.cost - (product.price * promC.pct) / 100)} грн
+            </span>
+          )}
         </div>
       </div>
 

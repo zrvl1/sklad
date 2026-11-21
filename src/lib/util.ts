@@ -39,6 +39,12 @@ export function buildSearch(
   return [p.name, p.nameTranslate, p.sku, p.barcode, p.sdId, ...codes].filter(Boolean).join(" ").toLowerCase();
 }
 
+/** Пошук за кількома словами в будь-якому порядку: «фільтр cityr» знайде «Повітряний фільтр Lifan CityR 150» */
+export function searchWords(q: string) {
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+  return { AND: words.map((w) => ({ search: { contains: w } })) };
+}
+
 /** Ціна з урахуванням знижки, якщо знижка діє на вказану дату */
 export function finalPrice(
   p: { price: number; discountValue: number | null; discountType: string | null; discountFrom: Date | null; discountTo: Date | null },

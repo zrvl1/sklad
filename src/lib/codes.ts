@@ -1,3 +1,4 @@
+import { searchWords } from "./util";
 import { scanVariants } from "./scan";
 import { db } from "./db";
 import { buildSearch } from "./util";
@@ -75,7 +76,7 @@ export async function searchProducts(q: string, take = 20, toBase = false): Prom
   const exact = await findByCode(q, toBase);
   if (exact.length) return exact;
   const found = await db.product.findMany({
-    where: { deletedAt: null, search: { contains: q.trim().toLowerCase() } },
+    where: { deletedAt: null, ...searchWords(q) },
     select: productSelect,
     orderBy: { name: "asc" },
     take,

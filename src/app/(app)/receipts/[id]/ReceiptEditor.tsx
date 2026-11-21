@@ -19,6 +19,8 @@ type Line = {
   cellId: number | null;
   image?: string | null;
   stockTotal?: number; // зараз на складі (до проведення цього приходу)
+  promPct?: number | null; // середня комісія Prom з заявок (% від ціни)
+  promOwn?: boolean; // true — з заявок саме цього товару, false — середня по Prom
 };
 
 /** Попередження по рядку приходу: ловимо типові помилки введення до проведення */
@@ -35,7 +37,7 @@ function lineWarnings(l: Line, rate: number) {
   return w;
 }
 
-type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string; image?: string | null; stockTotal?: number };
+type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; matchedBy?: string; image?: string | null; stockTotal?: number; promPct?: number | null; promOwn?: boolean };
 
 type Props = {
   receiptId: number;
@@ -116,6 +118,8 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           prevCost: p.cost,
           image: p.image ?? null,
           stockTotal: p.stockTotal,
+          promPct: p.promPct ?? null,
+          promOwn: p.promOwn ?? false,
           newPrice: null,
           cellId: activeCellId,
         },
@@ -391,10 +395,25 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
                     const c = l.cost * (rate || 1);
                     if (!(sale > 0) || !(c > 0)) return null;
                     const m = Math.round(((sale - c) / sale) * 100);
+                    const color = (x: number) => (x < 15 ? "var(--err)" : x < 30 ? "var(--warn)" : "var(--ok)");
+                    const pc = l.promPct ? (sale * l.promPct) / 100 : 0;
+                    const mp = Math.round(((sale - c - pc) / sale) * 100);
                     return (
-                      <div className="small" style={{ color: m < 15 ? "var(--err)" : m < 30 ? "var(--warn)" : "var(--ok)" }} title="Маржа: (ціна − закупівля) / ціна">
-                        маржа {m}% · {fmt(sale - c)} грн
-                      </div>
+                      <>
+                        <div className="small" style={{ color: color(m) }} title="Маржа: (ціна − закупівля) / ціна">
+                          маржа {m}% · {fmt(sale - c)} грн
+                        </div>
+                        {l.promPct ? (
+                          <div
+                            className="small"
+                            style={{ color: color(mp) }}
+                            title={`Якщо продати через Prom: комісія ${l.promPct}% (${l.promOwn ? "з заявок цього товару" : "середня по Prom — цей товар там ще не продавався"}) ≈ ${fmt(pc)} грн`}
+                          >
+                            з Prom {mp}% · {fmt(sale - c - pc)} грн
+                            <span className="muted"> (−{l.promPct}%{l.promOwn ? "" : " сер."})</span>
+                          </div>
+                        ) : null}
+                      </>
                     );
                   })()}
                 </td>
