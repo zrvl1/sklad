@@ -85,10 +85,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>Категорії для нових товарів</h2>
           <p className="small muted">
-            SalesDrive у YML віддає лише категорії, де вже є товари ({ymlCats.length} шт.). Нові порожні категорії впишіть сюди — по одній на рядок, назва точно як у SalesDrive. Вони з&apos;являться у списку поля «Категорія».
+            SalesDrive у YML віддає лише категорії, де вже є товари ({ymlCats.length} шт.). Нові порожні категорії впишіть сюди — по одній на рядок, назва точно як у SalesDrive, а через «=» її ID з SalesDrive (число в списку категорій), напр. «Моторна олива = 152700000». З ID товар потрапить саме в цю категорію, а не в нову з такою ж назвою.
           </p>
           <form action={saveCustomCategories}>
-            <textarea name="cats" rows={5} style={{ width: "100%" }} defaultValue={customCats.join("\n")} placeholder={"Моторна олива\nОлива для амортизаторів (вилки)"} />
+            <textarea name="cats" rows={5} style={{ width: "100%" }} defaultValue={customCats.join("\n")} placeholder={"Моторна олива = 152700001\nОлива для амортизаторів (вилки) = 152700002"} />
             <button className="btn primary">Зберегти категорії</button>
           </form>
         </div>

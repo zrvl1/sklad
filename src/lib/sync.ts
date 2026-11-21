@@ -18,7 +18,9 @@ export async function syncFromYml() {
   const ymlText = await fetchYmlText();
   const offers = parseYml(ymlText);
   try {
-    await setSetting("ymlCategories", JSON.stringify(parseYmlCategories(ymlText)));
+    const yc = parseYmlCategories(ymlText);
+    await setSetting("ymlCategories", JSON.stringify(yc.names));
+    await setSetting("ymlCategoryIds", JSON.stringify(yc.ids));
   } catch {}
   if (currencyEnabled()) {
     try {

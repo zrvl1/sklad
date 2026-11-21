@@ -13,6 +13,7 @@ import { setCellQty } from "@/lib/stock";
 import { buildSearch, getSetting, logAction, num, setSetting, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
 import { nextSku } from "@/lib/nextcodes";
+import { categoryIdFor } from "@/lib/categories";
 
 /** Характеристики як стабільний JSON (для порівняння "чи змінилося") */
 function normParams(json: string) {
@@ -90,7 +91,9 @@ export async function saveProduct(formData: FormData) {
     keywordsUa: str(formData.get("keywordsUa")),
     country: str(formData.get("country")),
     params: normParams(String(formData.get("params") ?? "[]")) as string | null,
+    categorySdId: null as string | null,
   };
+  data.categorySdId = await categoryIdFor(data.categoryName);
   // Новий товар: порожня українська версія перекладається автоматично (DeepL; ключові слова без DeepL — за словником).
   // В наявних товарах не чіпаємо: українська назва з SalesDrive може не приходити в YML, і ми б її затерли.
   if (!id) {
@@ -230,7 +233,8 @@ export async function createProductQuick(input: {
   const costData = cur
     ? { cost: toUah(input.cost || 0, cur, await getRates()), costCurrency: cur, costOriginal: input.cost || 0 }
     : { cost: input.cost || 0, costCurrency: null, costOriginal: null };
-  const data = { name: input.name.trim(), price: input.price || 0, barcode, categoryName: input.categoryName?.trim() || null };
+  const catName = input.categoryName?.trim() || null;
+  const data = { name: input.name.trim(), price: input.price || 0, barcode, categoryName: catName, categorySdId: await categoryIdFor(catName) };
   const created = await db.product.create({ data: { ...data, ...costData, search: buildSearch(data) } });
   await finalizeNewProduct(created.id, { genBarcode: input.genBarcode ?? true, genSku: input.genSku ?? true });
   await applyTemplate(created.id);

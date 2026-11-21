@@ -108,7 +108,8 @@ async function ymlCategoryNames(): Promise<string[]> {
     const { getSetting } = await import("./util");
     const yml = JSON.parse((await getSetting("ymlCategories")) ?? "[]") as string[];
     const custom = JSON.parse((await getSetting("customCategories")) ?? "[]") as string[];
-    return [...yml, ...custom];
+    const { parseCustomLine } = await import("./categories");
+    return [...yml, ...custom.map((l) => parseCustomLine(l).name)];
   } catch {
     return [];
   }

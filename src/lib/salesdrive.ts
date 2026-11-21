@@ -143,8 +143,9 @@ export function productToSd(
   if (p.supplierName) payload.supplier = p.supplierName;
   if (p.categorySdId || p.categoryName) {
     payload.category = {};
+    // є ID — шлемо тільки його (за назвою SalesDrive може створити нову категорію-дублікат)
     if (p.categorySdId) payload.category.id = p.categorySdId;
-    if (p.categoryName) payload.category.name = p.categoryName;
+    else if (p.categoryName) payload.category.name = p.categoryName;
   }
   if (p.discountValue && p.discountValue > 0) {
     payload.discount = {
@@ -290,16 +291,21 @@ export async function fetchYmlText() {
  * Розбір YML. Назви тегів у різних CRM трохи відрізняються, тому перевіряємо кілька варіантів.
  * Якщо якесь поле не підтягується — запустіть `npm run yml:inspect` і допишіть потрібний тег тут.
  */
-/** Усі категорії з YML (зокрема порожні, ще без товарів) */
-export function parseYmlCategories(xml: string): string[] {
+/** Усі категорії з YML: назви і ID (ID лише для назв, що не повторюються) */
+export function parseYmlCategories(xml: string): { names: string[]; ids: Record<string, string> } {
   const doc = ymlParser.parse(xml);
   const shop = doc?.yml_catalog?.shop ?? doc?.shop ?? {};
-  const out: string[] = [];
+  const byName = new Map<string, Set<string>>();
   for (const c of (shop.categories?.category ?? []) as Record<string, unknown>[]) {
     const name = text(c as Node)?.trim();
-    if (name) out.push(name);
+    const id = text(c["@_id"] as Node);
+    if (!name) continue;
+    if (!byName.has(name)) byName.set(name, new Set());
+    if (id) byName.get(name)!.add(id);
   }
-  return [...new Set(out)];
+  const ids: Record<string, string> = {};
+  for (const [n, set] of byName) if (set.size === 1) ids[n] = [...set][0];
+  return { names: [...byName.keys()], ids };
 }
 
 export function parseYml(xml: string): YmlOffer[] {
