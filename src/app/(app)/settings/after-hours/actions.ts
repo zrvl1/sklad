@@ -35,3 +35,16 @@ export async function testAfterHours() {
   }
   redirect("/settings/after-hours?msg=" + encodeURIComponent(msg));
 }
+
+export async function refreshStatuses() {
+  await requirePerm("settings");
+  let msg: string;
+  try {
+    const { fetchStatuses } = await import("@/lib/orders");
+    const list = await fetchStatuses();
+    msg = `Статуси оновлено з SalesDrive: ${list.length}`;
+  } catch (e) {
+    msg = `Не вдалося оновити статуси: ${e instanceof Error ? e.message : e}`;
+  }
+  redirect("/settings/after-hours?msg=" + encodeURIComponent(msg));
+}

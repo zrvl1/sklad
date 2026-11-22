@@ -3,7 +3,7 @@ import { requirePerm } from "@/lib/auth";
 import { getSetting } from "@/lib/util";
 import { cachedStatuses, fetchStatuses } from "@/lib/orders";
 import { afterHoursCfg, writeKeyConfigured, type AfterHoursLog } from "@/lib/afterHours";
-import { saveAfterHours, testAfterHours } from "./actions";
+import { refreshStatuses, saveAfterHours, testAfterHours } from "./actions";
 
 export default async function AfterHoursPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
   await requirePerm("settings");
@@ -84,9 +84,14 @@ export default async function AfterHoursPage({ searchParams }: { searchParams: P
           Зберегти
         </button>
       </form>
-      <form action={testAfterHours} className="toolbar">
-        <button className="btn">Перевірити зараз (нічого не змінює)</button>
-      </form>
+      <div className="toolbar">
+        <form action={testAfterHours}>
+          <button className="btn">Перевірити зараз (нічого не змінює)</button>
+        </form>
+        <form action={refreshStatuses}>
+          <button className="btn">⟳ Оновити статуси з SalesDrive</button>
+        </form>
+      </div>
       {log.length > 0 && (
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>Останні зміни</h2>
