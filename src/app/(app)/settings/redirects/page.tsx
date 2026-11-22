@@ -50,6 +50,9 @@ export default async function RedirectsPage({ searchParams }: { searchParams: Pr
             <a className="btn sm" href="/api/seo/redirects">
               ⬇ Excel (без домену)
             </a>
+            <a className="btn sm" href="/api/seo/redirects?full=1&ru=strip" title="Російські адреси без /ru/ — Horoshop не знаходить посилання з /ru/; українські, що вже є, пропущено">
+              ⬇ Excel: російські без /ru/
+            </a>
             <a className="btn sm" href="/api/seo/redirects?full=1&fmt=csv">
               ⬇ CSV через кому
             </a>
