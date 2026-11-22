@@ -85,3 +85,13 @@ export function readXlsx(buf: Buffer): string[][] {
   }
   return rows;
 }
+
+/** Усі текстові значення з усіх аркушів .xlsx (для пошуку, напр., URL-адрес у будь-якому аркуші) */
+export function xlsxAllStrings(buf: Buffer): string[] {
+  const files = unzip(buf);
+  const out: string[] = [];
+  const ss = files.get("xl/sharedStrings.xml")?.toString("utf8");
+  if (ss) for (const si of ss.match(/<si>[\s\S]*?<\/si>/g) ?? []) out.push(unxml([...si.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((m) => m[1]).join("")));
+  for (const [k, v] of files) if (/^xl\/worksheets\/sheet\d+\.xml$/.test(k)) for (const m of v.toString("utf8").matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)) out.push(unxml(m[1]));
+  return out;
+}
