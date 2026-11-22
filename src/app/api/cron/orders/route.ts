@@ -12,7 +12,15 @@ export async function GET(req: Request) {
   if (!secret || secret.length < 16 || given.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected))) {
     return new Response("unauthorized", { status: 401 });
   }
-  if (!(await backfillState())) return Response.json({ ok: true, idle: true });
+  // Нові заявки в неробочий час → статус «Новий СМС» (автоSMS у SalesDrive)
+  let afterHours: unknown = null;
+  try {
+    const { afterHoursCfg, nowAfterHours, runAfterHours } = await import("@/lib/afterHours");
+    if ((await afterHoursCfg()).enabled && (await nowAfterHours())) afterHours = await runAfterHours();
+  } catch (e) {
+    afterHours = { error: e instanceof Error ? e.message : String(e) };
+  }
+  if (!(await backfillState())) return Response.json({ ok: true, idle: true, afterHours });
   try {
     return Response.json({ ok: true, ...(await backfillOrders()) });
   } catch (e) {
