@@ -9,7 +9,8 @@ export async function saveLabelCfg(formData: FormData) {
   await requirePerm("settings");
   const low = Math.max(0, Number(formData.get("low")) || 100);
   const high = Math.max(low + 1, Number(formData.get("high")) || 250);
-  const idField = formData.get("idField") === "sku" ? "sku" : "sdId";
+  const v = formData.get("idField");
+  const idField = v === "sku" || v === "sdId" ? v : "both";
   await setSetting("merchantLabelCfg", JSON.stringify({ low, high, idField }));
   redirect("/settings/merchant-feed?msg=" + encodeURIComponent("Збережено"));
 }

@@ -44,6 +44,7 @@ export default async function MerchantFeedPage({ searchParams }: { searchParams:
         <input name="high" defaultValue={cfg.high} style={{ width: 70 }} />
         <span className="small">грн. ID товару в Merchant =</span>
         <select name="idField" defaultValue={cfg.idField}>
+          <option value="both">обидва (ID SalesDrive і SKU) — рекомендовано</option>
           <option value="sdId">ID SalesDrive (як «Артикул» у Horoshop)</option>
           <option value="sku">SKU (CM…)</option>
         </select>

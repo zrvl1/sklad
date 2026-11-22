@@ -1,14 +1,14 @@
 import { db } from "./db";
 import { getSetting } from "./util";
 
-export type LabelCfg = { low: number; high: number; idField: "sdId" | "sku" };
+export type LabelCfg = { low: number; high: number; idField: "both" | "sdId" | "sku" };
 
 export async function labelCfg(): Promise<LabelCfg> {
   try {
     const c = JSON.parse((await getSetting("merchantLabelCfg")) ?? "{}") as Partial<LabelCfg>;
-    return { low: c.low ?? 100, high: c.high ?? 250, idField: c.idField === "sku" ? "sku" : "sdId" };
+    return { low: c.low ?? 100, high: c.high ?? 250, idField: c.idField === "sku" || c.idField === "sdId" ? c.idField : "both" };
   } catch {
-    return { low: 100, high: 250, idField: "sdId" };
+    return { low: 100, high: 250, idField: "both" };
   }
 }
 
@@ -27,10 +27,12 @@ export async function labelRows(): Promise<LabelRow[]> {
   const stockOf = new Map<number, number>(products.map((p) => [p.id, p.stocks.reduce((s, x) => s + Number(x.qty), 0)]));
   const out: LabelRow[] = [];
   for (const p of products) {
-    const id = cfg.idField === "sku" ? p.sku : p.sdId;
-    if (!id) continue;
+    // у Merchant ID товару буває і ID SalesDrive (3168664887, W000476), і SKU (CM0518-1) — даємо обидва, зайві Merchant пропустить
+    const ids = [...new Set([cfg.idField !== "sku" ? p.sdId : null, cfg.idField !== "sdId" ? p.sku : null].filter((x): x is string => !!x))];
+    if (!ids.length) continue;
     const st: number = p.baseProductId ? Math.floor((stockOf.get(p.baseProductId) ?? 0) / (p.kitQty || 1)) : (stockOf.get(p.id) ?? 0);
     const m = p.price > 0 && p.cost > 0 ? p.price - p.cost : null;
+    for (const id of ids)
     out.push({
       id,
       name: p.nameTranslate || p.name,
