@@ -45,7 +45,10 @@ export default async function RedirectsPage({ searchParams }: { searchParams: Pr
             </Link>
             <span className="spacer" />
             <a className="btn primary sm" href="/api/seo/redirects">
-              ⬇ CSV для Horoshop
+              ⬇ CSV (адреси без домену)
+            </a>
+            <a className="btn sm" href="/api/seo/redirects?full=1">
+              ⬇ CSV (повні посилання)
             </a>
           </div>
           <table className="small">
