@@ -211,6 +211,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <a className="btn sm" href="/api/prom/ua-keywords">
                     ⬇ Файл для імпорту на Prom (CSV)
                   </a>
+                  <a className="btn sm" href="/api/export/brands" title="Бренди для імпорту в Horoshop (SalesDrive їх туди не передає)">
+                    ⬇ Бренди для Horoshop (CSV)
+                  </a>
                   <Link className="btn sm" href="/settings/prom-commission">
                     % Комісії Prom по категоріях
                   </Link>
