@@ -14,7 +14,20 @@ export async function GET(req: Request) {
   try {
     list = JSON.parse((await getSetting("redirects404")) ?? "[]");
   } catch {}
+  const fmt = new URL(req.url).searchParams.get("fmt") ?? "xlsx";
+  const rows = list.map((r) => [abs(r.from), abs(r.to)]);
+  if (fmt === "xlsx") {
+    const { writeXlsx } = await import("@/lib/xlsxWrite");
+    // без заголовка: дві колонки — стара адреса, нова адреса
+    return new Response(new Uint8Array(writeXlsx(rows, "Редиректи")), {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="redirects-301${full ? "-full" : ""}.xlsx"`,
+      },
+    });
+  }
   const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  const body = ["Звідки;Куди", ...list.map((r) => `${q(abs(r.from))};${q(abs(r.to))}`)].join("\r\n");
+  // CSV через кому, без заголовка
+  const body = rows.map(([a, b]) => `${q(a)},${q(b)}`).join("\r\n");
   return new Response("﻿" + body, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="redirects-301.csv"' } });
 }

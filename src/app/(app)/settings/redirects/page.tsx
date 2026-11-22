@@ -44,11 +44,14 @@ export default async function RedirectsPage({ searchParams }: { searchParams: Pr
               На головну ({count("головна")})
             </Link>
             <span className="spacer" />
-            <a className="btn primary sm" href="/api/seo/redirects">
-              ⬇ CSV (адреси без домену)
+            <a className="btn primary sm" href="/api/seo/redirects?full=1">
+              ⬇ Excel (повні посилання)
             </a>
-            <a className="btn sm" href="/api/seo/redirects?full=1">
-              ⬇ CSV (повні посилання)
+            <a className="btn sm" href="/api/seo/redirects">
+              ⬇ Excel (без домену)
+            </a>
+            <a className="btn sm" href="/api/seo/redirects?full=1&fmt=csv">
+              ⬇ CSV через кому
             </a>
           </div>
           <table className="small">
