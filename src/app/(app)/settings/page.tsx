@@ -211,6 +211,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <a className="btn sm" href="/api/prom/ua-keywords">
                     ⬇ Файл для імпорту на Prom (CSV)
                   </a>
+                  <Link className="btn sm" href="/settings/merchant-feed">
+                    🏷 Фід міток для Merchant
+                  </Link>
                   <Link className="btn sm" href="/settings/redirects">
                     ↪ Редиректи 404
                   </Link>
