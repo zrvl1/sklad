@@ -127,6 +127,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
                       <Link href={`/messages?order=${o.id}`}>
                         <b>{o.id}</b>
                       </Link>
+                      {o.extId && o.extId !== String(o.id) && <div className="small muted">зам. {o.extId}</div>}
                     </td>
                     <td className="small">{o.time.slice(0, 16)}</td>
                     <td>
@@ -151,7 +152,8 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
         <>
           <div className="panel">
             <b>
-              Заявка №{info.id} · {info.name || "без імені"}
+              Заявка №{info.id}
+              {info.extId && info.extId !== String(info.id) ? ` (замовлення ${info.extId})` : ""} · {info.name || "без імені"}
             </b>{" "}
             · {info.phone || "немає телефону"} · {info.delivery}
             {info.ttn ? ` · ТТН ${info.ttn}` : ""}

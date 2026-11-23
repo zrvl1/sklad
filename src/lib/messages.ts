@@ -160,6 +160,7 @@ const money = (v: number) => v.toLocaleString("uk-UA", { minimumFractionDigits: 
 
 export type OrderInfo = {
   id: number;
+  extId: string; // зовнішній номер замовлення (сайт/Prom) — його бачить клієнт
   time: string;
   statusId: number;
   name: string;
@@ -205,6 +206,7 @@ export function parseOrder(o: Record<string, unknown>, opts: Record<string, Reco
   const site = str(o.sajt ?? keys.filter((k) => /^(sait|site|shop|sayt)$/i.test(k)).map((k) => o[k])[0]);
   return {
     id: Number(o.id),
+    extId: str(o.externalId ?? o.external_id ?? o.externalNumber),
     time: str(o.orderTime),
     statusId: Number(o.statusId) || 0,
     name,
@@ -225,7 +227,9 @@ export function parseOrder(o: Record<string, unknown>, opts: Record<string, Reco
 export function fill(text: string, o: OrderInfo, shop: Record<string, string>) {
   const isProm = /prom/i.test(o.site);
   const vars: Record<string, string> = {
-    номер: String(o.id),
+    // клієнт знає номер замовлення з сайту / Prom, а не внутрішній номер SalesDrive
+    номер: o.extId || String(o.id),
+    номер_заявки: String(o.id),
     "ім'я": o.firstName || "",
     піб: o.name,
     телефон: o.phone,
