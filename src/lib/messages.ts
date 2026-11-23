@@ -21,7 +21,7 @@ export const DEFAULT_TEMPLATES: MsgTemplate[] = [
 Доставка: {доставка}
 Отримувач: {піб}, {телефон}
 
-🚚 Відправляємо двічі на день — до 12:00 і до 17:00. ТТН надішлемо окремим повідомленням.
+🚚 {відправка}. ТТН надішлемо окремим повідомленням.
 ⚠️ Під час повітряної тривоги відділення Нової пошти зачиняються, тому відправка може перенестися на наступний день до 12:00.
 
 Помітили помилку в даних? Напишіть у відповідь.
@@ -39,7 +39,7 @@ ${ASK}`,
 Доставка: {доставка}
 Отримувач: {піб}, {телефон}
 
-Будь ласка, підтвердіть замовлення відповіддю «Так» — і ми відправимо його найближчим часом (до 12:00 або до 17:00).
+Будь ласка, підтвердіть замовлення відповіддю «Так». 🚚 {відправка}.
 ⚠️ Під час повітряної тривоги відділення Нової пошти зачиняються, тому відправка може перенестися на наступний день до 12:00.
 
 ${ASK}`,
@@ -223,6 +223,20 @@ export function parseOrder(o: Record<string, unknown>, opts: Record<string, Reco
   };
 }
 
+/**
+ * Коли відправимо — залежно від того, о котрій зараз (Київ) надсилається повідомлення:
+ * до 11:30 → сьогодні до 12:00; до 16:30 (Пн–Пт) → сьогодні до 17:00; інакше → завтра до 12:00.
+ */
+export function shipLine(now = new Date()) {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
+  const m = Number(g("hour")) * 60 + Number(g("minute"));
+  const weekend = g("weekday") === "Sat" || g("weekday") === "Sun";
+  if (m < 11 * 60 + 30) return "Відправимо сьогодні до 12:00";
+  if (!weekend && m < 16 * 60 + 30) return "Відправимо сьогодні до 17:00";
+  return "Відправимо завтра до 12:00";
+}
+
 /** Підставити дані заявки й контакти магазину в шаблон */
 export function fill(text: string, o: OrderInfo, shop: Record<string, string>) {
   const isProm = /prom/i.test(o.site);
@@ -230,6 +244,7 @@ export function fill(text: string, o: OrderInfo, shop: Record<string, string>) {
     // клієнт знає номер замовлення з сайту / Prom, а не внутрішній номер SalesDrive
     номер: o.extId || String(o.id),
     номер_заявки: String(o.id),
+    відправка: shipLine(),
     "ім'я": o.firstName || "",
     піб: o.name,
     телефон: o.phone,
