@@ -175,7 +175,14 @@ export type OrderInfo = {
   site: string;
 };
 
-export function parseOrder(o: Record<string, unknown>): OrderInfo {
+/** Назва з довідника SalesDrive замість id (сайт 19 → crane-moto.com, оплата 6 → «Накладений платіж») */
+export function nameFromOptions(opts: Record<string, Record<string, string>>, keys: string[], v: string) {
+  if (!v || !/^\d+$/.test(v)) return v;
+  for (const k of keys) if (opts[k]?.[v]) return opts[k][v];
+  return v;
+}
+
+export function parseOrder(o: Record<string, unknown>, opts: Record<string, Record<string, string>> = {}): OrderInfo {
   const c = (o.primaryContact ?? (Array.isArray(o.contacts) ? o.contacts[0] : null) ?? {}) as Record<string, unknown>;
   const firstName = str(c.fName);
   const name = [str(c.lName), firstName, str(c.mName)].filter(Boolean).join(" ");
@@ -196,7 +203,22 @@ export function parseOrder(o: Record<string, unknown>): OrderInfo {
   const cod = num(dd.cashOnDeliveryAmount ?? dd.cod ?? dd.backwardDeliveryAmount);
   const keys = Object.keys(o);
   const site = str(o.sajt ?? keys.filter((k) => /^(sait|site|shop|sayt)$/i.test(k)).map((k) => o[k])[0]);
-  return { id: Number(o.id), time: str(o.orderTime), statusId: Number(o.statusId) || 0, name, firstName: shortName || firstName, phone, items, titles, total, payment: str(o.payment_method ?? o.paymentMethod), delivery, ttn, cod, site };
+  return {
+    id: Number(o.id),
+    time: str(o.orderTime),
+    statusId: Number(o.statusId) || 0,
+    name,
+    firstName: shortName || firstName,
+    phone,
+    items,
+    titles,
+    total,
+    payment: nameFromOptions(opts, ["payment_method", "paymentMethod"], str(o.payment_method ?? o.paymentMethod)),
+    delivery,
+    ttn,
+    cod,
+    site: nameFromOptions(opts, ["sajt", "site", "sait"], site),
+  };
 }
 
 /** Підставити дані заявки й контакти магазину в шаблон */

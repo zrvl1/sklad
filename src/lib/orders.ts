@@ -252,9 +252,62 @@ async function fetchOrderPages(filter: Record<string, string>, firstPage: number
  */
 export async function fetchOrderLive(id: number): Promise<Record<string, unknown> | null> {
   if (!ordersEnabled()) throw new Error("Не налаштовано SALESDRIVE_ORDERS_KEY");
-  const r = await sdGetList({ "filter[id]": String(id), "filter[statusId]": "__NOTDELETED__", limit: "1" });
-  const list = (r?.data ?? []) as Record<string, unknown>[];
-  return list.find((o) => Number(o.id) === id) ?? list[0] ?? null;
+  // SalesDrive може ігнорувати невідомий фільтр і віддати останні заявки — тому завжди звіряємо id
+  const tries: Record<string, string>[] = [
+    { "filter[id]": String(id), limit: "5" },
+    { "filter[id][from]": String(id), "filter[id][to]": String(id), limit: "5" },
+    { "filter[id][]": String(id), limit: "5" },
+  ];
+  // формат фільтра, що спрацював минулого разу, — першим (кожен запит списку = пауза 6,5 с)
+  const known = Number((await getSetting("sdIdFilter")) ?? "-1");
+  const order = known >= 0 && known < tries.length ? [known, ...tries.keys()].filter((v, i, a) => a.indexOf(v) === i) : [...tries.keys()];
+  for (const i of order) {
+    try {
+      const r = await sdGetList(tries[i]);
+      await rememberFieldOptions(r?.meta);
+      const hit = ((r?.data ?? []) as Record<string, unknown>[]).find((o) => Number(o.id) === id);
+      if (hit) {
+        if (i !== known) await setSetting("sdIdFilter", String(i));
+        return hit;
+      }
+    } catch {
+      /* пробуємо інший формат фільтра */
+    }
+  }
+  // запасний шлях: останні змінені заявки (2 сторінки по 100)
+  for (let page = 1; page <= 2; page++) {
+    const r = await sdGetList({ limit: "100", page: String(page), "filter[updateAt][from]": sdTime(new Date(Date.now() - 30 * 864e5)) });
+    const hit = ((r?.data ?? []) as Record<string, unknown>[]).find((o) => Number(o.id) === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Довідники полів заявки (сайт, спосіб оплати…) з meta відповіді SalesDrive: { поле: { id: назва } } */
+async function rememberFieldOptions(meta: unknown) {
+  if (!meta || typeof meta !== "object") return;
+  const fields = ((meta as Record<string, unknown>).fields ?? meta) as Record<string, unknown>;
+  const out: Record<string, Record<string, string>> = {};
+  for (const [k, v] of Object.entries(fields ?? {})) {
+    const opts = (v && typeof v === "object" ? ((v as Record<string, unknown>).options ?? (v as Record<string, unknown>).values) : null) as unknown;
+    if (!Array.isArray(opts)) continue;
+    const m: Record<string, string> = {};
+    for (const o of opts as Record<string, unknown>[]) {
+      const val = o.value ?? o.id;
+      const text = o.text ?? o.name ?? o.title;
+      if (val !== undefined && text) m[String(val)] = String(text);
+    }
+    if (Object.keys(m).length) out[k] = m;
+  }
+  if (Object.keys(out).length) await setSetting("sdFieldOptions", JSON.stringify(out));
+}
+
+export async function fieldOptions(): Promise<Record<string, Record<string, string>>> {
+  try {
+    return JSON.parse((await getSetting("sdFieldOptions")) ?? "{}");
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -266,6 +319,7 @@ export async function fetchOrdersByStatusLive(statusIds: number[]): Promise<Reco
   const out: Record<string, unknown>[] = [];
   for (const st of statusIds.slice(0, 3)) {
     const r = await sdGetList({ "filter[statusId]": String(st), limit: "100", page: "1" });
+    await rememberFieldOptions(r?.meta);
     out.push(...((r?.data ?? []) as Record<string, unknown>[]));
   }
   return out;

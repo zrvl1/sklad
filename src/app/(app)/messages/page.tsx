@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { can, requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { cachedStatuses, fetchOrderLive, fetchOrdersByStatusLive, fetchStatuses, normTtn } from "@/lib/orders";
+import { cachedStatuses, fetchOrderLive, fetchOrdersByStatusLive, fetchStatuses, fieldOptions, normTtn } from "@/lib/orders";
 import { fill, listStatusIds, loadShop, loadTemplates, parseOrder, suggestTemplate } from "@/lib/messages";
 import { saveListStatuses } from "./settings/actions";
 import MessageCards from "./MessageCards";
@@ -29,7 +29,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
       if (!raw) error = `Заявку №${orderId} не знайдено в SalesDrive`;
       else {
         keys = Object.keys(raw);
-        info = parseOrder(raw);
+        info = parseOrder(raw, await fieldOptions());
         const [tpls, shop] = await Promise.all([loadTemplates(), loadShop()]);
         cards = tpls.map((t) => ({ key: t.key, title: t.title, text: fill(t.text, info!, shop) }));
       }
@@ -50,7 +50,9 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   let listError: string | null = null;
   if (!q && listIds.length) {
     try {
-      list = (await fetchOrdersByStatusLive(listIds)).map(parseOrder).sort((a, b) => b.time.localeCompare(a.time));
+      const raw = await fetchOrdersByStatusLive(listIds);
+      const opts = await fieldOptions();
+      list = raw.map((o) => parseOrder(o, opts)).sort((a, b) => b.time.localeCompare(a.time));
     } catch (e) {
       listError = `SalesDrive: ${e instanceof Error ? e.message : e}`;
     }
@@ -153,7 +155,13 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
             </b>{" "}
             · {info.phone || "немає телефону"} · {info.delivery}
             {info.ttn ? ` · ТТН ${info.ttn}` : ""}
-            {sp.debug && <div className="small muted">Поля заявки: {keys.join(", ")}</div>}
+            {sp.debug && (
+              <div className="small muted">
+                Поля заявки: {keys.join(", ")}
+                <br />
+                Довідники: {JSON.stringify(await fieldOptions()).slice(0, 600)}
+              </div>
+            )}
           </div>
           <MessageCards cards={cards} phone={info.phone} suggested={suggested} />
         </>
