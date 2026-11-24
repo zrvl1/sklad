@@ -78,6 +78,7 @@ function feedCategoryPaths(doc: Record<string, unknown>): Map<string, string> {
     const c = raw.get(id);
     if (!c) return "";
     const up = c.parent && depth < 8 ? pathOf(c.parent, depth + 1) : "";
+    if (!c.name) return up; // категорія без назви — товари лишаються в батьківській
     return up ? `${up} › ${c.name}` : c.name;
   };
   for (const id of raw.keys()) paths.set(id, pathOf(id));
