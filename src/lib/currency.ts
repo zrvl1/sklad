@@ -1,4 +1,15 @@
 import { db } from "./db";
+import { getSetting } from "./util";
+
+/** Курси, які власник вводить сам у додатку (щодня) — їх не перезаписуємо курсами SalesDrive */
+export type ManualRates = Record<string, { rate: number; at: string }>;
+export async function manualRates(): Promise<ManualRates> {
+  try {
+    return JSON.parse((await getSetting("manualRates")) ?? "{}") as ManualRates;
+  } catch {
+    return {};
+  }
+}
 
 export const BASE = "UAH";
 
@@ -15,14 +26,17 @@ export async function refreshRates() {
   if (!res.ok) throw new Error(`Курси валют: SalesDrive відповів ${res.status}: ${text.slice(0, 200)}`);
   const data = JSON.parse(text) as { baseCurrency?: string; currencies?: { code: string; rate: number | string }[] };
   const list = (data.currencies ?? []).map((c) => ({ code: String(c.code).toUpperCase(), rate: Number(c.rate) })).filter((c) => c.code && c.rate > 0);
-  for (const c of list) await db.currency.upsert({ where: { code: c.code }, update: { rate: c.rate }, create: c });
+  const manual = await manualRates();
+  for (const c of list) if (!manual[c.code]) await db.currency.upsert({ where: { code: c.code }, update: { rate: c.rate }, create: c });
   return { base: data.baseCurrency ?? BASE, list };
 }
 
 /** Курси з кешу; якщо застаріли (більше години) — оновлюємо з SalesDrive */
 export async function getRates(): Promise<Record<string, number>> {
   let rows = await db.currency.findMany();
-  const stale = !rows.length || rows.some((r) => Date.now() - r.updatedAt.getTime() > 60 * 60 * 1000);
+  const manual = await manualRates().catch(() => ({}) as ManualRates);
+  const auto = rows.filter((r) => !manual[r.code]);
+  const stale = !rows.length || auto.some((r) => Date.now() - r.updatedAt.getTime() > 60 * 60 * 1000);
   if (stale) {
     try {
       await refreshRates();

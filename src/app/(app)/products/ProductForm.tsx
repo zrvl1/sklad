@@ -61,6 +61,14 @@ export default function ProductForm({
         <label>
           Ціна продажу, грн
           <input name="price" type="number" min={0} step="0.01" defaultValue={p?.price ?? ""} />
+          {p?.rrp ? (
+            <select name="priceMode" defaultValue={p.priceLocked ? "manual" : "auto"} className="small" style={{ marginTop: 4 }}>
+              <option value="auto">
+                авто: РРЦ {p.rrp} {p.rrpCurrency} × курс
+              </option>
+              <option value="manual">вручну (не перераховувати)</option>
+            </select>
+          ) : null}
         </label>
         <label>
           Собівартість{showCurrency ? "" : ", грн"}

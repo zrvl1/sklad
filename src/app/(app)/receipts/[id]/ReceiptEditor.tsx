@@ -249,7 +249,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
               ))}
             </select>
             {cur !== "UAH" && (
-              <span className="small muted">{rate ? `курс SalesDrive: 1 ${cur} = ${rate} грн` : "немає курсу — додайте валюту в SalesDrive"}</span>
+              <span className="small muted">{rate ? `курс: 1 ${cur} = ${rate} грн (змінити — «Постачальники»)` : "немає курсу — введіть у «Постачальники → Курс на сьогодні»"}</span>
             )}
           </span>
         </label>

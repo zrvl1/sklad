@@ -203,7 +203,21 @@ export async function saveProduct(formData: FormData) {
       paramsMode: before.params === null ? "add" : "replace",
       withCost: before.cost !== costData.cost || (before.costCurrency ?? null) !== costData.costCurrency || (before.costOriginal ?? null) !== costData.costOriginal,
     };
-    await db.product.update({ where: { id }, data: { ...data, ...costData, textEditedAt: new Date(), search: buildSearch(data) } });
+    // ціна з РРЦ × курс: змінили ціну вручну — фіксуємо її; повернули «авто» — перераховуємо з РРЦ
+    const lockData: { priceLocked?: boolean } = {};
+    if (formData.has("priceMode") && before.rrp) {
+      const wantAuto = formData.get("priceMode") === "auto";
+      if (wantAuto && before.priceLocked) {
+        const { priceFromRrp } = await import("@/lib/supplierFeed");
+        const sup = before.supplierId ? await db.supplier.findUnique({ where: { id: before.supplierId } }) : null;
+        const np = priceFromRrp(before.rrp, before.rrpCurrency ?? "USD", await getRates(), sup?.roundTo ?? 10);
+        if (np) data.price = np;
+        lockData.priceLocked = false;
+      } else if (wantAuto && before.price !== data.price) lockData.priceLocked = true;
+      else lockData.priceLocked = !wantAuto;
+      opts.withPrice = before.price !== data.price;
+    }
+    await db.product.update({ where: { id }, data: { ...data, ...costData, ...lockData, textEditedAt: new Date(), search: buildSearch(data) } });
     productId = id;
     await finalizeNewProduct(id, gen);
     await logAction(user.id, "update", "product", id, data);
@@ -820,4 +834,98 @@ export async function alignKitPrices() {
   redirect(
     `/products/kits?${err ? `warn=${encodeURIComponent(`Ціни в додатку вирівняно, але SalesDrive не прийняв: ${err}`)}` : `msg=${encodeURIComponent(`Ціни карток вирівняно за основними (основних: ${bases.length}, карток: ${before})`)}`}`
   );
+}
+
+/**
+ * Створити товар з фіду постачальника за кодом: назва, опис (таблиця характеристик), характеристики, бренд,
+ * усі фото (копіюються в додаток), РРЦ × курс як ціна, код постачальника для накладних.
+ */
+export async function createFromSupplierItem(input: { supplierId: number; code: string; name?: string; categoryName?: string; cost?: number; costCurrency?: string }) {
+  const user = await requirePerm("products.edit");
+  const { paramsHtml, priceFromRrp } = await import("@/lib/supplierFeed");
+  const s = await db.supplier.findUnique({ where: { id: input.supplierId } });
+  const it = await db.supplierItem.findUnique({ where: { supplierId_code: { supplierId: input.supplierId, code: input.code.trim() } } });
+  if (!s || !it) return { ok: false as const, error: "Товар з таким кодом не знайдено у фіді постачальника" };
+  const already = await codeOwner(it.code);
+  if (already) return { ok: false as const, error: `Код ${it.code} вже прив'язаний до «${already.name}»` };
+
+  const params = (() => {
+    try {
+      return JSON.parse(it.params ?? "[]") as { name: string; value: string }[];
+    } catch {
+      return [];
+    }
+  })();
+  const rates = await getRates();
+  const rrp = s.feedPriceType === "rrp" && it.price > 0 ? it.price : null;
+  const price = rrp ? (priceFromRrp(rrp, it.currency, rates, s.roundTo) ?? 0) : 0;
+  const cur = input.costCurrency && input.costCurrency !== "UAH" ? input.costCurrency : null;
+  const costIn = input.cost ?? (s.feedPriceType === "cost" ? it.price : 0);
+  const costData = cur
+    ? { cost: toUah(costIn || 0, cur, rates), costCurrency: cur, costOriginal: costIn || 0 }
+    : { cost: costIn || 0, costCurrency: null, costOriginal: null };
+  // категорія — лише наявна в SalesDrive (інакше SalesDrive створить зайву категорію в корені); вибір запам'ятовуємо для категорії фіду
+  const cat = await findCategory(input.categoryName ?? it.category);
+  if (cat && it.category && input.categoryName) {
+    let map: Record<string, string> = {};
+    try {
+      map = JSON.parse((await getSetting("feedCategoryMap")) ?? "{}");
+    } catch {}
+    map[`${s.id}:${it.category}`] = cat.path;
+    await setSetting("feedCategoryMap", JSON.stringify(map));
+  }
+  const name = (input.name ?? it.name).trim();
+  const data = {
+    name,
+    price,
+    categoryName: cat?.name ?? null,
+    categorySdId: cat?.id ?? null,
+    description: paramsHtml(params) || null,
+    params: JSON.stringify(params.map((p) => ({ name: p.name, type: "text", value: p.value }))),
+    manufacturer: it.brand,
+    supplierName: s.name,
+    supplierId: s.id,
+    supplierCode: it.code,
+    rrp,
+    rrpCurrency: rrp ? it.currency : null,
+  };
+  const created = await db.product.create({ data: { ...data, ...costData, search: buildSearch(data) } });
+  await finalizeNewProduct(created.id, { genBarcode: true, genSku: true });
+  await addCode(created.id, it.code, "supplier", s.id).catch(() => null);
+  // артикул постачальника теж шукається в накладних
+  if (it.article && it.article !== it.code) await addCode(created.id, it.article, "supplier", s.id).catch(() => null);
+
+  // фото постачальника → у додаток (його посилання http:// з портом сайти й Google не приймають)
+  const { ownImageUrl } = await import("@/lib/images");
+  const urls: string[] = [];
+  let photoNote = "";
+  for (const src of (JSON.parse(it.pictures ?? "[]") as string[]).slice(0, 10)) {
+    try {
+      const r = await fetch(src, { signal: AbortSignal.timeout(20000) });
+      const mime = r.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!r.ok || !/^image\//.test(mime) || buf.length > 4_000_000 || buf.length < 500) continue;
+      const img = await db.productImage.create({ data: { productId: created.id, mime, data: buf } });
+      urls.push(ownImageUrl(img.id));
+    } catch {
+      photoNote = " Частину фото не вдалося завантажити.";
+    }
+  }
+  if (urls.length) {
+    await db.product.update({ where: { id: created.id }, data: { images: JSON.stringify(urls) } });
+    const { warmImages } = await import("@/lib/images");
+    await warmImages(urls);
+  }
+  const p = await db.product.findUniqueOrThrow({ where: { id: created.id } });
+  await logAction(user.id, "create", "product", p.id, { from: "supplier-feed", supplier: s.name, code: it.code });
+  const push = await pushProduct(p.id, { ...ALL, withDetails: true });
+  const warning = !push.ok ? `Товар збережено, але не відправлено в SalesDrive: ${push.error}` : null;
+  revalidatePath("/products");
+  return {
+    ok: true as const,
+    warning:
+      warning ??
+      `Товар «${p.name}» створено з фіду: ${urls.length} фото, ${params.length} характеристик${price ? `, ціна ${price} грн (РРЦ ${rrp} ${it.currency})` : ""}.${photoNote}${cat ? "" : " Категорію не вибрано — вкажіть у картці товару."}`,
+    product: { id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, price: p.price, cost: p.cost, sdId: p.sdId },
+  };
 }

@@ -1,0 +1,221 @@
+/**
+ * Фід постачальника (XML/YML): довідник товарів за кодом, РРЦ × курс, створення карток.
+ * Формат як у TT AGRO MOTO: <offer><code/><article/><name/><price/><currency/><description/><available/><param name=…/><pictures><picture/></pictures></offer>
+ * Підтримує й класичний YML (<offer id=…><vendorCode/><picture/>…).
+ */
+import { XMLParser } from "fast-xml-parser";
+import { db } from "./db";
+import { getRates } from "./currency";
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  parseTagValue: false,
+  parseAttributeValue: false,
+  isArray: (name: string) => ["offer", "param", "picture", "item", "product"].includes(name),
+});
+
+type Node = unknown;
+const txt = (v: Node): string => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return txt((v as Record<string, unknown>)["#text"] ?? "");
+  return String(v).trim();
+};
+const num = (v: Node) => {
+  const n = Number(txt(v).replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+};
+
+export type FeedItem = {
+  code: string;
+  article: string | null;
+  name: string;
+  price: number;
+  currency: string;
+  available: boolean;
+  category: string | null;
+  brand: string | null;
+  description: string | null;
+  params: { name: string; value: string }[];
+  pictures: string[];
+};
+
+function findOffers(doc: Record<string, unknown>): Record<string, unknown>[] {
+  // шукаємо масив offer будь-де в документі
+  const stack: unknown[] = [doc];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    for (const [k, v] of Object.entries(cur as Record<string, unknown>)) {
+      if ((k === "offer" || k === "item" || k === "product") && Array.isArray(v) && v.length && typeof v[0] === "object") return v as Record<string, unknown>[];
+      if (typeof v === "object") stack.push(v);
+    }
+  }
+  return [];
+}
+
+export function parseFeed(xml: string): FeedItem[] {
+  const doc = parser.parse(xml) as Record<string, unknown>;
+  const out: FeedItem[] = [];
+  for (const o of findOffers(doc)) {
+    const params = ((o.param ?? []) as Record<string, unknown>[])
+      .map((p) => ({ name: txt(p["@_name"]), value: txt(p) }))
+      .filter((p) => p.name && p.value);
+    const pv = (re: RegExp) => params.find((p) => re.test(p.name))?.value ?? null;
+    const picsNode = (o.pictures as Record<string, unknown> | undefined)?.picture ?? o.picture ?? [];
+    const pictures = (Array.isArray(picsNode) ? picsNode : [picsNode]).map(txt).filter((u) => /^https?:\/\//i.test(u));
+    const code = txt(o.code) || txt(o["@_id"]) || txt(o.vendorCode);
+    const name = txt(o.name) || txt(o.model);
+    if (!code || !name) continue;
+    const avail = txt(o.available ?? o["@_available"]).toLowerCase();
+    out.push({
+      code,
+      article: txt(o.article) || txt(o.vendorCode) || null,
+      name,
+      price: num(o.price),
+      currency: (txt(o.currency) || txt(o.currencyId) || "UAH").toUpperCase().replace("UAN", "UAH"),
+      available: avail === "" ? true : avail === "true" || avail === "1" || avail === "yes",
+      category: pv(/^категорія$/i) ?? (txt(o.categoryName) || null),
+      brand: pv(/^(виробник|бренд|brand)$/i) ?? (txt(o.vendor) || null),
+      description: txt(o.description) || null,
+      params,
+      pictures,
+    });
+  }
+  return out;
+}
+
+/** Ціна продажу з РРЦ: РРЦ × курс, округлено вгору до roundTo грн */
+export function priceFromRrp(rrp: number, currency: string, rates: Record<string, number>, roundTo = 10) {
+  const rate = currency === "UAH" ? 1 : rates[currency];
+  if (!rate || !(rrp > 0)) return null;
+  const uah = rrp * rate;
+  const step = roundTo > 0 ? roundTo : 1;
+  return Math.ceil(uah / step) * step;
+}
+
+/** Завантажити фід постачальника: оновити довідник, РРЦ і ціни прив'язаних товарів */
+export async function refreshSupplierFeed(supplierId: number) {
+  const s = await db.supplier.findUniqueOrThrow({ where: { id: supplierId } });
+  if (!s.feedUrl) throw new Error("Не вказано посилання на фід");
+  let items: FeedItem[];
+  try {
+    const res = await fetch(s.feedUrl, { cache: "no-store", signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`фід відповів ${res.status}`);
+    items = parseFeed(await res.text());
+    if (!items.length) throw new Error("у фіді не знайдено жодного товару (<offer>)");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await db.supplier.update({ where: { id: supplierId }, data: { feedError: msg.slice(0, 300) } });
+    throw new Error(msg);
+  }
+  // великі фіди: нові — пачками, наявні — лише ті, що змінилися (інакше Vercel не встигне)
+  type Row = { id: number; code: string } & Record<string, unknown>;
+  const sig = (d: Record<string, unknown>) =>
+    JSON.stringify([d.article, d.name, d.price, d.currency, d.available, d.category, d.brand, d.description, d.params, d.pictures]);
+  const existing = new Map<string, { id: number; sig: string }>(
+    ((await db.supplierItem.findMany({ where: { supplierId } })) as Row[]).map((i) => [i.code, { id: i.id, sig: sig(i) }])
+  );
+  const seen = new Set<string>();
+  const toCreate: Record<string, unknown>[] = [];
+  let updated = 0;
+  for (const it of items) {
+    if (seen.has(it.code)) continue;
+    seen.add(it.code);
+    const data = {
+      article: it.article,
+      name: it.name.slice(0, 500),
+      price: it.price,
+      currency: it.currency,
+      available: it.available,
+      category: it.category,
+      brand: it.brand,
+      description: it.description,
+      params: JSON.stringify(it.params),
+      pictures: JSON.stringify(it.pictures),
+    };
+    const ex = existing.get(it.code);
+    if (!ex) toCreate.push({ supplierId, code: it.code, ...data });
+    else if (ex.sig !== sig(data)) {
+      await db.supplierItem.update({ where: { id: ex.id }, data });
+      updated++;
+    }
+  }
+  for (let i = 0; i < toCreate.length; i += 500) await db.supplierItem.createMany({ data: toCreate.slice(i, i + 500), skipDuplicates: true });
+  // зникли з фіду — немає в наявності
+  const gone = [...existing.keys()].filter((c) => !seen.has(c));
+  if (gone.length) await db.supplierItem.updateMany({ where: { supplierId, code: { in: gone } }, data: { available: false } });
+  await db.supplier.update({ where: { id: supplierId }, data: { feedAt: new Date(), feedError: null } });
+  const prices = await syncRrpPrices(supplierId);
+  return { items: seen.size, created: toCreate.length, updated, gone: gone.length, ...prices };
+}
+
+/**
+ * Для товарів постачальника: РРЦ з фіду → product.rrp; ціна = РРЦ × курс (якщо не зафіксована вручну).
+ * Змінені ціни — у SalesDrive (звідти на сайт і Prom) і на картки-комплекти.
+ */
+export async function syncRrpPrices(supplierId?: number) {
+  const suppliers = await db.supplier.findMany({ where: supplierId ? { id: supplierId } : { feedUrl: { not: null } } });
+  const rates = await getRates();
+  const changed: number[] = [];
+  for (const s of suppliers) {
+    const products = await db.product.findMany({ where: { supplierId: s.id, supplierCode: { not: null }, deletedAt: null, baseProductId: null } });
+    if (!products.length) continue;
+    type Item = { code: string; price: number; currency: string };
+    const items = new Map<string, Item>(
+      ((await db.supplierItem.findMany({ where: { supplierId: s.id, code: { in: products.map((p) => p.supplierCode!) } } })) as Item[]).map((i) => [i.code, i])
+    );
+    for (const p of products) {
+      const it = items.get(p.supplierCode!);
+      const data: { rrp?: number; rrpCurrency?: string; price?: number } = {};
+      if (it && s.feedPriceType === "rrp" && it.price > 0 && (p.rrp !== it.price || p.rrpCurrency !== it.currency)) {
+        data.rrp = it.price;
+        data.rrpCurrency = it.currency;
+      }
+      const rrp = data.rrp ?? p.rrp;
+      const cur = data.rrpCurrency ?? p.rrpCurrency ?? s.currency;
+      if (!p.priceLocked && rrp) {
+        const np = priceFromRrp(rrp, cur, rates, s.roundTo);
+        if (np && np !== p.price) data.price = np;
+      }
+      if (Object.keys(data).length) {
+        await db.product.update({ where: { id: p.id }, data });
+        if (data.price !== undefined) changed.push(p.id);
+      }
+    }
+  }
+  if (changed.length) await pushPrices(changed);
+  return { pricesChanged: changed.length };
+}
+
+async function pushPrices(ids: number[]) {
+  const { isSalesDriveConfigured, productToSd, sdUpdateProducts } = await import("./salesdrive");
+  const { propagatePriceToKits } = await import("./kits");
+  if (isSalesDriveConfigured()) {
+    const ps = await db.product.findMany({ where: { id: { in: ids }, sdId: { not: null } } });
+    for (let i = 0; i < ps.length; i += 100) {
+      try {
+        await sdUpdateProducts(ps.slice(i, i + 100).map((p) => productToSd(p, null, { withPrice: true })));
+      } catch {
+        /* не зупиняємо — помилка видна в «Останні відповіді SalesDrive» */
+      }
+    }
+  }
+  await propagatePriceToKits(ids);
+}
+
+/** Опис для сайту з характеристик постачальника: єдиний стиль — таблиця «Характеристики» */
+export function paramsHtml(params: { name: string; value: string }[]) {
+  const skip = /^(категорія|призначення|гарантія|країна виробник|габарити упаковки, мм)$/i;
+  const rows = params.filter((p) => !skip.test(p.name));
+  if (!rows.length) return "";
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const extra = params.filter((p) => /^(призначення|гарантія|країна виробник)$/i.test(p.name));
+  return [
+    "<h3>Характеристики</h3>",
+    "<table>",
+    ...rows.map((p) => `<tr><td>${esc(p.name)}</td><td><b>${esc(p.value)}</b></td></tr>`),
+    "</table>",
+    ...extra.map((p) => `<p><b>${esc(p.name)}:</b> ${esc(p.value)}</p>`),
+  ].join("\n");
+}

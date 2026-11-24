@@ -383,12 +383,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {can(user, "receipts") && (
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Постачальники</h2>
+        <p className="small">
+          <Link href="/suppliers">Відкрити постачальників →</Link> XML-фіди, курс валют, борги й оплати
+        </p>
         <div style={{ marginBottom: 10 }}>
           {suppliers.map((s) => (
-            <span key={s.id} className="badge" style={{ margin: "0 6px 6px 0" }}>
+            <Link key={s.id} href={`/suppliers/${s.id}`} className="badge" style={{ margin: "0 6px 6px 0" }}>
               {s.name}
               {s.phone ? ` · ${s.phone}` : ""}
-            </span>
+            </Link>
           ))}
         </div>
         <form action={saveSupplier} className="row">

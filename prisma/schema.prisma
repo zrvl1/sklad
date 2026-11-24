@@ -47,13 +47,62 @@ model Warehouse {
 }
 
 model Supplier {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  phone     String?
-  note      String?
-  createdAt DateTime  @default(now())
-  receipts  Receipt[]
-  codes     ProductCode[]
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  phone         String?
+  note          String?
+  createdAt     DateTime  @default(now())
+  feedUrl       String?   // посилання на XML/YML постачальника
+  feedPriceType String    @default("rrp") // що означає <price> у фіді: rrp — РРЦ (ціна продажу), cost — закупівля
+  currency      String    @default("UAH") // валюта розрахунків з постачальником
+  roundTo       Int       @default(10)    // округлення ціни продажу з РРЦ (грн)
+  feedAt        DateTime? // коли востаннє завантажено фід
+  feedError     String?
+  receipts      Receipt[]
+  codes         ProductCode[]
+  items         SupplierItem[]
+  payments      SupplierPayment[]
+}
+
+// Товари з фіду постачальника (довідник: шукаємо за кодом, створюємо картки)
+model SupplierItem {
+  id         Int      @id @default(autoincrement())
+  supplierId Int
+  code       String   // <code> — код товару в накладній
+  article    String?
+  name       String
+  price      Float    @default(0)
+  currency   String   @default("UAH")
+  available  Boolean  @default(true)
+  category   String?
+  brand      String?
+  description String?
+  params     String?  // JSON [{name, value}]
+  pictures   String?  // JSON [url]
+  updatedAt  DateTime @updatedAt
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, code])
+  @@index([supplierId, article])
+}
+
+// Оплати постачальнику у валюті: скільки валюти й скільки гривень реально витрачено (курсова різниця)
+model SupplierPayment {
+  id          Int      @id @default(autoincrement())
+  supplierId  Int
+  date        DateTime @default(now())
+  currency    String
+  amount      Float    // у валюті постачальника
+  uah         Float    // скільки гривень витрачено (купівля валюти / готівка)
+  bookedUah   Float    @default(0) // за яким курсом цей борг був у собівартості (середній курс боргу)
+  diffUah     Float    @default(0) // курсова різниця: uah - bookedUah (+ витрата, − дохід)
+  expenseId   Int?     // запис у «Гроші за місяць»
+  note        String?
+  createdById Int
+  createdAt   DateTime @default(now())
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId, date])
 }
 
 model Product {
@@ -90,6 +139,11 @@ model Product {
   baseProductId    Int?           // картка-комплект (вітрина для SEO): посилається на основний фізичний товар
   kitQty           Float          @default(1) // скільки штук основного товару в одній картці
   minStock         Float?         // мінімальний залишок (порожньо — додаток підказує за продажами)
+  supplierId       Int?           // постачальник з фідом (для РРЦ і оновлень)
+  supplierCode     String?        // код товару у фіді/накладній постачальника
+  rrp              Float?         // РРЦ постачальника у валюті rrpCurrency
+  rrpCurrency      String?
+  priceLocked      Boolean        @default(false) // ціна задана вручну — не перераховувати з РРЦ × курс
   sdKitPending     Boolean        @default(false) // картку створено в додатку — у SalesDrive ще треба позначити «Комплект» і додати основний
   base             Product?       @relation("KitBase", fields: [baseProductId], references: [id], onDelete: SetNull)
   kits             Product[]      @relation("KitBase")

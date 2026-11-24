@@ -1,7 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { createProductQuick, linkCode } from "@/app/(app)/products/actions";
+import CreateFromFeed from "@/components/CreateFromFeed";
+
+type FeedHit = {
+  supplierId: number;
+  supplierName: string;
+  code: string;
+  article: string | null;
+  name: string;
+  price: number;
+  currency: string;
+  photos: number;
+  params: number;
+  categoryPaths: string[];
+  defaultCategory: string;
+};
 
 export type Found = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; sdId?: string | null };
 
@@ -45,6 +60,17 @@ export default function UnknownCode({
   const [form, setForm] = useState({ name: "", price: "", cost: "", category: "" });
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [feed, setFeed] = useState<FeedHit | null>(null);
+
+  // код є у XML постачальника? — тоді товар створюється в один клік (назва, характеристики, фото)
+  useEffect(() => {
+    if (!code || !canCreate) return;
+    const qs = new URLSearchParams({ code, ...(supplierId ? { supplierId: String(supplierId) } : {}) });
+    fetch(`/api/suppliers/feed-item?${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: FeedHit | null) => setFeed(d))
+      .catch(() => null);
+  }, [code, supplierId, canCreate]);
 
   const search = async () => {
     if (!q.trim()) return;
@@ -119,6 +145,24 @@ export default function UnknownCode({
         </button>
       </div>
       {err && <div className="msg err">{err}</div>}
+      {feed && (
+        <div style={{ padding: 10, marginBottom: 10, background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 6 }}>
+          <div style={{ marginBottom: 6 }}>
+            Є у XML «{feed.supplierName}»: <b>{feed.name}</b>{" "}
+            <span className="small muted">
+              код {feed.code}
+              {feed.article ? ` · арт. ${feed.article}` : ""} · {feed.price} {feed.currency} · {feed.photos} фото · {feed.params} характеристик
+            </span>
+          </div>
+          <CreateFromFeed
+            supplierId={feed.supplierId}
+            code={feed.code}
+            categoryPaths={feed.categoryPaths}
+            defaultCategory={feed.defaultCategory}
+            onCreated={(p, note) => onDone(p, note)}
+          />
+        </div>
+      )}
 
       {mode === "link" && code && (
         <>

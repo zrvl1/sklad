@@ -56,7 +56,7 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
     });
   const currency = (input.currency || "UAH").toUpperCase();
   const rate = currency === "UAH" ? 1 : (await getRates())[currency];
-  if (!rate) return { ok: false as const, error: `Немає курсу для ${currency}. Перевірте валюти в SalesDrive.` };
+  if (!rate) return { ok: false as const, error: `Немає курсу для ${currency}. Введіть його в «Постачальники → Курс на сьогодні».` };
   const totalCurrency = Math.round(lines.reduce((s, l) => s + l.qty * l.cost, 0) * 100) / 100;
   const total = Math.round(totalCurrency * rate * 100) / 100;
 
@@ -214,6 +214,8 @@ export async function postReceipt(id: number) {
           price: x.product.price,
           priceCurrency: x.product.priceCurrency,
           supplierName: x.product.supplierName,
+          // нова ціна в приході для товару з РРЦ — ручна, курс її не перераховує
+          ...(x.product.rrp && x.withPrice ? { priceLocked: true } : {}),
           ...(sdOn ? { syncError: null, syncedAt: now } : {}),
         },
       });

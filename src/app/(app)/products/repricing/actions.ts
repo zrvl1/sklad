@@ -12,7 +12,8 @@ export async function savePrices(changes: { id: number; price: number }[]) {
   if (!valid.length) return { ok: false, text: "Немає змін" };
   const before = await db.product.findMany({ where: { id: { in: valid.map((c) => c.id) } }, select: { id: true, price: true } });
   const old = new Map(before.map((b) => [b.id, b.price]));
-  for (const c of valid) await db.product.update({ where: { id: c.id }, data: { price: c.price } });
+  // ручна переоцінка фіксує ціну (курс × РРЦ її більше не змінює)
+  for (const c of valid) await db.product.update({ where: { id: c.id }, data: { price: c.price, priceLocked: true } });
   await logAction(user.id, "reprice", "products", null, valid.map((c) => ({ id: c.id, from: old.get(c.id), to: c.price })));
 
   let sdNote = "";

@@ -131,9 +131,10 @@ export function productToSd(
     payload.currency = p.priceCurrency ?? "UAH";
   }
   if (opts.withCost) {
-    const inCurrency = p.costCurrency && p.costCurrency !== "UAH" && p.costOriginal !== null;
-    payload.expenses = String(inCurrency ? p.costOriginal : p.cost);
-    payload.currencyExpenses = inCurrency ? p.costCurrency! : "UAH";
+    // собівартість — завжди в гривні за курсом дня приходу (курс додатку). Інакше SalesDrive щодня перераховував би
+    // доларову закупівлю своїм курсом і прибуток у звітах «плавав» би; курсова різниця рахується окремо при оплаті постачальнику
+    payload.expenses = String(p.cost);
+    payload.currencyExpenses = "UAH";
   }
   if (p.nameForDocuments) payload.nameForDocuments = p.nameForDocuments;
   if (p.sku) payload.sku = p.sku;

@@ -25,8 +25,18 @@ export async function GET(req: Request) {
     // прибираємо старі записи спроб входу (старші за 90 днів)
     await db.loginAttempt.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 90 * 864e5) } } });
     const orders = ordersEnabled() ? await syncOrders() : null; // продажі для звітів
-    await logAction(null, "auto-sync", "products", null, { ...r, orders });
-    return Response.json({ ok: true, ...r, orders });
+    // фіди постачальників: РРЦ, наявність → ціни товарів (РРЦ × курс)
+    const feeds: Record<string, unknown> = {};
+    const { refreshSupplierFeed } = await import("@/lib/supplierFeed");
+    for (const sup of await db.supplier.findMany({ where: { feedUrl: { not: null } }, select: { id: true, name: true } })) {
+      try {
+        feeds[sup.name] = await refreshSupplierFeed(sup.id);
+      } catch (e) {
+        feeds[sup.name] = e instanceof Error ? e.message : String(e);
+      }
+    }
+    await logAction(null, "auto-sync", "products", null, { ...r, orders, feeds });
+    return Response.json({ ok: true, ...r, orders, feeds });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     await logAction(null, "auto-sync-error", "products", null, error);
