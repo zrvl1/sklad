@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePerm } from "@/lib/auth";
 import { allCategories, PATH_SEP } from "@/lib/categories";
 import { addCategory, editCategory, removeCategory } from "./actions";
+import CategoryTreeToggle from "@/components/CategoryTreeToggle";
 
 export default async function CategoriesPage({ searchParams }: { searchParams: Promise<{ msg?: string; edit?: string; del?: string }> }) {
   await requirePerm("products.edit");
@@ -46,7 +47,9 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
         {cats.length === 0 ? (
           <p className="muted">Категорій ще немає. Натисніть «⟳ Завантажити товари з SalesDrive» в Налаштуваннях.</p>
         ) : (
-          <table>
+          <>
+          <CategoryTreeToggle tableId="cat-tree" />
+          <table id="cat-tree">
             <thead>
               <tr>
                 <th>Категорія</th>
@@ -58,7 +61,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
             <tbody>
               {cats.map((c) =>
                 sp.del === c.id ? (
-                  <tr key={c.id}>
+                  <tr key={c.id} data-path={c.path} data-focus="1">
                     <td colSpan={4} style={{ background: "#fef2f2" }}>
                       <form action={removeCategory} className="stack">
                         <input type="hidden" name="id" value={c.id} />
@@ -105,7 +108,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                     </td>
                   </tr>
                 ) : sp.edit === c.id ? (
-                  <tr key={c.id}>
+                  <tr key={c.id} data-path={c.path} data-focus="1">
                     <td colSpan={4}>
                       <form action={editCategory} className="toolbar" style={{ flexWrap: "wrap" }}>
                         <input type="hidden" name="id" value={c.id} />
@@ -130,10 +133,21 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                     </td>
                   </tr>
                 ) : (
-                  <tr key={c.id}>
+                  <tr key={c.id} data-path={c.path}>
                     <td style={{ paddingLeft: 8 + c.depth * 22 }}>
-                      {c.depth ? "└ " : ""}
-                      {cats.some((x) => x.parentId === c.id) ? <b>📂 {c.name}</b> : <>📁 {c.name}</>}
+                      {cats.some((x) => x.parentId === c.id) ? (
+                        <>
+                          <button type="button" data-toggle={c.path} className="btn sm" style={{ padding: "0 6px", marginRight: 4, minWidth: 24 }}>
+                            ▸
+                          </button>
+                          <b>📂 {c.name}</b>{" "}
+                          <span className="small muted">({cats.filter((x) => x.parentId === c.id).length})</span>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ display: "inline-block", width: 28 }}>{c.depth ? "└" : ""}</span>📁 {c.name}
+                        </>
+                      )}
                     </td>
                     <td>
                       <Link href={`/products?q=${encodeURIComponent(c.name)}`}>{total(c.id, c.path)}</Link>
@@ -149,6 +163,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
               )}
             </tbody>
           </table>
+          </>
         )}
       </div>
     </>
