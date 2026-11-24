@@ -225,3 +225,18 @@ export function paramsHtml(params: { name: string; value: string }[]) {
     ...extra.map((p) => `<p><b>${esc(p.name)}:</b> ${esc(p.value)}</p>`),
   ].join("\n");
 }
+
+/** Характеристики «за замовчуванням» для товарів постачальника (країна, стан) */
+export const DEFAULT_EXTRA_PARAMS = "Країна виробник: Китай\nСтан: Новий";
+export function parseExtraParams(text: string | null | undefined) {
+  return (text ?? DEFAULT_EXTRA_PARAMS)
+    .split(/\r?\n/)
+    .map((l) => l.match(/^\s*([^:]+?)\s*:\s*(.+?)\s*$/))
+    .filter((m): m is RegExpMatchArray => Boolean(m))
+    .map((m) => ({ name: m[1], value: m[2] }));
+}
+/** Додати/замінити характеристики постачальника за замовчуванням */
+export function withExtraParams(params: { name: string; value: string }[], extra: { name: string; value: string }[]) {
+  const out = params.filter((p) => !extra.some((e) => e.name.toLowerCase() === p.name.toLowerCase()));
+  return [...out, ...extra];
+}

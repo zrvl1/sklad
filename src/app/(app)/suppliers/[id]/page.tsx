@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { can, requirePerm } from "@/lib/auth";
 import { dateInput, dateTimeUa, dateUa, getSetting, money } from "@/lib/util";
 import { getRates } from "@/lib/currency";
-import { priceFromRrp } from "@/lib/supplierFeed";
+import { DEFAULT_EXTRA_PARAMS, priceFromRrp } from "@/lib/supplierFeed";
 import { supplierBalance } from "@/lib/supplierLedger";
 import { allCategories } from "@/lib/categories";
 import { MONEY_ACCOUNTS } from "@/lib/finance-consts";
@@ -96,6 +96,11 @@ export default async function SupplierPage({ params, searchParams }: { params: P
           <Link href={`/suppliers/${id}?only=new`} className="small">
             показати перші 100
           </Link>
+          {canCreate && totalItems > 0 && (
+            <Link href={`/suppliers/${id}/categories`} className="small">
+              категорії фіду → сайту
+            </Link>
+          )}
         </form>
         {items.length > 0 && (
           <table>
@@ -292,6 +297,10 @@ export default async function SupplierPage({ params, searchParams }: { params: P
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            Характеристики, які додаються до кожного товару (рядок «Назва: значення»)
+            <textarea name="extraParams" rows={3} defaultValue={s.extraParams ?? DEFAULT_EXTRA_PARAMS} />
           </label>
           <label>
             Вести борг з дати (приходи до неї вважаються оплаченими)

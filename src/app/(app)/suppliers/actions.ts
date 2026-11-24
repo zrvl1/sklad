@@ -60,6 +60,7 @@ export async function saveSupplierFeed(formData: FormData) {
     feedPriceType: formData.get("feedPriceType") === "cost" ? "cost" : "rrp",
     currency: (str(formData.get("currency")) ?? "UAH").toUpperCase(),
     roundTo: Math.max(1, Math.min(100, Number(formData.get("roundTo")) || 10)),
+    extraParams: String(formData.get("extraParams") ?? "").trim(),
     ledgerFrom: str(formData.get("ledgerFrom")) ? new Date(`${str(formData.get("ledgerFrom"))}T00:00:00+02:00`) : null,
   };
   await db.supplier.update({ where: { id }, data });
@@ -145,4 +146,53 @@ export async function createSupplier(formData: FormData) {
   const s = await db.supplier.upsert({ where: { name }, update: {}, create: { name, phone: str(formData.get("phone")) } });
   await logAction(user.id, "save", "supplier", s.id);
   redirect(`/suppliers/${s.id}`);
+}
+
+/** Зіставлення категорій фіду з категоріями сайту + створення дерева */
+export async function saveFeedCategories(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const supplierId = Number(formData.get("supplierId"));
+  const path = `/suppliers/${supplierId}/categories`;
+  const { allCategories, createCategoryTree, findCategory } = await import("@/lib/categories");
+  let note = "";
+  const tree = String(formData.get("tree") ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (tree.length) {
+    try {
+      const r = await createCategoryTree(tree);
+      await logAction(user.id, "create-tree", "category", null, r);
+      note = r.created ? `Створено категорій у SalesDrive: ${r.created}. ` : "Нових категорій не було — усі вже існують. ";
+    } catch (e) {
+      return back(path, `Дерево не створено: ${e instanceof Error ? e.message : e}`, true);
+    }
+  }
+  let map: Record<string, string> = {};
+  try {
+    map = JSON.parse((await getSetting("feedCategoryMap")) ?? "{}");
+  } catch {}
+  const cats = await allCategories();
+  let saved = 0;
+  const bad: string[] = [];
+  for (const [k, v] of formData.entries()) {
+    if (!k.startsWith("fc:")) continue;
+    const feedCat = k.slice(3);
+    const val = String(v).trim();
+    const key = `${supplierId}:${feedCat}`;
+    if (!val) {
+      if (map[key]) delete map[key];
+      continue;
+    }
+    const c = (await findCategory(val)) ?? cats.find((x) => x.path.toLowerCase() === val.toLowerCase());
+    if (!c) {
+      bad.push(val);
+      continue;
+    }
+    if (map[key] !== c.path) saved++;
+    map[key] = c.path;
+  }
+  await setSetting("feedCategoryMap", JSON.stringify(map));
+  revalidatePath(`/suppliers/${supplierId}`);
+  back(path, `${note}Зіставлень збережено: ${saved}.${bad.length ? ` Не знайдено категорій: ${bad.slice(0, 5).join(", ")}` : ""}`, bad.length > 0 && !saved);
 }

@@ -849,13 +849,19 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
   const already = await codeOwner(it.code);
   if (already) return { ok: false as const, error: `Код ${it.code} вже прив'язаний до «${already.name}»` };
 
-  const params = (() => {
-    try {
-      return JSON.parse(it.params ?? "[]") as { name: string; value: string }[];
-    } catch {
-      return [];
-    }
-  })();
+  const { parseExtraParams, withExtraParams } = await import("@/lib/supplierFeed");
+  const extra = parseExtraParams(s.extraParams);
+  const params = withExtraParams(
+    (() => {
+      try {
+        return JSON.parse(it.params ?? "[]") as { name: string; value: string }[];
+      } catch {
+        return [];
+      }
+    })(),
+    extra
+  );
+  const country = params.find((p) => /^країна( виробник| виробництва)?$/i.test(p.name))?.value ?? null;
   const rates = await getRates();
   const rrp = s.feedPriceType === "rrp" && it.price > 0 ? it.price : null;
   const price = rrp ? (priceFromRrp(rrp, it.currency, rates, s.roundTo) ?? 0) : 0;
@@ -883,6 +889,7 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
     description: paramsHtml(params) || null,
     params: JSON.stringify(params.map((p) => ({ name: p.name, type: "text", value: p.value }))),
     manufacturer: it.brand,
+    country,
     supplierName: s.name,
     supplierId: s.id,
     supplierCode: it.code,

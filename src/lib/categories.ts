@@ -85,3 +85,42 @@ export async function updateCategory(id: string, name: string, parentId: string 
   await setSetting("createdCategories", JSON.stringify([...created, cat]));
   await db.product.updateMany({ where: { categorySdId: id }, data: { categoryName: cat.name } });
 }
+
+/**
+ * Створити дерево категорій одним запитом до SalesDrive.
+ * paths — рядки «Мотоблоки › Двигуни» (можна «>» або «/»); наявні рівні використовуються, відсутні — створюються.
+ */
+export async function createCategoryTree(paths: string[]) {
+  const { sdUpsertCategories, isSalesDriveConfigured } = await import("./salesdrive");
+  const all = await allCategories();
+  const byPath = new Map(all.map((c) => [c.path.toLowerCase(), c.id]));
+  let seq = Number((await getSetting("catSeq")) ?? "0");
+  const fresh: SdCategory[] = [];
+  for (const raw of paths) {
+    const parts = raw
+      .split(/\s*(?:›|>|\/)\s*/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    let parentId: string | null = null;
+    let path = "";
+    for (const name of parts) {
+      path = path ? path + PATH_SEP + name : name;
+      const key = path.toLowerCase();
+      let id = byPath.get(key);
+      if (!id) {
+        seq++;
+        id = String(900000000 + seq);
+        fresh.push({ id, name, parentId });
+        byPath.set(key, id);
+      }
+      parentId = id;
+    }
+  }
+  if (!fresh.length) return { created: 0, paths: [] as string[] };
+  if (isSalesDriveConfigured()) for (let i = 0; i < fresh.length; i += 50) await sdUpsertCategories(fresh.slice(i, i + 50));
+  await setSetting("catSeq", String(seq));
+  const created = parse<SdCategory[]>(await getSetting("createdCategories"), []);
+  await setSetting("createdCategories", JSON.stringify([...created, ...fresh]));
+  const after = await allCategories();
+  return { created: fresh.length, paths: fresh.map((f) => after.find((c) => c.id === f.id)?.path ?? f.name) };
+}
