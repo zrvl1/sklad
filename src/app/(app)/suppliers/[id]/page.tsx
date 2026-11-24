@@ -45,7 +45,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
     db.product.count({ where: { supplierId: id, deletedAt: null } }),
   ]);
   const owners = new Map<string, { id: number; name: string; price: number }>(
-    (await db.productCode.findMany({ where: { code: { in: items.map((i) => i.code) } }, include: { product: { select: { id: true, name: true, price: true } } } })).map((c) => [
+    (await db.productCode.findMany({ where: { code: { in: items.map((i) => i.code) }, product: { deletedAt: null } }, // видалені товари не рахуються — можна створити заново include: { product: { select: { id: true, name: true, price: true } } } })).map((c) => [
       c.code,
       c.product,
     ])
