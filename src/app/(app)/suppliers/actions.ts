@@ -147,6 +147,44 @@ export async function saveDescFooter(formData: FormData) {
   back("/suppliers", "Текст у кінці опису збережено — додаватиметься до нових товарів з XML");
 }
 
+/** Дописати текст про сумісність у кінець опису всіх товарів, де його (або схожого «Не впевнені…») ще немає */
+export async function appendFooterAll() {
+  const user = await requirePerm("products.edit");
+  const { descFooters } = await import("@/lib/supplierFeed");
+  const f = await descFooters();
+  const has = (t: string | null) => /Не впевнені|Не уверены|Перед замовленням перевірте|Перед заказом проверьте/i.test(t ?? "");
+  // опис невідомий (null) — не чіпаємо: інакше в SalesDrive затерли б наявний текст
+  const ps = await db.product.findMany({ where: { deletedAt: null, description: { not: null } } });
+  const changed: number[] = [];
+  for (const p of ps) {
+    const data: { description?: string; descriptionTranslate?: string } = {};
+    if (p.description && !has(p.description)) data.description = `${p.description.trim()}\n${f.ru}`;
+    if (p.descriptionTranslate?.trim() && !has(p.descriptionTranslate)) data.descriptionTranslate = `${p.descriptionTranslate.trim()}\n${f.ua}`;
+    if (!Object.keys(data).length) continue;
+    await db.product.update({ where: { id: p.id }, data: { ...data, textEditedAt: new Date() } });
+    changed.push(p.id);
+  }
+  let sdErr = "";
+  const { isSalesDriveConfigured, productToSd, sdUpdateProducts } = await import("@/lib/salesdrive");
+  if (isSalesDriveConfigured() && changed.length) {
+    const fresh = await db.product.findMany({ where: { id: { in: changed }, sdId: { not: null } } });
+    for (let i = 0; i < fresh.length; i += 100) {
+      try {
+        await sdUpdateProducts(fresh.slice(i, i + 100).map((p) => productToSd(p, null, { withDetails: true })));
+      } catch (e) {
+        sdErr = ` Помилка SalesDrive: ${e instanceof Error ? e.message : e}`;
+      }
+    }
+  }
+  const skipped = await db.product.count({ where: { deletedAt: null, description: null } });
+  await logAction(user.id, "append-footer", "product", null, { changed: changed.length });
+  back(
+    "/suppliers",
+    `Текст про сумісність дописано в ${changed.length} товарів і відправлено в SalesDrive.${skipped ? ` Без опису в додатку (не чіпали): ${skipped}.` : ""}${sdErr}`,
+    Boolean(sdErr)
+  );
+}
+
 export async function createSupplier(formData: FormData) {
   const user = await requirePerm("receipts");
   const name = str(formData.get("name"));

@@ -4,10 +4,11 @@ import { can, requirePerm } from "@/lib/auth";
 import { dateTimeUa, money } from "@/lib/util";
 import { supplierBalance } from "@/lib/supplierLedger";
 import RateForm from "@/components/RateForm";
-import { createSupplier, saveDescFooter } from "./actions";
+import { appendFooterAll, createSupplier, saveDescFooter } from "./actions";
 import { descFooters } from "@/lib/supplierFeed";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export default async function SuppliersPage({ searchParams }: { searchParams: Promise<{ msg?: string; err?: string }> }) {
   const user = await requirePerm("receipts");
@@ -80,7 +81,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
       {can(user, "products.edit") && (
         <details className="panel">
           <summary>
-            <b>Текст у кінці опису</b> <span className="small muted">— додається до кожного товару, створеного з XML (можна HTML)</span>
+            <b>Текст у кінці опису</b> <span className="small muted">— про перевірку сумісності; додається до кожного товару, створеного з XML (можна HTML)</span>
           </summary>
           <form action={saveDescFooter} className="stack" style={{ marginTop: 10 }}>
             <label>
@@ -94,6 +95,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             <div>
               <button className="btn sm">Зберегти</button>
             </div>
+          </form>
+          <form action={appendFooterAll} style={{ marginTop: 10 }}>
+            <button className="btn sm">Дописати в усі наявні товари</button>{" "}
+            <span className="small muted">
+              лише туди, де такого тексту (або «Не впевнені…») ще немає; зміни одразу йдуть у SalesDrive → сайт і Prom
+            </span>
           </form>
         </details>
       )}
