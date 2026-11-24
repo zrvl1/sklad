@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createFromSupplierItem } from "@/app/(app)/products/actions";
+import CategoryTreeSelect, { type TreeOpt } from "./CategoryTreeSelect";
 
 export type FeedProduct = { id: number; name: string; sku: string | null; barcode: string | null; price: number; cost: number; sdId?: string | null };
 
@@ -10,7 +11,7 @@ export type FeedProduct = { id: number; name: string; sku: string | null; barcod
 export default function CreateFromFeed({
   supplierId,
   code,
-  categoryPaths,
+  categoryOptions,
   defaultCategory,
   cost,
   costCurrency,
@@ -19,7 +20,7 @@ export default function CreateFromFeed({
 }: {
   supplierId: number;
   code: string;
-  categoryPaths: string[];
+  categoryOptions: TreeOpt[];
   defaultCategory: string;
   cost?: number;
   costCurrency?: string;
@@ -29,8 +30,6 @@ export default function CreateFromFeed({
   const [cat, setCat] = useState(defaultCategory);
   const [res, setRes] = useState<{ ok: boolean; text: string; id?: number } | null>(null);
   const [pending, start] = useTransition();
-  const listId = `cats-${supplierId}`;
-  const known = categoryPaths.includes(cat) || categoryPaths.some((p) => p.endsWith(` › ${cat}`) || p === cat);
 
   if (res?.ok && res.id)
     return (
@@ -41,19 +40,7 @@ export default function CreateFromFeed({
 
   return (
     <span className="row" style={{ gap: 6, flexWrap: compact ? "nowrap" : "wrap" }}>
-      <input
-        list={listId}
-        value={cat}
-        onChange={(e) => setCat(e.target.value)}
-        placeholder="Категорія на сайті"
-        style={{ minWidth: 220, borderColor: cat && !known ? "#b45309" : undefined }}
-        title={cat && !known ? "Такої категорії немає в SalesDrive — оберіть зі списку" : undefined}
-      />
-      <datalist id={listId}>
-        {categoryPaths.map((p) => (
-          <option key={p} value={p} />
-        ))}
-      </datalist>
+      <CategoryTreeSelect options={categoryOptions} mode="path" value={cat} onChange={(v) => setCat(v)} placeholder="Категорія на сайті" style={{ minWidth: 260 }} />
       <button
         type="button"
         className="btn sm"

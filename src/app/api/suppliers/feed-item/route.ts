@@ -32,7 +32,6 @@ export async function GET(req: Request) {
     currency: it.currency,
     photos: (JSON.parse(it.pictures ?? "[]") as string[]).length,
     params: (JSON.parse(it.params ?? "[]") as unknown[]).length,
-    categoryPaths: cats.map((c) => c.path),
     defaultCategory: (it.category && map[`${it.supplierId}:${it.category}`]) || (same.length === 1 ? same[0].path : ""),
   });
 }

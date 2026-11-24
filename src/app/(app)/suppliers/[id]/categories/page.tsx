@@ -5,6 +5,7 @@ import { requirePerm } from "@/lib/auth";
 import { getSetting } from "@/lib/util";
 import { allCategories } from "@/lib/categories";
 import { saveFeedCategories } from "../../actions";
+import FeedCategoryTable from "@/components/FeedCategoryTable";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -58,31 +59,7 @@ export default async function FeedCategoriesPage({ params, searchParams }: { par
           <textarea name="tree" rows={8} style={{ width: "100%", fontFamily: "monospace" }} placeholder={"Мотоблоки та культиватори > Двигуни\nМотоблоки та культиватори > Фрези та навісне"} />
         </div>
         <div className="panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Категорія у фіді</th>
-                <th>Товарів</th>
-                <th>Категорія на сайті</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.name}>
-                  <td>{r.name}</td>
-                  <td>{r.count}</td>
-                  <td>
-                    <input name={`fc:${r.name}`} list="all-cats" defaultValue={def(r.name)} style={{ width: "100%", minWidth: 320 }} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <datalist id="all-cats">
-            {cats.map((c) => (
-              <option key={c.id} value={c.path} />
-            ))}
-          </datalist>
+          <FeedCategoryTable rows={rows.map((r) => ({ ...r, value: def(r.name) }))} options={cats} />
           <p style={{ marginBottom: 0 }}>
             <button className="btn primary">Зберегти (і створити дерево, якщо заповнено)</button>
           </p>

@@ -54,7 +54,6 @@ export default async function SupplierPage({ params, searchParams }: { params: P
   try {
     catMap = JSON.parse(mapRaw ?? "{}");
   } catch {}
-  const paths = cats.map((c) => c.path);
   const defCat = (feedCat: string | null) => {
     if (!feedCat) return "";
     const mapped = catMap[`${id}:${feedCat}`];
@@ -147,7 +146,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
                           ✓ є: {own.name}
                         </Link>
                       ) : canCreate ? (
-                        <CreateFromFeed supplierId={id} code={it.code} categoryPaths={paths} defaultCategory={defCat(it.category)} />
+                        <CreateFromFeed supplierId={id} code={it.code} categoryOptions={cats} defaultCategory={defCat(it.category)} />
                       ) : (
                         <span className="small muted">немає картки</span>
                       )}

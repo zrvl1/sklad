@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { createProductQuick, linkCode } from "@/app/(app)/products/actions";
 import CreateFromFeed from "@/components/CreateFromFeed";
+import CategoryTreeSelect, { type TreeOpt } from "@/components/CategoryTreeSelect";
 
 type FeedHit = {
   supplierId: number;
@@ -14,7 +15,6 @@ type FeedHit = {
   currency: string;
   photos: number;
   params: number;
-  categoryPaths: string[];
   defaultCategory: string;
 };
 
@@ -44,7 +44,7 @@ export default function UnknownCode({
   onCancel,
 }: {
   currency?: string; // валюта закупівлі документа
-  categories?: string[];
+  categories?: TreeOpt[];
   canCreate?: boolean; // створювати нові товари може лише адміністратор
   code: string | null;
   supplierId: number | null;
@@ -157,7 +157,7 @@ export default function UnknownCode({
           <CreateFromFeed
             supplierId={feed.supplierId}
             code={feed.code}
-            categoryPaths={feed.categoryPaths}
+            categoryOptions={categories}
             defaultCategory={feed.defaultCategory}
             onCreated={(p, note) => onDone(p, note)}
           />
@@ -199,18 +199,13 @@ export default function UnknownCode({
 
       {mode === "create" && canCreate && (
         <div className="row">
-          <datalist id="uc-categories">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
           <label style={{ flex: 2, minWidth: 200 }}>
             Назва
             <input value={form.name} autoFocus onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
-          <label style={{ width: 170 }}>
+          <label style={{ width: 280 }}>
             Категорія
-            <input list="uc-categories" value={form.category} placeholder="для шаблону опису" onChange={(e) => setForm({ ...form, category: e.target.value })} />
+            <CategoryTreeSelect options={categories} mode="path" value={form.category} onChange={(v) => setForm({ ...form, category: v })} placeholder="оберіть у дереві" />
           </label>
           <label style={{ width: 110 }}>
             Закупівля, {currency}

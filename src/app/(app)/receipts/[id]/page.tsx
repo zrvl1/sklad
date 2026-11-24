@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { dateInput, dateTimeUa, dateUa, money } from "@/lib/util";
 import { getRates } from "@/lib/currency";
-import { listCategories } from "@/lib/templates";
+import { allCategories } from "@/lib/categories";
 import { can, requireUser } from "@/lib/auth";
 import ReceiptEditor from "./ReceiptEditor";
 import { deleteReceipt } from "../actions";
@@ -40,7 +40,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
       db.supplier.findMany({ orderBy: { name: "asc" } }),
       db.cell.findMany({ orderBy: { code: "asc" } }),
       showCurrency ? getRates() : Promise.resolve({ UAH: 1 } as Record<string, number>),
-      listCategories(),
+      allCategories(),
     ]);
     return (
       <>

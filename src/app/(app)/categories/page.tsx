@@ -4,6 +4,7 @@ import { requirePerm } from "@/lib/auth";
 import { allCategories, PATH_SEP } from "@/lib/categories";
 import { addCategory, editCategory, removeCategory } from "./actions";
 import CategoryTreeToggle from "@/components/CategoryTreeToggle";
+import CategoryTreeSelect from "@/components/CategoryTreeSelect";
 
 export default async function CategoriesPage({ searchParams }: { searchParams: Promise<{ msg?: string; edit?: string; del?: string }> }) {
   await requirePerm("products.edit");
@@ -32,14 +33,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
         <b>＋ Нова категорія</b>
         <input name="name" placeholder="Назва, напр. Моторна олива" required style={{ minWidth: 260 }} />
         <span className="small muted">у розділі</span>
-        <select name="parentId" defaultValue="">
-          <option value="">— верхній рівень —</option>
-          {cats.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.path}
-            </option>
-          ))}
-        </select>
+        <CategoryTreeSelect options={cats} name="parentId" mode="id" emptyLabel="— верхній рівень —" placeholder="— верхній рівень —" style={{ minWidth: 340 }} />
         <button className="btn primary">Створити в SalesDrive</button>
       </form>
 
@@ -75,15 +69,14 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                               {own > 0 ? (
                                 <label>
                                   У категорії {own} товарів. Перенести їх у:
-                                  <select name="targetId" defaultValue={parent?.id ?? ""} required>
-                                    {!parent && <option value="">— оберіть категорію —</option>}
-                                    {parentsFor(c.path).map((o) => (
-                                      <option key={o.id} value={o.id}>
-                                        {o.path}
-                                        {o.id === parent?.id ? " (батьківська)" : ""}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <CategoryTreeSelect
+                                    options={parentsFor(c.path)}
+                                    name="targetId"
+                                    mode="id"
+                                    defaultValue={parent?.id ?? ""}
+                                    placeholder="— оберіть категорію —"
+                                    style={{ minWidth: 340 }}
+                                  />
                                 </label>
                               ) : (
                                 <span className="small muted">Товарів у самій категорії немає.</span>
@@ -114,14 +107,15 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                         <input type="hidden" name="id" value={c.id} />
                         <input name="name" defaultValue={c.name} required style={{ minWidth: 240 }} />
                         <span className="small muted">у розділі</span>
-                        <select name="parentId" defaultValue={c.parentId ?? ""}>
-                          <option value="">— верхній рівень —</option>
-                          {parentsFor(c.path).map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.path}
-                            </option>
-                          ))}
-                        </select>
+                        <CategoryTreeSelect
+                          options={parentsFor(c.path)}
+                          name="parentId"
+                          mode="id"
+                          defaultValue={c.parentId ?? ""}
+                          emptyLabel="— верхній рівень —"
+                          placeholder="— верхній рівень —"
+                          style={{ minWidth: 340 }}
+                        />
                         <button className="btn primary sm">Зберегти</button>
                         <Link className="btn sm" href="/categories">
                           Скасувати

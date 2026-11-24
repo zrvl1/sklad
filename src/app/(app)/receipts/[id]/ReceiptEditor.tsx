@@ -1,5 +1,6 @@
 "use client";
 
+import type { TreeOpt } from "@/components/CategoryTreeSelect";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { postReceipt, saveReceipt, type ReceiptInput } from "../actions";
@@ -47,7 +48,7 @@ type Props = {
   cells: { id: number; code: string; warehouseId: number }[];
   rates: Record<string, number>; // курси з SalesDrive: гривень за 1 одиницю
   showCurrency: boolean;
-  categories: string[];
+  categories: TreeOpt[];
   canCreate: boolean;
 };
 

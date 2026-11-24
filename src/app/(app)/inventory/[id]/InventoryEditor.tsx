@@ -1,5 +1,6 @@
 "use client";
 
+import type { TreeOpt } from "@/components/CategoryTreeSelect";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import UnknownCode, { type Found } from "@/components/UnknownCode";
@@ -15,7 +16,7 @@ type Props = {
   stock: Record<number, number>; // залишок за обліком на момент відкриття
   cells: { id: number; code: string }[];
   suppliers: { id: number; name: string }[];
-  categories: string[];
+  categories: TreeOpt[];
   canCreate: boolean;
 };
 

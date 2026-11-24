@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { dateTimeUa, money } from "@/lib/util";
 import InventoryEditor from "./InventoryEditor";
-import { listCategories } from "@/lib/templates";
+import { allCategories } from "@/lib/categories";
 import { can, requireUser } from "@/lib/auth";
 import { deleteInventory } from "../actions";
 
@@ -22,7 +22,7 @@ export default async function InventoryPage({ params }: { params: Promise<{ id: 
       db.cell.findMany({ where: { warehouseId: inv.warehouseId }, orderBy: { code: "asc" } }),
       db.stockBalance.findMany({ where: { warehouseId: inv.warehouseId, productId: { in: ids } } }),
       db.supplier.findMany({ orderBy: { name: "asc" } }),
-      listCategories(),
+      allCategories(),
     ]);
     return (
       <>

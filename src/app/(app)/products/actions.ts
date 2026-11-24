@@ -295,8 +295,10 @@ export async function createProductQuick(input: {
   const costData = cur
     ? { cost: toUah(input.cost || 0, cur, await getRates()), costCurrency: cur, costOriginal: input.cost || 0 }
     : { cost: input.cost || 0, costCurrency: null, costOriginal: null };
-  const catName = input.categoryName?.trim() || null;
-  const data = { name: input.name.trim(), price: input.price || 0, barcode, categoryName: catName, categorySdId: await categoryIdFor(catName) };
+  // категорія — повний шлях з дерева або назва
+  const catFound = await findCategory(input.categoryName);
+  const catName = catFound?.name ?? (input.categoryName?.trim().split(PATH_SEP).pop() || null);
+  const data = { name: input.name.trim(), price: input.price || 0, barcode, categoryName: catName, categorySdId: catFound?.id ?? (await categoryIdFor(catName)) };
   const created = await db.product.create({ data: { ...data, ...costData, search: buildSearch(data) } });
   await finalizeNewProduct(created.id, { genBarcode: input.genBarcode ?? true, genSku: input.genSku ?? true });
   await applyTemplate(created.id);
