@@ -146,6 +146,7 @@ model Product {
   rrp              Float?         // РРЦ постачальника у валюті rrpCurrency
   rrpCurrency      String?
   priceLocked      Boolean        @default(false) // ціна задана вручну — не перераховувати з РРЦ × курс
+  seoAt            DateTime?      // коли завантажено SEO-тексти (назва, опис, запити) з файлу
   sdKitPending     Boolean        @default(false) // картку створено в додатку — у SalesDrive ще треба позначити «Комплект» і додати основний
   base             Product?       @relation("KitBase", fields: [baseProductId], references: [id], onDelete: SetNull)
   kits             Product[]      @relation("KitBase")
