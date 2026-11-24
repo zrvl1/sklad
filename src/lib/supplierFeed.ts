@@ -105,7 +105,10 @@ export async function refreshSupplierFeed(supplierId: number) {
     items = parseFeed(await res.text());
     if (!items.length) throw new Error("у фіді не знайдено жодного товару (<offer>)");
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    let msg = e instanceof Error ? e.message : String(e);
+    // «fetch failed» сам по собі нічого не каже — додаємо причину (таймаут, відмова з'єднання, DNS…)
+    const cause = e instanceof Error ? (e.cause as { code?: string; message?: string } | undefined) : undefined;
+    if (cause) msg += ` (${[cause.code, cause.message].filter(Boolean).join(": ")})`;
     await db.supplier.update({ where: { id: supplierId }, data: { feedError: msg.slice(0, 300) } });
     throw new Error(msg);
   }
