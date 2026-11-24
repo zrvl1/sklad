@@ -12,7 +12,7 @@ const parser = new XMLParser({
   attributeNamePrefix: "@_",
   parseTagValue: false,
   parseAttributeValue: false,
-  isArray: (name: string) => ["offer", "param", "picture", "item", "product"].includes(name),
+  isArray: (name: string) => ["offer", "param", "picture", "item", "product", "category"].includes(name),
 });
 
 type Node = unknown;
@@ -54,8 +54,39 @@ function findOffers(doc: Record<string, unknown>): Record<string, unknown>[] {
   return [];
 }
 
+/** Дерево категорій фіду (<categories><category id parentId>Назва</category>) → id → повний шлях */
+function feedCategoryPaths(doc: Record<string, unknown>): Map<string, string> {
+  const raw = new Map<string, { name: string; parent: string | null }>();
+  const stack: unknown[] = [doc];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    for (const [k, v] of Object.entries(cur as Record<string, unknown>)) {
+      if (k === "offer" || k === "item" || k === "product") continue; // всередині товарів <category> — це лише id
+      if (k === "category" && Array.isArray(v)) {
+        for (const c of v as Record<string, unknown>[]) {
+          if (c && typeof c === "object" && c["@_id"] !== undefined) {
+            const parent = txt(c["@_parentId"] ?? c["@_parent_id"] ?? c["@_parentid"]);
+            raw.set(txt(c["@_id"]), { name: txt(c), parent: parent || null });
+          }
+        }
+      } else if (typeof v === "object") stack.push(v);
+    }
+  }
+  const paths = new Map<string, string>();
+  const pathOf = (id: string, depth = 0): string => {
+    const c = raw.get(id);
+    if (!c) return "";
+    const up = c.parent && depth < 8 ? pathOf(c.parent, depth + 1) : "";
+    return up ? `${up} › ${c.name}` : c.name;
+  };
+  for (const id of raw.keys()) paths.set(id, pathOf(id));
+  return paths;
+}
+
 export function parseFeed(xml: string): FeedItem[] {
   const doc = parser.parse(xml) as Record<string, unknown>;
+  const catPaths = feedCategoryPaths(doc);
   const out: FeedItem[] = [];
   for (const o of findOffers(doc)) {
     const params = ((o.param ?? []) as Record<string, unknown>[])
@@ -75,7 +106,11 @@ export function parseFeed(xml: string): FeedItem[] {
       price: num(o.price),
       currency: (txt(o.currency) || txt(o.currencyId) || "UAH").toUpperCase().replace("UAN", "UAH"),
       available: avail === "" ? true : avail === "true" || avail === "1" || avail === "yes",
-      category: pv(/^категорія$/i) ?? (txt(o.categoryName) || null),
+      // категорія: з дерева фіду за id (повний шлях), інакше з характеристики «Категорія»
+      category:
+        catPaths.get(txt(Array.isArray(o.category) ? o.category[0] : o.category) || txt(Array.isArray(o.categoryId) ? o.categoryId[0] : o.categoryId)) ||
+        pv(/^категорія$/i) ||
+        (txt(o.categoryName) || null),
       brand: pv(/^(виробник|бренд|brand)$/i) ?? (txt(o.vendor) || null),
       description: txt(o.description) || null,
       params,
@@ -124,7 +159,7 @@ export async function refreshSupplierFeed(supplierId: number) {
   );
   const seen = new Set<string>();
   const toCreate: Record<string, unknown>[] = [];
-  let updated = 0;
+  const toUpdate: { id: number; data: Record<string, unknown> }[] = [];
   for (const it of items) {
     if (seen.has(it.code)) continue;
     seen.add(it.code);
@@ -142,11 +177,12 @@ export async function refreshSupplierFeed(supplierId: number) {
     };
     const ex = existing.get(it.code);
     if (!ex) toCreate.push({ supplierId, code: it.code, ...data });
-    else if (ex.sig !== sig(data)) {
-      await db.supplierItem.update({ where: { id: ex.id }, data });
-      updated++;
-    }
+    else if (ex.sig !== sig(data)) toUpdate.push({ id: ex.id, data });
   }
+  // змінені — пачками в одній транзакції (тисячі окремих запитів Vercel не встигає)
+  for (let i = 0; i < toUpdate.length; i += 200)
+    await db.$transaction(toUpdate.slice(i, i + 200).map((u) => db.supplierItem.update({ where: { id: u.id }, data: u.data })));
+  const updated = toUpdate.length;
   for (let i = 0; i < toCreate.length; i += 500) await db.supplierItem.createMany({ data: toCreate.slice(i, i + 500), skipDuplicates: true });
   // зникли з фіду — немає в наявності
   const gone = [...existing.keys()].filter((c) => !seen.has(c));
