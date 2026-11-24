@@ -180,8 +180,9 @@ async function saveSdDebug(sent: unknown, status: number, response: string) {
 }
 
 /** Додати/оновити товари в SalesDrive */
-export async function sdUpdateProducts(products: SdProductPayload[]) {
+export async function sdUpdateProducts(products: SdProductPayload[]): Promise<string[]> {
   const { url, key } = config();
+  const added: string[] = []; // товари, яких у SalesDrive ще не було («successfully added»)
   for (let i = 0; i < products.length; i += 100) {
     const chunk = products.slice(i, i + 100);
     const res = await fetch(`${url}/product-handler/`, {
@@ -205,7 +206,9 @@ export async function sdUpdateProducts(products: SdProductPayload[]) {
     if (d && (d.success === false || d.status === "error" || d.error)) {
       throw new Error(`SalesDrive: ${d.message ?? JSON.stringify(d.error ?? d).slice(0, 300)}`);
     }
+    for (const m of text.matchAll(/product\[(\d+)\][^.]*?added/gi)) added.push(m[1]);
   }
+  return added;
 }
 
 /** Видалити товари в SalesDrive (потрібне право «Товари: видалення») */

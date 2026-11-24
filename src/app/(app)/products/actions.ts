@@ -12,6 +12,7 @@ import { moneyProblem, validateCodes } from "@/lib/validate";
 import { setCellQty } from "@/lib/stock";
 import { buildSearch, getSetting, logAction, num, setSetting, str } from "@/lib/util";
 import { getRates, toUah } from "@/lib/currency";
+import { productImages } from "@/lib/images";
 import { nextSku } from "@/lib/nextcodes";
 import { appSdId, isAppSdId } from "@/lib/sdid";
 import { PATH_SEP, categoryIdFor, createCategory, findCategory } from "@/lib/categories";
@@ -32,12 +33,18 @@ export async function pushProduct(productId: number, opts: PushOpts) {
     // перша успішна передача (або повтор після помилки) — повністю, разом з назвою й фото
     const first = !p.syncedAt;
     const full = { ...ALL, withDetails: true, withImages: true };
+    const sent: PushOpts & { withImages?: boolean } = first ? { ...opts, ...full } : opts;
+    let added: string[] = [];
     try {
-      await sdUpdateProducts([productToSd(p, null, first ? { ...opts, ...full } : opts)]);
+      added = await sdUpdateProducts([productToSd(p, null, sent)]);
     } catch (e) {
       // SalesDrive не знайшов товар (вважає його новим і вимагає назву) — відправляємо повністю
       if (!(e instanceof Error && /required field/i.test(e.message))) throw e;
-      await sdUpdateProducts([productToSd(p, null, { ...opts, ...full })]);
+      added = await sdUpdateProducts([productToSd(p, null, { ...opts, ...full })]);
+    }
+    // SalesDrive щойно створив товар, а фото в цьому запиті не було — дошлемо фото окремо
+    if (p.sdId && added.includes(p.sdId) && !sent.withImages && productImages(p.images).length) {
+      await sdUpdateProducts([productToSd(p, null, { withImages: true })]);
     }
     await db.product.update({ where: { id: p.id }, data: { syncError: null, syncedAt: new Date() } });
     return { ok: true as const };
