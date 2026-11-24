@@ -14,7 +14,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   const showMoney = can(user, "costs");
   const suppliers = await db.supplier.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { items: true } } } });
   const balances = showMoney
-    ? await Promise.all(suppliers.map((s) => supplierBalance(s.id, s.currency)))
+    ? await Promise.all(suppliers.map((s) => (s.ledgerFrom ? supplierBalance(s.id, s.currency, s.ledgerFrom) : null)))
     : [];
   const linked = await db.product.groupBy({ by: ["supplierId"], where: { supplierId: { not: null }, deletedAt: null }, _count: true });
   return (
@@ -57,8 +57,10 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                           </b>
                           {b.currency !== "UAH" && <div className="small muted">≈ {money(b.debtUah)} грн у собівартості</div>}
                         </>
-                      ) : (
+                      ) : b ? (
                         <span className="muted">0</span>
+                      ) : (
+                        <span className="small muted">не ведеться</span>
                       )}
                     </td>
                   )}

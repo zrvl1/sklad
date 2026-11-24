@@ -60,6 +60,7 @@ export async function saveSupplierFeed(formData: FormData) {
     feedPriceType: formData.get("feedPriceType") === "cost" ? "cost" : "rrp",
     currency: (str(formData.get("currency")) ?? "UAH").toUpperCase(),
     roundTo: Math.max(1, Math.min(100, Number(formData.get("roundTo")) || 10)),
+    ledgerFrom: str(formData.get("ledgerFrom")) ? new Date(`${str(formData.get("ledgerFrom"))}T00:00:00+02:00`) : null,
   };
   await db.supplier.update({ where: { id }, data });
   await logAction(user.id, "save", "supplier", id, { ...data, feedUrl: feedUrl ? "set" : null });
@@ -97,7 +98,8 @@ export async function addPayment(formData: FormData) {
   const dateStr = str(formData.get("date"));
   const date = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date();
   const account = str(formData.get("account"));
-  const bal = await supplierBalance(supplierId, currency);
+  if (!s.ledgerFrom) await db.supplier.update({ where: { id: supplierId }, data: { ledgerFrom: date } }); // перша оплата — старт обліку
+  const bal = await supplierBalance(supplierId, currency, s.ledgerFrom ?? date);
   const booked = bookedFor(bal, amount, uah);
   const diff = Math.round((uah - booked) * 100) / 100;
   let expenseId: number | null = null;

@@ -58,6 +58,7 @@ model Supplier {
   roundTo       Int       @default(10)    // округлення ціни продажу з РРЦ (грн)
   feedAt        DateTime? // коли востаннє завантажено фід
   feedError     String?
+  ledgerFrom    DateTime? // розрахунки (борг, оплати) ведуться з цієї дати; раніші приходи вважаються оплаченими
   receipts      Receipt[]
   codes         ProductCode[]
   items         SupplierItem[]

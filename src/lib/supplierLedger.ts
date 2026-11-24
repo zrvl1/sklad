@@ -22,9 +22,9 @@ export type Balance = {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export async function supplierBalance(supplierId: number, currency: string): Promise<Balance> {
+export async function supplierBalance(supplierId: number, currency: string, from?: Date | null): Promise<Balance> {
   const [rec, pay] = await Promise.all([
-    db.receipt.aggregate({ where: { supplierId, currency, status: "posted" }, _sum: { totalCurrency: true, total: true } }),
+    db.receipt.aggregate({ where: { supplierId, currency, status: "posted", ...(from ? { date: { gte: from } } : {}) }, _sum: { totalCurrency: true, total: true } }),
     db.supplierPayment.aggregate({ where: { supplierId, currency }, _sum: { amount: true, bookedUah: true, uah: true, diffUah: true } }),
   ]);
   const receipts = rec._sum.totalCurrency ?? 0;

@@ -40,7 +40,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
     getRates(),
     allCategories(),
     getSetting("feedCategoryMap"),
-    showMoney ? supplierBalance(id, s.currency) : Promise.resolve(null),
+    showMoney ? supplierBalance(id, s.currency, s.ledgerFrom ?? new Date()) : Promise.resolve(null),
     showMoney ? db.supplierPayment.findMany({ where: { supplierId: id }, orderBy: { date: "desc" }, take: 30 }) : Promise.resolve([]),
     db.product.count({ where: { supplierId: id, deletedAt: null } }),
   ]);
@@ -159,6 +159,11 @@ export default async function SupplierPage({ params, searchParams }: { params: P
       {showMoney && bal && (
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>Розрахунки ({s.currency})</h2>
+          <p className="small muted">
+            {s.ledgerFrom
+              ? `Облік з ${dateUa(s.ledgerFrom)}: враховуються приходи з цієї дати (раніші вважаються оплаченими). Дату можна змінити в налаштуваннях нижче.`
+              : "Облік ще не ведеться: почнеться з першої записаної оплати, або вкажіть дату старту в налаштуваннях нижче (наприклад, дату першої неоплаченої накладної)."}
+          </p>
           <div className="row" style={{ gap: 24, marginBottom: 10 }}>
             <div>
               Приходів: <b>{money(bal.receipts)} {s.currency}</b>
@@ -287,6 +292,10 @@ export default async function SupplierPage({ params, searchParams }: { params: P
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            Вести борг з дати (приходи до неї вважаються оплаченими)
+            <input type="date" name="ledgerFrom" defaultValue={dateInput(s.ledgerFrom)} />
           </label>
           <label>
             Примітка <input name="note" defaultValue={s.note ?? ""} />
