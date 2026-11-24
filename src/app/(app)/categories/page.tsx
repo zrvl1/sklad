@@ -2,9 +2,9 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requirePerm } from "@/lib/auth";
 import { allCategories, PATH_SEP } from "@/lib/categories";
-import { addCategory, editCategory } from "./actions";
+import { addCategory, editCategory, removeCategory } from "./actions";
 
-export default async function CategoriesPage({ searchParams }: { searchParams: Promise<{ msg?: string; edit?: string }> }) {
+export default async function CategoriesPage({ searchParams }: { searchParams: Promise<{ msg?: string; edit?: string; del?: string }> }) {
   await requirePerm("products.edit");
   const sp = await searchParams;
   const [cats, counts] = await Promise.all([
@@ -57,7 +57,54 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
             </thead>
             <tbody>
               {cats.map((c) =>
-                sp.edit === c.id ? (
+                sp.del === c.id ? (
+                  <tr key={c.id}>
+                    <td colSpan={4} style={{ background: "#fef2f2" }}>
+                      <form action={removeCategory} className="stack">
+                        <input type="hidden" name="id" value={c.id} />
+                        <b>Видалити категорію «{c.path}»?</b>
+                        {(() => {
+                          const own = countOf.get(c.id) ?? 0;
+                          const kids = cats.filter((x) => x.parentId === c.id);
+                          const parent = cats.find((x) => x.id === c.parentId);
+                          return (
+                            <>
+                              {own > 0 ? (
+                                <label>
+                                  У категорії {own} товарів. Перенести їх у:
+                                  <select name="targetId" defaultValue={parent?.id ?? ""} required>
+                                    {!parent && <option value="">— оберіть категорію —</option>}
+                                    {parentsFor(c.path).map((o) => (
+                                      <option key={o.id} value={o.id}>
+                                        {o.path}
+                                        {o.id === parent?.id ? " (батьківська)" : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              ) : (
+                                <span className="small muted">Товарів у самій категорії немає.</span>
+                              )}
+                              {kids.length > 0 && (
+                                <span className="small">
+                                  Підкатегорії ({kids.map((k) => k.name).join(", ")}) не видаляються — піднімуться на рівень вище
+                                  {parent ? ` у «${parent.name}»` : " (на верхній рівень)"} разом зі своїми товарами.
+                                </span>
+                              )}
+                              <span className="small muted">Категорію буде видалено і в SalesDrive; товари отримають нову категорію там теж.</span>
+                            </>
+                          );
+                        })()}
+                        <div className="row">
+                          <button className="btn danger sm">Так, видалити</button>
+                          <Link className="btn sm" href="/categories">
+                            Скасувати
+                          </Link>
+                        </div>
+                      </form>
+                    </td>
+                  </tr>
+                ) : sp.edit === c.id ? (
                   <tr key={c.id}>
                     <td colSpan={4}>
                       <form action={editCategory} className="toolbar" style={{ flexWrap: "wrap" }}>
@@ -75,6 +122,9 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                         <button className="btn primary sm">Зберегти</button>
                         <Link className="btn sm" href="/categories">
                           Скасувати
+                        </Link>
+                        <Link className="btn sm danger" href={`/categories?del=${encodeURIComponent(c.id)}`} style={{ marginLeft: "auto" }}>
+                          Видалити…
                         </Link>
                       </form>
                     </td>

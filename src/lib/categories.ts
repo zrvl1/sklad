@@ -124,3 +124,56 @@ export async function createCategoryTree(paths: string[]) {
   const after = await allCategories();
   return { created: fresh.length, paths: fresh.map((f) => after.find((c) => c.id === f.id)?.path ?? f.name) };
 }
+
+/**
+ * Видалити категорію в додатку й SalesDrive.
+ * Товари переносяться в targetId (або в батьківську категорію), підкатегорії — у батьківську.
+ */
+export async function deleteCategory(id: string, targetId: string | null) {
+  const all = await allCategories();
+  const cat = all.find((c) => c.id === id);
+  if (!cat) throw new Error("Категорію не знайдено");
+  const tId = targetId || cat.parentId;
+  const target = tId ? all.find((c) => c.id === tId) ?? null : null;
+  if (target && (target.id === id || target.path.startsWith(cat.path + PATH_SEP))) throw new Error("Не можна переносити товари в саму категорію чи її підкатегорію");
+
+  const products = await db.product.findMany({ where: { categorySdId: id } });
+  const active = products.filter((p) => !p.deletedAt);
+  if (active.length && !target) throw new Error(`У категорії ${active.length} товарів — оберіть, куди їх перенести`);
+
+  // 1) підкатегорії — на рівень вище
+  const children = all.filter((c) => c.parentId === id);
+  for (const c of children) await updateCategory(c.id, c.name, cat.parentId);
+
+  // 2) товари — у нову категорію (у нас і в SalesDrive)
+  if (products.length)
+    await db.product.updateMany({ where: { categorySdId: id }, data: { categorySdId: target?.id ?? null, categoryName: target?.name ?? null } });
+  const { isSalesDriveConfigured, productToSd, sdUpdateProducts, sdDeleteCategories } = await import("./salesdrive");
+  let sdNote = "";
+  if (isSalesDriveConfigured()) {
+    const moved = await db.product.findMany({ where: { id: { in: active.map((p) => p.id) }, sdId: { not: null } } });
+    for (let i = 0; i < moved.length; i += 100) await sdUpdateProducts(moved.slice(i, i + 100).map((p) => productToSd(p, null, {})));
+    // 3) сама категорія
+    try {
+      await sdDeleteCategories([id]);
+    } catch (e) {
+      sdNote = ` SalesDrive не видалив категорію (${e instanceof Error ? e.message : e}) — видаліть її там вручну; товарів у ній уже немає.`;
+    }
+  }
+
+  // 4) прибрати з додатку
+  const drop = <T extends { id: string }>(list: T[]) => list.filter((c) => c.id !== id);
+  await setSetting("ymlCategoryTree", JSON.stringify(drop(parse<SdCategory[]>(await getSetting("ymlCategoryTree"), []))));
+  await setSetting("createdCategories", JSON.stringify(drop(parse<SdCategory[]>(await getSetting("createdCategories"), []))));
+  await setSetting("customCategories", JSON.stringify(parse<string[]>(await getSetting("customCategories"), []).filter((l) => parseCustomLine(l).id !== id)));
+  // зіставлення категорій фіду постачальника
+  const map = parse<Record<string, string>>(await getSetting("feedCategoryMap"), {});
+  for (const [k, v] of Object.entries(map)) {
+    if (v === cat.path) {
+      if (target) map[k] = target.path;
+      else delete map[k];
+    } else if (v.startsWith(cat.path + PATH_SEP)) map[k] = (cat.parentId ? all.find((c) => c.id === cat.parentId)!.path + PATH_SEP : "") + v.slice(cat.path.length + PATH_SEP.length);
+  }
+  await setSetting("feedCategoryMap", JSON.stringify(map));
+  return { name: cat.name, moved: active.length, target: target?.path ?? null, children: children.length, sdNote };
+}

@@ -333,6 +333,26 @@ export async function sdUpsertCategories(cats: SdCategory[]) {
   }
 }
 
+/** Видалити категорії в SalesDrive (category-handler, action delete — як для товарів) */
+export async function sdDeleteCategories(ids: string[]) {
+  const { url, key } = config();
+  const res = await fetch(`${url}/category-handler/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Api-Key": key },
+    body: JSON.stringify({ form: key, action: "delete", category: ids.map((id) => ({ id })) }),
+    cache: "no-store",
+  });
+  const text = await res.text();
+  await saveSdDebug({ deleteCategories: ids }, res.status, text);
+  if (!res.ok) throw new Error(`SalesDrive відповів ${res.status}: ${text.slice(0, 300)}`);
+  try {
+    const d = JSON.parse(text) as { status?: string; errors?: unknown; message?: string };
+    if (d.status === "error") throw new Error(`SalesDrive: ${JSON.stringify(d.errors ?? d.message).slice(0, 300)}`);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("SalesDrive")) throw e;
+  }
+}
+
 export function parseYml(xml: string): YmlOffer[] {
   const doc = ymlParser.parse(xml);
   const shop = doc?.yml_catalog?.shop ?? doc?.shop ?? {};

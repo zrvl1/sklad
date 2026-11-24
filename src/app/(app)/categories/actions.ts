@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePerm } from "@/lib/auth";
-import { createCategory, updateCategory } from "@/lib/categories";
+import { createCategory, deleteCategory, updateCategory } from "@/lib/categories";
 import { logAction, str } from "@/lib/util";
 
 const back = (msg: string) => {
@@ -41,6 +41,25 @@ export async function editCategory(formData: FormData) {
     msg = `Збережено: ${name}`;
   } catch (e) {
     msg = `Не збережено: ${e instanceof Error ? e.message : e}`;
+  }
+  back(msg);
+}
+
+export async function removeCategory(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  const id = str(formData.get("id"));
+  if (!id) return back("Не вказано категорію");
+  let msg: string;
+  try {
+    const r = await deleteCategory(id, str(formData.get("targetId")));
+    await logAction(user.id, "delete", "category", null, { id, ...r });
+    msg =
+      `Категорію «${r.name}» видалено.` +
+      (r.moved ? ` Товарів перенесено: ${r.moved} → ${r.target}.` : "") +
+      (r.children ? ` Підкатегорій піднято на рівень вище: ${r.children}.` : "") +
+      r.sdNote;
+  } catch (e) {
+    msg = `Не видалено: ${e instanceof Error ? e.message : e}`;
   }
   back(msg);
 }
