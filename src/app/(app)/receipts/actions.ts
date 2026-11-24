@@ -157,12 +157,14 @@ export async function postReceipt(id: number) {
     const oldCost = r.currency === "UAH" ? p.cost : p.costCurrency === r.currency ? p.costOriginal : null;
     const unit =
       costMethod === "avg" && old > 0 && oldCost !== null && oldCost > 0 ? (old * oldCost + a.qty * a.cost) / (old + a.qty) : a.cost;
+    // у гривні: старий залишок — за його гривневою собівартістю (курс попередніх приходів), новий — за курсом цього приходу
+    const unitUah = costMethod === "avg" && old > 0 && p.cost > 0 ? (old * p.cost + a.qty * a.cost * rate) / (old + a.qty) : a.cost * rate;
     a.cost = Math.round(unit * 100) / 100;
     return {
       // собівартість: у валюті приходу (SalesDrive сам перерахує в гривню) + у гривні для наших звітів
       product: {
         ...p,
-        cost: Math.round(a.cost * rate * 100) / 100,
+        cost: Math.round(unitUah * 100) / 100,
         costCurrency: r.currency === "UAH" ? null : r.currency,
         costOriginal: r.currency === "UAH" ? null : a.cost,
         // нова ціна продажу вводиться в гривні

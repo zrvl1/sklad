@@ -44,7 +44,7 @@ type Props = {
   receiptId: number;
   initial: Omit<ReceiptInput, "lines"> & { lines: Line[] };
   warehouses: { id: number; name: string }[];
-  suppliers: { id: number; name: string }[];
+  suppliers: { id: number; name: string; currency?: string }[];
   cells: { id: number; code: string; warehouseId: number }[];
   rates: Record<string, number>; // курси з SalesDrive: гривень за 1 одиницю
   showCurrency: boolean;
@@ -228,7 +228,13 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           Постачальник
           <select
             value={header.supplierId ?? ""}
-            onChange={(e) => (setHeader({ ...header, supplierId: e.target.value ? Number(e.target.value) : null }), touch())}
+            onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : null;
+              // валюта закупівлі — як у постачальника (ТАТА — USD)
+              const sc = suppliers.find((s) => s.id === id)?.currency;
+              setHeader({ ...header, supplierId: id, ...(showCurrency && sc ? { currency: sc } : {}) });
+              touch();
+            }}
           >
             <option value="">—</option>
             {suppliers.map((s) => (

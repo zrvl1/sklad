@@ -34,10 +34,11 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
   const prom = r.status === "draft" ? (await promCommissions(r.lines.map((l) => l.productId))).byProduct : new Map();
 
   if (r.status === "draft") {
-    const showCurrency = process.env.ENABLE_CURRENCY === "true";
-    const [warehouses, suppliers, cells, rates, categories] = await Promise.all([
+    const suppliers = await db.supplier.findMany({ orderBy: { name: "asc" } });
+    // валюта закупівлі: увімкнена в налаштуваннях або є постачальник, з яким розрахунки у валюті
+    const showCurrency = process.env.ENABLE_CURRENCY === "true" || suppliers.some((s) => s.currency !== "UAH") || r.currency !== "UAH";
+    const [warehouses, cells, rates, categories] = await Promise.all([
       db.warehouse.findMany({ orderBy: { name: "asc" } }),
-      db.supplier.findMany({ orderBy: { name: "asc" } }),
       db.cell.findMany({ orderBy: { code: "asc" } }),
       showCurrency ? getRates() : Promise.resolve({ UAH: 1 } as Record<string, number>),
       allCategories(),
@@ -81,7 +82,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
             })),
           }}
           warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
-          suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+          suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency }))}
           cells={cells.map((c) => ({ id: c.id, code: c.code, warehouseId: c.warehouseId }))}
           rates={rates}
           showCurrency={showCurrency}
