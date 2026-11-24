@@ -4,7 +4,8 @@ import { can, requirePerm } from "@/lib/auth";
 import { dateTimeUa, money } from "@/lib/util";
 import { supplierBalance } from "@/lib/supplierLedger";
 import RateForm from "@/components/RateForm";
-import { createSupplier } from "./actions";
+import { createSupplier, saveDescFooter } from "./actions";
+import { descFooters } from "@/lib/supplierFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   const balances = showMoney
     ? await Promise.all(suppliers.map((s) => (s.ledgerFrom ? supplierBalance(s.id, s.currency, s.ledgerFrom) : null)))
     : [];
+  const footer = await descFooters();
   const linked = await db.product.groupBy({ by: ["supplierId"], where: { supplierId: { not: null }, deletedAt: null }, _count: true });
   return (
     <>
@@ -75,6 +77,26 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
           <button className="btn sm">Додати</button>
         </form>
       </div>
+      {can(user, "products.edit") && (
+        <details className="panel">
+          <summary>
+            <b>Текст у кінці опису</b> <span className="small muted">— додається до кожного товару, створеного з XML (можна HTML)</span>
+          </summary>
+          <form action={saveDescFooter} className="stack" style={{ marginTop: 10 }}>
+            <label>
+              Українською
+              <textarea name="ua" rows={3} defaultValue={footer.ua} />
+            </label>
+            <label>
+              Російською
+              <textarea name="ru" rows={3} defaultValue={footer.ru} />
+            </label>
+            <div>
+              <button className="btn sm">Зберегти</button>
+            </div>
+          </form>
+        </details>
+      )}
     </>
   );
 }

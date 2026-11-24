@@ -882,13 +882,32 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
     map[`${s.id}:${it.category}`] = cat.path;
     await setSetting("feedCategoryMap", JSON.stringify(map));
   }
-  const name = (input.name ?? it.name).trim();
+  // у фіді все українською: UA — у «переклад», RU (основна мова SalesDrive) — через DeepL
+  const nameUa = (input.name ?? it.name).trim();
+  const { descFooters } = await import("@/lib/supplierFeed");
+  const footer = await descFooters();
+  const descUa = [paramsHtml(params), footer.ua].filter(Boolean).join("\n");
+  let name = nameUa;
+  let descRu: string | null = null;
+  const { translate, translateConfigured } = await import("@/lib/translate");
+  if (translateConfigured()) {
+    try {
+      const [n] = await translate([nameUa], "UK", "RU");
+      const [d] = paramsHtml(params) ? await translate([paramsHtml(params)], "UK", "RU", true) : [""];
+      if (n) name = n;
+      descRu = [d, footer.ru].filter(Boolean).join("\n");
+    } catch {
+      /* перекладач недоступний — RU-назва українською, виправите вручну */
+    }
+  }
   const data = {
     name,
+    nameTranslate: nameUa,
     price,
     categoryName: cat?.name ?? null,
     categorySdId: cat?.id ?? null,
-    description: paramsHtml(params) || null,
+    description: descRu ?? descUa,
+    descriptionTranslate: descUa,
     params: JSON.stringify(params.map((p) => ({ name: p.name, type: "text", value: p.value }))),
     manufacturer: it.brand,
     country,

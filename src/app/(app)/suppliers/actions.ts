@@ -139,6 +139,14 @@ export async function deletePayment(formData: FormData) {
   back(`/suppliers/${p.supplierId}`, "Оплату видалено");
 }
 
+export async function saveDescFooter(formData: FormData) {
+  const user = await requirePerm("products.edit");
+  await setSetting("descFooterUa", String(formData.get("ua") ?? "").trim());
+  await setSetting("descFooterRu", String(formData.get("ru") ?? "").trim());
+  await logAction(user.id, "save", "setting", "descFooter");
+  back("/suppliers", "Текст у кінці опису збережено — додаватиметься до нових товарів з XML");
+}
+
 export async function createSupplier(formData: FormData) {
   const user = await requirePerm("receipts");
   const name = str(formData.get("name"));

@@ -263,6 +263,17 @@ export function paramsHtml(params: { name: string; value: string }[]) {
   ].join("\n");
 }
 
+/** Текст у кінці кожного опису (перевірка сумісності / зв'язок) — UA і RU */
+export const DEFAULT_FOOTER_UA =
+  "<p><b>Перед замовленням перевірте сумісність</b> — звірте модель техніки та розміри зі своєю деталлю. Не впевнені або потрібні точні розміри запчастини? Напишіть або зателефонуйте нам — підкажемо по сумісності та за потреби заміряємо деталь.</p>";
+export const DEFAULT_FOOTER_RU =
+  "<p><b>Перед заказом проверьте совместимость</b> — сверьте модель техники и размеры со своей деталью. Не уверены или нужны точные размеры запчасти? Напишите или позвоните нам — подскажем по совместимости и при необходимости замерим деталь.</p>";
+export async function descFooters() {
+  const { getSetting } = await import("./util");
+  const [ua, ru] = await Promise.all([getSetting("descFooterUa"), getSetting("descFooterRu")]);
+  return { ua: ua ?? DEFAULT_FOOTER_UA, ru: ru ?? DEFAULT_FOOTER_RU };
+}
+
 /** Характеристики «за замовчуванням» для товарів постачальника (країна, стан) */
 export const DEFAULT_EXTRA_PARAMS = "Країна виробник: Китай\nСтан: Новий";
 export function parseExtraParams(text: string | null | undefined) {
