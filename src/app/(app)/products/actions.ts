@@ -901,10 +901,11 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
   let photoNote = "";
   for (const src of (JSON.parse(it.pictures ?? "[]") as string[]).slice(0, 10)) {
     try {
-      const r = await fetch(src, { signal: AbortSignal.timeout(20000) });
-      const mime = r.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (!r.ok || !/^image\//.test(mime) || buf.length > 4_000_000 || buf.length < 500) continue;
+      const { robustGet } = await import("@/lib/robustFetch");
+      const r = await robustGet(src, 20000);
+      const mime = r.type.split(";")[0] || "image/jpeg";
+      const buf = r.body;
+      if (r.status !== 200 || !/^image\//.test(mime) || buf.length > 4_000_000 || buf.length < 500) continue;
       const img = await db.productImage.create({ data: { productId: created.id, mime, data: buf } });
       urls.push(ownImageUrl(img.id));
     } catch {

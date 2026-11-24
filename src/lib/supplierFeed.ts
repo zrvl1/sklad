@@ -100,9 +100,12 @@ export async function refreshSupplierFeed(supplierId: number) {
   if (!s.feedUrl) throw new Error("Не вказано посилання на фід");
   let items: FeedItem[];
   try {
-    const res = await fetch(s.feedUrl, { cache: "no-store", signal: AbortSignal.timeout(60000) });
-    if (!res.ok) throw new Error(`фід відповів ${res.status}`);
-    items = parseFeed(await res.text());
+    const { robustGet } = await import("./robustFetch");
+    const res = await robustGet(s.feedUrl, 90000);
+    if (res.status < 200 || res.status >= 300) throw new Error(`фід відповів ${res.status}`);
+    const head = res.body.subarray(0, 200).toString("latin1");
+    const enc = head.match(/encoding=["']([\w-]+)["']/i)?.[1]?.toLowerCase() ?? "utf-8";
+    items = parseFeed(new TextDecoder(enc === "utf8" ? "utf-8" : enc).decode(res.body));
     if (!items.length) throw new Error("у фіді не знайдено жодного товару (<offer>)");
   } catch (e) {
     let msg = e instanceof Error ? e.message : String(e);
