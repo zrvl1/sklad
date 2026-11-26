@@ -139,7 +139,9 @@ export default async function MoneyPage({ searchParams }: { searchParams: SP }) 
               )}
               <tr>
                 <td>
-                  − Закупівлі товару ({s.receipts} <Link href="/reports">приходів</Link>)
+                  − Оплата товару ({s.receiptsCounted} з {s.receipts} <Link href="/receipts">приходів</Link>
+                  {s.supplierPaid > 0 ? ` + оплати постачальникам ${money(s.supplierPaid)}` : ""})
+                  <div className="small muted">без приходів «оплачено раніше» і в борг постачальнику</div>
                 </td>
                 <td className="num">{money(s.purchases)}</td>
               </tr>

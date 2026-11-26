@@ -263,3 +263,14 @@ export async function deleteReceipt(formData: FormData) {
   }
   redirect("/receipts");
 }
+
+/** «Оплачено раніше» — прихід не рахується в «Русі грошей» за місяць (напр. внесення наявного товару) */
+export async function togglePaidEarlier(formData: FormData) {
+  const user = await requirePerm("receipts");
+  const id = Number(formData.get("id"));
+  const r = await db.receipt.findUniqueOrThrow({ where: { id } });
+  await db.receipt.update({ where: { id }, data: { paidEarlier: !r.paidEarlier } });
+  await logAction(user.id, "paid-earlier", "receipt", id, { value: !r.paidEarlier });
+  revalidatePath(`/receipts/${id}`);
+  revalidatePath("/reports/expenses");
+}

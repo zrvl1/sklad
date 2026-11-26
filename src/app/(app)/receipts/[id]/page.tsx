@@ -9,7 +9,7 @@ import { getRates } from "@/lib/currency";
 import { allCategories } from "@/lib/categories";
 import { can, requireUser } from "@/lib/auth";
 import ReceiptEditor from "./ReceiptEditor";
-import { deleteReceipt } from "../actions";
+import { deleteReceipt, togglePaidEarlier } from "../actions";
 import PrintReceiptLabels from "./PrintReceiptLabels";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ posted?: string; warn?: string }> };
@@ -128,6 +128,19 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
         <div>
           Провів: {r.postedBy?.name ?? "—"}, {dateTimeUa(r.postedAt)}
         </div>
+        <form action={togglePaidEarlier}>
+          <input type="hidden" name="id" value={r.id} />
+          {r.paidEarlier ? (
+            <span>
+              💰 <b>Оплачено раніше</b> — не рахується в «Русі грошей» за місяць.{" "}
+              <button className="btn sm">Скасувати</button>
+            </span>
+          ) : (
+            <button className="btn sm" title="Товар оплачено раніше (напр. внесення наявного залишку) — не рахувати як витрату грошей цього місяця">
+              Позначити «оплачено раніше»
+            </button>
+          )}
+        </form>
         {r.note && <div style={{ gridColumn: "1 / -1" }}>Коментар: {r.note}</div>}
       </div>
 

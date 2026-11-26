@@ -21,7 +21,10 @@ export async function monthSummary(from: Date, to: Date) {
       _sum: { amount: true, costAmount: true, profit: true, commission: true },
       _count: true,
     }),
-    db.receipt.aggregate({ where: { status: "posted", date: { gte: from, lt: to } }, _sum: { total: true }, _count: true }),
+    db.receipt.findMany({
+      where: { status: "posted", date: { gte: from, lt: to } },
+      select: { total: true, paidEarlier: true, date: true, supplier: { select: { ledgerFrom: true } } },
+    }),
     db.expense.groupBy({ by: ["kind"], where: { date: { gte: from, lt: to } }, _sum: { amount: true } }),
   ]);
   const k = (kind: MoneyKind) => money.find((m) => m.kind === kind)?._sum.amount ?? 0;
@@ -31,7 +34,12 @@ export async function monthSummary(from: Date, to: Date) {
   // рахуємо самі: виручка − собівартість − комісія Prom (прибуток SalesDrive уже містить мінус комісію — не віднімати двічі)
   const gross = revenue - cogs - commission;
   const net = gross + k("income") - k("expense");
-  const purchases = receipts._sum.total ?? 0;
+  // гроші за товар: приходи, оплачені при отриманні (без «оплачено раніше» і без боргу постачальнику),
+  // плюс реальні оплати постачальникам з боргом (у гривнях, як купили валюту/віддали готівку)
+  const onCredit = (r: (typeof receipts)[number]) => Boolean(r.supplier?.ledgerFrom && r.date >= r.supplier.ledgerFrom);
+  const paidOnReceipt = receipts.filter((r) => !r.paidEarlier && !onCredit(r)).reduce((s, r) => s + r.total, 0);
+  const supplierPaid = (await db.supplierPayment.aggregate({ where: { date: { gte: from, lt: to } }, _sum: { uah: true } }))._sum.uah ?? 0;
+  const purchases = Math.round((paidOnReceipt + supplierPaid) * 100) / 100;
   const cashIn = revenue + k("income") + k("invest");
   const cashOut = purchases + commission + k("expense") + k("owner");
   return {
@@ -46,7 +54,9 @@ export async function monthSummary(from: Date, to: Date) {
     owner: k("owner"),
     invest: k("invest"),
     purchases,
-    receipts: receipts._count,
+    receipts: receipts.length,
+    receiptsCounted: receipts.filter((r) => !r.paidEarlier && !onCredit(r)).length,
+    supplierPaid,
     cashIn,
     cashOut,
     cashNet: cashIn - cashOut,
