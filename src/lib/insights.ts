@@ -133,7 +133,7 @@ export async function buildInsights(): Promise<Insight[]> {
     db.expense.findMany({ where: { kind: "expense", date: { gte: mFrom, lt: mTo }, category: { contains: "Реклама" } }, select: { category: true, amount: true } }),
     db.sdOrder.findMany({
       where: { orderTime: { gte: mFrom, lt: mTo }, ...(saleIds.length ? { statusId: { in: saleIds } } : {}) },
-      select: { profit: true, commission: true, utmCampaign: true },
+      select: { amount: true, costAmount: true, commission: true, utmCampaign: true },
     }),
   ]);
   const monthName = mFrom.toLocaleString("uk-UA", { month: "long", year: "numeric" });
@@ -153,7 +153,7 @@ export async function buildInsights(): Promise<Insight[]> {
   for (const [camp, sum] of byCamp) {
     const profit = mOrders
       .filter((o) => o.utmCampaign && o.utmCampaign.toLowerCase().includes(camp.toLowerCase()))
-      .reduce((s, o) => s + o.profit - o.commission, 0);
+      .reduce((s, o) => s + o.amount - o.costAmount - o.commission, 0);
     const ratio = sum > 0 ? profit / sum : 0;
     if (ratio < 1)
       out.push({

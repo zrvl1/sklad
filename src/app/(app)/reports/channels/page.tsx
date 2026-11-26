@@ -51,7 +51,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: SP 
     if (saleIds.includes(o.statusId)) {
       c.sold++;
       c.revenue += o.amount;
-      c.profit += o.profit - o.commission;
+      c.profit += o.amount - o.costAmount - o.commission; // прибуток SalesDrive уже мінус комісія — рахуємо самі, без подвійного віднімання
       c.commission += o.commission;
     } else if (refusedIds.has(o.statusId)) c.refused++;
     chans.set(key, c);
