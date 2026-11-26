@@ -246,6 +246,33 @@ export default async function ProductPage({ params, searchParams }: Props) {
           </details>
         );
       })()}
+      {(() => {
+        // чого не вистачає в картці (основні товари)
+        if (product.baseProductId || product.deletedAt) return null;
+        const stockTotal = product.stocks.reduce((s, x) => s + x.qty, 0);
+        const miss: [string, string][] = [];
+        if (!product.codes.some((c) => c.type === "supplier")) miss.push(["код постачальника", "supcode"]);
+        if (!product.categorySdId && !product.categoryName) miss.push(["категорія", "cat"]);
+        if (!(product.cost > 0)) miss.push(["собівартість", "cost"]);
+        if (!product.manufacturer) miss.push(["бренд", "man"]);
+        if (!product.country) miss.push(["країна", "country"]);
+        if (!product.keywords) miss.push(["ключові слова", "kw"]);
+        if (!product.description) miss.push(["опис", "desc"]);
+        if (!product.images || product.images === "[]") miss.push(["фото", "photo"]);
+        if (stockTotal > 0 && !product.cells.some((c) => c.qty > 0)) miss.push(["комірка", "cell"]);
+        if (!miss.length) return null;
+        return (
+          <div className="msg warn small">
+            <b>Не заповнено:</b>{" "}
+            {miss.map(([t, f], i) => (
+              <span key={f}>
+                {i > 0 && ", "}
+                <Link href={`/products/fill?f=${f}`}>{t}</Link>
+              </span>
+            ))}
+          </div>
+        );
+      })()}
       {langIssues(product).length > 0 && (
         <div className="msg warn small">
           <b>Змішана мова:</b>

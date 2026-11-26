@@ -19,6 +19,9 @@ const FILTERS: Record<string, string> = {
   lang: "Змішана мова (RU/UA)",
   cell: "Без комірки (є залишок)",
   photo: "Без фото",
+  supcode: "Без коду постачальника",
+  cat: "Без категорії",
+  desc: "Без опису",
   all: "Усі основні товари",
 };
 
@@ -58,6 +61,12 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
           ? { ...base, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } }
         : f === "photo"
           ? { ...base, OR: [{ images: null }, { images: "" }, { images: "[]" }] }
+        : f === "supcode"
+          ? { ...base, codes: { none: { type: "supplier" } } }
+        : f === "cat"
+          ? { ...base, AND: [{ OR: [{ categorySdId: null }, { categorySdId: "" }] }, { OR: [{ categoryName: null }, { categoryName: "" }] }] }
+        : f === "desc"
+          ? { ...base, OR: [{ description: null }, { description: "" }] }
           : base;
 
   const [counts, total, rows, cells, mans] = await Promise.all([
@@ -70,6 +79,11 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       Promise.resolve(langIds.length),
       db.product.count({ where: { deletedAt: null, baseProductId: null, stocks: { some: { qty: { gt: 0 } } }, cells: { none: { qty: { gt: 0 } } } } }),
       db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ images: null }, { images: "" }, { images: "[]" }] } }),
+      db.product.count({ where: { deletedAt: null, baseProductId: null, codes: { none: { type: "supplier" } } } }),
+      db.product.count({
+        where: { deletedAt: null, baseProductId: null, AND: [{ OR: [{ categorySdId: null }, { categorySdId: "" }] }, { OR: [{ categoryName: null }, { categoryName: "" }] }] },
+      }),
+      db.product.count({ where: { deletedAt: null, baseProductId: null, OR: [{ description: null }, { description: "" }] } }),
     ]),
     db.product.count({ where }),
     db.product.findMany({
@@ -99,7 +113,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>
             {t}
-            {i < 8 ? ` (${counts[i]})` : ""}
+            {i < counts.length ? ` (${counts[i]})` : ""}
           </Link>
         ))}
         <form className="row" style={{ gap: 6 }}>
