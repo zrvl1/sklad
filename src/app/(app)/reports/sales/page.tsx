@@ -44,7 +44,8 @@ export default async function SalesReport({ searchParams }: { searchParams: SP }
   const ownerOut = expenses.filter((e) => e.kind === "owner").reduce((s, e) => s + (e._sum.amount ?? 0), 0);
   const expTotal = bizExp.reduce((s, e) => s + (e._sum.amount ?? 0), 0);
   const commission = orders._sum.commission ?? 0;
-  const gross = (orders._sum.profit ?? 0) - commission;
+  // виручка − собівартість − комісія Prom (у прибутку SalesDrive комісія вже віднята — не віднімаємо двічі)
+  const gross = (orders._sum.amount ?? 0) - (orders._sum.costAmount ?? 0) - commission;
   const net = gross + otherIncome - expTotal;
 
   // По товарах: продажі карток-комплектів зводимо на основний (фізичний) товар, у штуках основного

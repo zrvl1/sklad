@@ -28,8 +28,8 @@ export async function monthSummary(from: Date, to: Date) {
   const revenue = orders._sum.amount ?? 0;
   const cogs = orders._sum.costAmount ?? 0;
   const commission = orders._sum.commission ?? 0;
-  // прибуток SalesDrive не враховує комісію Prom — віднімаємо її
-  const gross = (orders._sum.profit ?? revenue - cogs) - commission;
+  // рахуємо самі: виручка − собівартість − комісія Prom (прибуток SalesDrive уже містить мінус комісію — не віднімати двічі)
+  const gross = revenue - cogs - commission;
   const net = gross + k("income") - k("expense");
   const purchases = receipts._sum.total ?? 0;
   const cashIn = revenue + k("income") + k("invest");
