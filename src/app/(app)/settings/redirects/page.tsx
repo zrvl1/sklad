@@ -44,6 +44,10 @@ export default async function RedirectsPage({ searchParams }: { searchParams: Pr
               На головну ({count("головна")})
             </Link>
             <span className="spacer" />
+            <span className="small muted" style={{ alignSelf: "center" }}>
+              у файлах — без «на головну» і без категорій зі схожістю &lt; 0.5 (
+              <a href="/api/seo/redirects?full=1&all=1">усе разом</a>)
+            </span>
             <a className="btn primary sm" href="/api/seo/redirects?full=1">
               ⬇ Excel (повні посилання)
             </a>

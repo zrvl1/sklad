@@ -14,6 +14,9 @@ export async function GET(req: Request) {
   try {
     list = JSON.parse((await getSetting("redirects404")) ?? "[]");
   } catch {}
+  // за замовчуванням без слабких збігів: «на головну» і категорії зі схожістю < 0.5 (часто не та тематика)
+  if (new URL(req.url).searchParams.get("all") !== "1")
+    list = list.filter((r) => r.kind !== "головна" && !(r.kind === "категорія" && r.score < 0.5));
   const fmt = new URL(req.url).searchParams.get("fmt") ?? "xlsx";
   // Horoshop не знаходить адреси з /ru/ у редиректах — для них окремий файл без мовного префікса
   // (редирект Horoshop діє для адреси без /ru/; українські вже імпортовані — їх пропускаємо)

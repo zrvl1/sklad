@@ -28,6 +28,7 @@ export default function CreateFromFeed({
   compact?: boolean;
 }) {
   const [cat, setCat] = useState(defaultCategory);
+  const [name, setName] = useState("");
   const [res, setRes] = useState<{ ok: boolean; text: string; id?: number } | null>(null);
   const [pending, start] = useTransition();
 
@@ -40,6 +41,13 @@ export default function CreateFromFeed({
 
   return (
     <span className="row" style={{ gap: 6, flexWrap: compact ? "nowrap" : "wrap" }}>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Ваша назва UA (порожньо — як у постачальника)"
+        title="Краще вписати одразу: тоді на сайті з першого дня буде правильна адреса сторінки і не з’явиться 404 після перейменування"
+        style={{ minWidth: 320 }}
+      />
       <CategoryTreeSelect options={categoryOptions} mode="path" value={cat} onChange={(v) => setCat(v)} placeholder="Категорія на сайті" style={{ minWidth: 260 }} />
       <button
         type="button"
@@ -47,7 +55,7 @@ export default function CreateFromFeed({
         disabled={pending}
         onClick={() =>
           start(async () => {
-            const r = await createFromSupplierItem({ supplierId, code, categoryName: cat || undefined, cost, costCurrency });
+            const r = await createFromSupplierItem({ supplierId, code, name: name.trim() || undefined, categoryName: cat || undefined, cost, costCurrency });
             if (!r.ok) return setRes({ ok: false, text: r.error });
             setRes({ ok: true, text: r.warning ?? "", id: r.product.id });
             onCreated?.(r.product, r.warning);
