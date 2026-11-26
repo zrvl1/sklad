@@ -20,7 +20,9 @@ export default function ProductForm({
   showCurrency = false,
   kitsCount = 0,
   suggestedSku = null,
+  supplierCodes = [],
 }: {
+  supplierCodes?: { code: string; supplier: string | null }[];
   suggestedSku?: string | null;
   kitsCount?: number;
   product?: Product | null;
@@ -150,8 +152,13 @@ export default function ProductForm({
           </label>
         </div>
         <label>
-          Артикул постачальника (додати)
+          Артикул постачальника (додати ще один)
           <input name="supplierCode" placeholder="код із накладної постачальника" />
+          {supplierCodes.length > 0 && (
+            <span className="small" style={{ color: "#15803d" }}>
+              ✓ вже прив’язано: {supplierCodes.map((c) => `${c.code}${c.supplier ? ` (${c.supplier})` : ""}`).join(", ")}
+            </span>
+          )}
         </label>
         <label>
           Постачальник цього артикула

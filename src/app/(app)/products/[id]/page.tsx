@@ -365,7 +365,12 @@ export default async function ProductPage({ params, searchParams }: Props) {
       )}
 
 
-      <ProductForm product={product} {...ctx} kitsCount={product.kits.length} />
+      <ProductForm
+        product={product}
+        {...ctx}
+        kitsCount={product.kits.length}
+        supplierCodes={product.codes.filter((c) => c.type === "supplier").map((c) => ({ code: c.code, supplier: c.supplier?.name ?? null }))}
+      />
 
       <div className="grid2">
         <div className="panel">
