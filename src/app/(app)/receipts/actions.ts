@@ -18,6 +18,7 @@ export type ReceiptInput = {
   invoiceNo: string;
   note: string;
   currency: string; // валюта закупівлі
+  rate?: string; // свій курс приходу (порожньо — курс дня)
   lines: { productId: number; qty: number; cost: number; newPrice: number | null; cellId: number | null }[];
 };
 
@@ -55,7 +56,9 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
       return k?.baseProductId ? { ...l, productId: k.baseProductId, qty: l.qty * q, cost: l.cost / q } : l;
     });
   const currency = (input.currency || "UAH").toUpperCase();
-  const rate = currency === "UAH" ? 1 : (await getRates())[currency];
+  const ownRate = Number(String(input.rate ?? "").replace(",", "."));
+  const rateFixed = currency !== "UAH" && ownRate > 0;
+  const rate = currency === "UAH" ? 1 : rateFixed ? ownRate : (await getRates())[currency];
   if (!rate) return { ok: false as const, error: `Немає курсу для ${currency}. Введіть його в «Постачальники → Курс на сьогодні».` };
   const totalCurrency = Math.round(lines.reduce((s, l) => s + l.qty * l.cost, 0) * 100) / 100;
   const total = Math.round(totalCurrency * rate * 100) / 100;
@@ -72,6 +75,7 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
         note: input.note.trim() || null,
         currency,
         rate,
+        rateFixed,
         total,
         totalCurrency,
         lines: { create: lines.map((l) => ({ productId: l.productId, qty: l.qty, cost: l.cost, newPrice: l.newPrice, cellId: l.cellId })) },
@@ -116,7 +120,8 @@ export async function postReceipt(id: number) {
 
   // Свіжий курс із SalesDrive на момент проведення
   let rate = 1;
-  if (r.currency !== "UAH") {
+  if (r.currency !== "UAH" && r.rateFixed) rate = r.rate; // свій курс (за ним уже купили валюту)
+  else if (r.currency !== "UAH") {
     try {
       if (sdOn) await refreshRates();
     } catch {

@@ -67,9 +67,11 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
     invoiceNo: initial.invoiceNo,
     note: initial.note,
     currency: initial.currency || "UAH",
+    rate: initial.rate ?? "",
   });
   const cur = header.currency;
-  const rate = cur === "UAH" ? 1 : rates[cur] ?? 0;
+  const ownRate = parseFloat(String(header.rate).replace(",", "."));
+  const rate = cur === "UAH" ? 1 : ownRate > 0 ? ownRate : rates[cur] ?? 0;
   const [lines, setLines] = useState<Line[]>(initial.lines);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Found[]>([]);
@@ -256,7 +258,20 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
               ))}
             </select>
             {cur !== "UAH" && (
-              <span className="small muted">{rate ? `курс: 1 ${cur} = ${rate} грн (змінити — «Постачальники»)` : "немає курсу — введіть у «Постачальники → Курс на сьогодні»"}</span>
+              <>
+                <span className="small">курс приходу:</span>
+                <input
+                  value={header.rate}
+                  onChange={(e) => (setHeader({ ...header, rate: e.target.value }), touch())}
+                  placeholder={rates[cur] ? String(rates[cur]) : "курс"}
+                  inputMode="decimal"
+                  style={{ width: 80 }}
+                  title="Порожньо — курс дня. Впишіть свій, якщо валюту за цю накладну вже купили за іншим курсом"
+                />
+                <span className="small muted">
+                  {ownRate > 0 ? `свій курс (курс дня ${rates[cur] ?? "—"})` : rates[cur] ? "порожньо — курс дня" : "немає курсу — введіть у «Постачальники»"}
+                </span>
+              </>
             )}
           </span>
         </label>

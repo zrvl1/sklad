@@ -63,6 +63,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
             invoiceNo: r.invoiceNo ?? "",
             note: r.note ?? "",
             currency: r.currency,
+            rate: r.rateFixed ? String(r.rate) : "",
             lines: r.lines.map((l) => ({
               key: String(l.id),
               productId: l.productId,

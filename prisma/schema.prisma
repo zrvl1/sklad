@@ -221,6 +221,7 @@ model Receipt {
   status      String        @default("draft") // draft | posted
   currency    String        @default("UAH") // валюта закупівлі
   rate        Float         @default(1)     // курс до гривні на момент приходу (з SalesDrive)
+  rateFixed   Boolean       @default(false) // курс вказано вручну (напр. за ним уже купили валюту) — не брати курс дня
   total       Float         @default(0)     // сума в гривні
   totalCurrency Float       @default(0)     // сума у валюті приходу
   createdById Int
