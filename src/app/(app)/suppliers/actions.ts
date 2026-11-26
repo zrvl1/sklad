@@ -61,6 +61,7 @@ export async function saveSupplierFeed(formData: FormData) {
     currency: (str(formData.get("currency")) ?? "UAH").toUpperCase(),
     roundTo: Math.max(1, Math.min(100, Number(formData.get("roundTo")) || 10)),
     extraParams: String(formData.get("extraParams") ?? "").trim(),
+    manualPriceCats: JSON.stringify(formData.getAll("manualCat").map(String).filter(Boolean)),
     ledgerFrom: str(formData.get("ledgerFrom")) ? new Date(`${str(formData.get("ledgerFrom"))}T00:00:00+02:00`) : null,
   };
   await db.supplier.update({ where: { id }, data });
@@ -77,7 +78,7 @@ export async function loadFeed(formData: FormData) {
     await logAction(user.id, "feed", "supplier", id, r);
     back(
       path,
-      `Фід завантажено: ${r.items} товарів (нових ${r.created}, змінених ${r.updated}${r.gone ? `, зникли з фіду ${r.gone}` : ""}). Змінено цін у ваших товарах: ${r.pricesChanged}.`
+      `Фід завантажено: ${r.items} товарів (нових ${r.created}, змінених ${r.updated}${r.gone ? `, зникли з фіду ${r.gone}` : ""}). Змінено цін у ваших товарах: ${r.pricesChanged}.${r.issues ? ` Проблем: ${r.issues} — див. «Перевірка товарів».` : ""}`
     );
   } catch (e) {
     if (e && typeof e === "object" && "digest" in e) throw e; // redirect
@@ -137,6 +138,15 @@ export async function deletePayment(formData: FormData) {
   await db.supplierPayment.delete({ where: { id } });
   await logAction(user.id, "payment-delete", "supplier", p.supplierId, { amount: p.amount, currency: p.currency });
   back(`/suppliers/${p.supplierId}`, "Оплату видалено");
+}
+
+/** Перевірити товари постачальника за фідом (без завантаження фіду): РРЦ, ціни, проблеми */
+export async function checkFeedProducts(formData: FormData) {
+  const user = await requirePerm("receipts");
+  const id = Number(formData.get("id"));
+  const r = await syncRrpPrices(id);
+  await logAction(user.id, "feed-check", "supplier", id, r);
+  back(`/suppliers/${id}`, `Перевірено. Змінено цін: ${r.pricesChanged}. Проблем: ${r.issues}.`);
 }
 
 export async function saveDescFooter(formData: FormData) {

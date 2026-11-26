@@ -143,6 +143,29 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const ymlCheckRaw = await getSetting(`ymlCheck:${product.id}`);
   const promCheckRaw = await getSetting(`promCheck:${product.id}`);
 
+  // РРЦ з фіду постачальника: що є, як рахується ціна, проблеми
+  let feedInfo: { supplier: string; text: string; warn: boolean } | null = null;
+  if (product.supplierId && product.supplierCode && !product.baseProductId) {
+    const sup = await db.supplier.findUnique({ where: { id: product.supplierId } });
+    const it = await db.supplierItem.findUnique({ where: { supplierId_code: { supplierId: product.supplierId, code: product.supplierCode } } });
+    if (sup) {
+      const { manualPriceCategoryIds, priceFromRrp } = await import("@/lib/supplierFeed");
+      const manual = product.categorySdId ? (await manualPriceCategoryIds(sup.manualPriceCats)).has(product.categorySdId) : false;
+      const { getRates } = await import("@/lib/currency");
+      if (!it) feedInfo = { supplier: sup.name, text: `код ${product.supplierCode} не знайдено у фіді — РРЦ не оновлюється`, warn: true };
+      else {
+        const calc = it.price > 0 ? priceFromRrp(it.price, it.currency, await getRates(), sup.roundTo) : null;
+        const mode = product.priceLocked ? "ціна вручну (зафіксована)" : manual ? "ціна вручну (категорія з ручними цінами)" : "ціна = РРЦ × курс (авто)";
+        const probs = [!it.available && "немає в наявності у постачальника", !(it.price > 0) && "у фіді немає ціни"].filter(Boolean).join("; ");
+        feedInfo = {
+          supplier: sup.name,
+          text: `код ${it.code} · РРЦ ${it.price} ${it.currency}${calc ? ` ≈ ${calc} грн` : ""} · ${mode}${probs ? ` · ⚠ ${probs}` : ""}`,
+          warn: Boolean(probs),
+        };
+      }
+    }
+  }
+
   return (
     <>
       <div className="toolbar">
@@ -246,6 +269,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
           </details>
         );
       })()}
+      {feedInfo && (
+        <div className={`msg small ${feedInfo.warn ? "warn" : ""}`}>
+          <b>Фід {feedInfo.supplier}:</b> {feedInfo.text}
+        </div>
+      )}
       {(() => {
         // чого не вистачає в картці (основні товари)
         if (product.baseProductId || product.deletedAt) return null;

@@ -9,7 +9,8 @@ import { supplierBalance } from "@/lib/supplierLedger";
 import { allCategories } from "@/lib/categories";
 import { MONEY_ACCOUNTS } from "@/lib/finance-consts";
 import CreateFromFeed from "@/components/CreateFromFeed";
-import { addPayment, deletePayment, loadFeed, saveSupplierFeed } from "../actions";
+import { addPayment, checkFeedProducts, deletePayment, loadFeed, saveSupplierFeed } from "../actions";
+import type { FeedIssue } from "@/lib/supplierFeed";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -34,7 +35,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
       ? { AND: words.map((w) => ({ OR: [{ code: { contains: w, mode: "insensitive" as const } }, { article: { contains: w, mode: "insensitive" as const } }, { name: { contains: w, mode: "insensitive" as const } }] })) }
       : {}),
   };
-  const [items, totalItems, rates, cats, mapRaw, bal, payments, linkedCount] = await Promise.all([
+  const [items, totalItems, rates, cats, mapRaw, bal, payments, linkedCount, issuesRaw] = await Promise.all([
     q || sp.only === "new" ? db.supplierItem.findMany({ where, orderBy: { name: "asc" }, take: 100 }) : Promise.resolve([]),
     db.supplierItem.count({ where: { supplierId: id } }),
     getRates(),
@@ -43,7 +44,16 @@ export default async function SupplierPage({ params, searchParams }: { params: P
     showMoney ? supplierBalance(id, s.currency, s.ledgerFrom ?? new Date()) : Promise.resolve(null),
     showMoney ? db.supplierPayment.findMany({ where: { supplierId: id }, orderBy: { date: "desc" }, take: 30 }) : Promise.resolve([]),
     db.product.count({ where: { supplierId: id, deletedAt: null } }),
+    getSetting(`feedIssues:${id}`),
   ]);
+  let check: { at: string; checked: number; issues: FeedIssue[] } | null = null;
+  try {
+    check = issuesRaw ? JSON.parse(issuesRaw) : null;
+  } catch {}
+  let manualCats: string[] = [];
+  try {
+    manualCats = JSON.parse(s.manualPriceCats ?? "[]");
+  } catch {}
   const owners = new Map<string, { id: number; name: string; price: number }>(
     (await db.productCode.findMany({ where: { code: { in: items.map((i) => i.code) }, product: { deletedAt: null } }, include: { product: { select: { id: true, name: true, price: true } } } })).map((c) => [
       c.code,
@@ -158,6 +168,49 @@ export default async function SupplierPage({ params, searchParams }: { params: P
           </table>
         )}
         {q && !items.length && <p className="muted">Нічого не знайдено за «{q}».</p>}
+      </div>
+
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Перевірка товарів за фідом</h2>
+        <p className="small muted">
+          Щодня після оновлення фіду: для ваших товарів цього постачальника (створених з XML або з прив’язаним кодом постачальника) береться РРЦ за кодом;
+          ціна = РРЦ × курс, крім товарів з ручною ціною та категорій «ручні ціни» (налаштування нижче).
+        </p>
+        <form action={checkFeedProducts} style={{ marginBottom: 8 }}>
+          <input type="hidden" name="id" value={id} />
+          <button className="btn sm">Перевірити зараз</button>{" "}
+          {check && (
+            <span className="small muted">
+              остання перевірка {dateTimeUa(new Date(check.at))}: товарів {check.checked}, проблем {check.issues.length}
+            </span>
+          )}
+        </form>
+        {check && check.issues.length > 0 ? (
+          <table className="small">
+            <thead>
+              <tr>
+                <th>Товар</th>
+                <th>Код</th>
+                <th>Проблема</th>
+              </tr>
+            </thead>
+            <tbody>
+              {check.issues.slice(0, 200).map((x, i) => (
+                <tr key={i}>
+                  <td>
+                    <Link href={`/products/${x.productId}`}>{x.name}</Link>
+                  </td>
+                  <td>{x.code}</td>
+                  <td style={{ color: /немає у фіді|немає ціни|курсу/.test(x.issue) ? "#b91c1c" : "#b45309" }}>{x.issue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : check ? (
+          <p className="small" style={{ color: "#15803d" }}>
+            ✓ Проблем немає
+          </p>
+        ) : null}
       </div>
 
       {showMoney && bal && (
@@ -297,6 +350,19 @@ export default async function SupplierPage({ params, searchParams }: { params: P
               ))}
             </select>
           </label>
+          <div>
+            <div>Ціни вручну в категоріях (з підкатегоріями) — тут РРЦ × курс не ставиться, лише показується для довідки:</div>
+            <div className="row" style={{ flexWrap: "wrap", gap: "4px 16px", marginTop: 4 }}>
+              {cats
+                .filter((c) => c.path.split(" › ").length <= 2)
+                .map((c) => (
+                  <label key={c.id} className="small" style={{ display: "inline-flex", gap: 4, alignItems: "center", paddingLeft: c.parentId ? 14 : 0 }}>
+                    <input type="checkbox" name="manualCat" value={c.id} defaultChecked={manualCats.includes(c.id)} />
+                    {c.parentId ? c.name : <b>{c.name}</b>}
+                  </label>
+                ))}
+            </div>
+          </div>
           <label>
             Характеристики, які додаються до кожного товару (рядок «Назва: значення»)
             <textarea name="extraParams" rows={3} defaultValue={s.extraParams ?? DEFAULT_EXTRA_PARAMS} />

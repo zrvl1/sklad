@@ -197,38 +197,100 @@ export async function refreshSupplierFeed(supplierId: number) {
  * Для товарів постачальника: РРЦ з фіду → product.rrp; ціна = РРЦ × курс (якщо не зафіксована вручну).
  * Змінені ціни — у SalesDrive (звідти на сайт і Prom) і на картки-комплекти.
  */
+export type FeedIssue = { productId: number; name: string; code: string; issue: string };
+
+/** Категорії з ручними цінами (і всі їхні підкатегорії): ціну не чіпаємо, лише оновлюємо РРЦ для довідки */
+export async function manualPriceCategoryIds(raw: string | null | undefined) {
+  let roots: string[] = [];
+  try {
+    roots = JSON.parse(raw ?? "[]");
+  } catch {}
+  if (!roots.length) return new Set<string>();
+  const { allCategories } = await import("./categories");
+  const cats = await allCategories();
+  const out = new Set<string>(roots);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of cats) if (c.parentId && out.has(c.parentId) && !out.has(c.id)) (out.add(c.id), (grew = true));
+  }
+  return out;
+}
+
+/**
+ * Для товарів постачальника: РРЦ з фіду (за кодом постачальника) → product.rrp; ціна = РРЦ × курс,
+ * якщо ціна не зафіксована вручну і категорія не в «ручних цінах». Перевірки — список проблем у налаштуваннях постачальника.
+ * Змінені ціни — у SalesDrive (звідти на сайт і Prom) і на картки-комплекти.
+ */
 export async function syncRrpPrices(supplierId?: number) {
   const suppliers = await db.supplier.findMany({ where: supplierId ? { id: supplierId } : { feedUrl: { not: null } } });
   const rates = await getRates();
   const changed: number[] = [];
+  let issuesTotal = 0;
   for (const s of suppliers) {
-    const products = await db.product.findMany({ where: { supplierId: s.id, supplierCode: { not: null }, deletedAt: null, baseProductId: null } });
-    if (!products.length) continue;
-    type Item = { code: string; price: number; currency: string };
-    const items = new Map<string, Item>(
-      ((await db.supplierItem.findMany({ where: { supplierId: s.id, code: { in: products.map((p) => p.supplierCode!) } } })) as Item[]).map((i) => [i.code, i])
-    );
-    for (const p of products) {
-      const it = items.get(p.supplierCode!);
-      const data: { rrp?: number; rrpCurrency?: string; price?: number } = {};
-      if (it && s.feedPriceType === "rrp" && it.price > 0 && (p.rrp !== it.price || p.rrpCurrency !== it.currency)) {
-        data.rrp = it.price;
-        data.rrpCurrency = it.currency;
+    // товари постачальника: створені з фіду або з прив’язаним кодом цього постачальника
+    const products = await db.product.findMany({
+      where: {
+        deletedAt: null,
+        baseProductId: null,
+        OR: [{ supplierId: s.id, supplierCode: { not: null } }, { codes: { some: { supplierId: s.id, type: "supplier" } } }],
+      },
+      include: { codes: { where: { supplierId: s.id, type: "supplier" }, select: { code: true } } },
+    });
+    const issues: FeedIssue[] = [];
+    if (products.length) {
+      const allCodes = [...new Set(products.flatMap((p) => [p.supplierCode, ...p.codes.map((c) => c.code)]).filter((c): c is string => Boolean(c)))];
+      type Item = { code: string; article: string | null; price: number; currency: string; available: boolean };
+      const rows = (await db.supplierItem.findMany({
+        where: { supplierId: s.id, OR: [{ code: { in: allCodes } }, { article: { in: allCodes } }] },
+        select: { code: true, article: true, price: true, currency: true, available: true },
+      })) as Item[];
+      const byCode = new Map<string, Item>();
+      for (const r of rows) {
+        byCode.set(r.code, r);
+        if (r.article && !byCode.has(r.article)) byCode.set(r.article, r);
       }
-      const rrp = data.rrp ?? p.rrp;
-      const cur = data.rrpCurrency ?? p.rrpCurrency ?? s.currency;
-      if (!p.priceLocked && rrp) {
-        const np = priceFromRrp(rrp, cur, rates, s.roundTo);
-        if (np && np !== p.price) data.price = np;
-      }
-      if (Object.keys(data).length) {
-        await db.product.update({ where: { id: p.id }, data });
-        if (data.price !== undefined) changed.push(p.id);
+      const manual = await manualPriceCategoryIds(s.manualPriceCats);
+      for (const p of products) {
+        const codes = [p.supplierCode, ...p.codes.map((c) => c.code)].filter((c): c is string => Boolean(c));
+        const it = codes.map((c) => byCode.get(c)).find(Boolean);
+        const name = p.nameTranslate || p.name;
+        const code = it?.code ?? codes[0] ?? "";
+        if (!it) {
+          issues.push({ productId: p.id, name, code, issue: "немає у фіді постачальника (код не знайдено)" });
+          continue;
+        }
+        const data: { rrp?: number; rrpCurrency?: string; price?: number; supplierId?: number; supplierCode?: string } = {};
+        if (p.supplierId !== s.id || p.supplierCode !== it.code) (data.supplierId = s.id), (data.supplierCode = it.code); // прив’язка за кодом
+        if (!it.available) issues.push({ productId: p.id, name, code, issue: "немає в наявності у постачальника" });
+        if (s.feedPriceType === "rrp") {
+          if (!(it.price > 0)) {
+            issues.push({ productId: p.id, name, code, issue: "у фіді немає ціни (РРЦ = 0)" });
+          } else if (p.rrp !== it.price || p.rrpCurrency !== it.currency) {
+            data.rrp = it.price;
+            data.rrpCurrency = it.currency;
+          }
+        }
+        const rrp = data.rrp ?? p.rrp;
+        const cur = data.rrpCurrency ?? p.rrpCurrency ?? s.currency;
+        const isManual = Boolean(p.categorySdId && manual.has(p.categorySdId));
+        if (!p.priceLocked && !isManual && rrp && it.price > 0) {
+          const np = priceFromRrp(rrp, cur, rates, s.roundTo);
+          if (!np) issues.push({ productId: p.id, name, code, issue: `немає курсу ${cur} — ціну не перераховано` });
+          else if (np !== p.price) data.price = np;
+        }
+        if (Object.keys(data).length) {
+          await db.product.update({ where: { id: p.id }, data });
+          if (data.price !== undefined) changed.push(p.id);
+        }
       }
     }
+    issuesTotal += issues.length;
+    const { setSetting } = await import("./util");
+    await setSetting(`feedIssues:${s.id}`, JSON.stringify({ at: new Date().toISOString(), checked: products.length, issues }));
   }
   if (changed.length) await pushPrices(changed);
-  return { pricesChanged: changed.length };
+  return { pricesChanged: changed.length, issues: issuesTotal };
 }
 
 async function pushPrices(ids: number[]) {
