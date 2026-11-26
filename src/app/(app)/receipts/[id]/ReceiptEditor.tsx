@@ -183,7 +183,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
     });
 
   // автозбереження чернетки: через 2 с після зміни (перехід іншою вкладкою меню не попереджає браузер)
-  const latest = useRef(payload);
+  const latest = useRef<() => ReceiptInput>(payload);
   latest.current = payload;
   useEffect(() => {
     if (!dirty) return;
