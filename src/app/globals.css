@@ -102,3 +102,7 @@ td input.short { width: 90px; }
 .pager { display: flex; gap: 6px; margin-top: 12px; align-items: center; }
 
 @media print { .no-print { display: none !important; } }
+
+/* дві широкі колонки (звіти): на вузькому екрані — одна; таблиці прокручуються, а не вилазять */
+.duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 12px 16px; }
+.duo > .panel { min-width: 0; overflow-x: auto; }

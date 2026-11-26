@@ -96,7 +96,22 @@ export default async function SitePage({ searchParams }: { searchParams: SP }) {
     if (n(c.advertiserAdCost) > 300 && rev / n(c.advertiserAdCost) < 2)
       tips.push(`Кампанія «${camp}»: витрати ${money(n(c.advertiserAdCost))} грн, продажі за GA4 ${money(rev)} грн — окупність нижче 2×. Перегляньте пошукові запити й товари в кампанії.`);
   }
-  const noResults = (search.data ?? []).slice(0, 15);
+  // пошукові запити сайту: декодуємо %D0%A2…, порожні прибираємо, однакові складаємо
+  const dec = (v: unknown) => {
+    const t = String(v ?? "").trim();
+    try {
+      return decodeURIComponent(t.replace(/\+/g, " ")).trim();
+    } catch {
+      return t;
+    }
+  };
+  const searchMap = new Map<string, number>();
+  for (const r of search.data ?? []) {
+    const t = dec(r.searchTerm);
+    if (!t || t === "(not set)") continue;
+    searchMap.set(t.toLowerCase(), (searchMap.get(t.toLowerCase()) ?? 0) + n(r.eventCount));
+  }
+  const noResults = [...searchMap].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([searchTerm, eventCount]) => ({ searchTerm, eventCount }));
 
   const err = (e: string | null) => (e ? <div className="msg warn small">Не вдалося отримати: {e}</div> : null);
 
@@ -153,7 +168,7 @@ export default async function SitePage({ searchParams }: { searchParams: SP }) {
         </div>
       )}
 
-      <div className="grid2">
+      <div className="duo">
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>Звідки приходять</h2>
           {err(channels.error)}
@@ -218,6 +233,9 @@ export default async function SitePage({ searchParams }: { searchParams: SP }) {
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Товари: дивляться, але не купують</h2>
         {err(items.error)}
+        {!items.error && !lookNoBuy.length && !cartNoBuy.length && (
+          <p className="small muted">Поки таких немає: товар потрапляє сюди від 15 переглядів без покупки або від 3 додавань у кошик без замовлення.</p>
+        )}
         <table className="small">
           <thead>
             <tr>
@@ -242,9 +260,12 @@ export default async function SitePage({ searchParams }: { searchParams: SP }) {
         </table>
       </div>
 
-      <div className="grid2">
+      <div className="duo">
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>Google: запити, які можна підтягнути в топ</h2>
+          {!queries.error && !opp.length && (
+            <p className="small muted">Поки немає запитів із 30+ показами на 4–20 місці. З’являться, коли зросте трафік — оберіть «90 днів».</p>
+          )}
           <p className="muted small">Сайт уже показується на 4–20 місці — трохи кращий опис або назва дадуть кліки.</p>
           {err(queries.error)}
           <table className="small">
