@@ -182,6 +182,19 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
       } else setMsg({ type: "err", text: r.error });
     });
 
+  // автозбереження чернетки: через 2 с після зміни (перехід іншою вкладкою меню не попереджає браузер)
+  const latest = useRef(payload);
+  latest.current = payload;
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(async () => {
+      const r = await saveReceipt(receiptId, latest.current());
+      if (r.ok) setDirty(false);
+    }, 2000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, header, lines]);
+
   const post = () => {
     if (!lines.length) return setMsg({ type: "err", text: "Додайте товари" });
     const warns = lines.flatMap((l) => lineWarnings(l, rate || 1).map((w) => `• ${l.name}: ${w}`));
@@ -484,7 +497,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
         </span>
         <span className="spacer" />
         <button className="btn" disabled={pending} onClick={save}>
-          Зберегти чернетку{dirty ? " *" : ""}
+          {dirty ? "Зберегти чернетку *" : "✓ Чернетку збережено"}
         </button>
         <button className="btn primary" disabled={pending || !lines.length} onClick={post}>
           {pending ? "Зачекайте…" : "Провести"}
