@@ -223,6 +223,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <a className="btn sm" href="/api/export/brands" title="Бренди для імпорту в Horoshop (SalesDrive їх туди не передає)">
                     ⬇ Бренди для Horoshop (CSV)
                   </a>
+                  <a className="btn sm" href="/api/export/names" title="Назви UA/RU для імпорту в Horoshop: SalesDrive не перезаписує там назви вже створених товарів">
+                    ⬇ Назви для Horoshop (CSV)
+                  </a>
+                  <form method="get" action="/api/export/names" className="toolbar">
+                    <input name="from" type="date" className="input" title="лише товари, змінені з цієї дати" />
+                    <button className="btn sm">⬇ назви, змінені з дати</button>
+                  </form>
                   <Link className="btn sm" href="/settings/prom-commission">
                     % Комісії Prom по категоріях
                   </Link>
