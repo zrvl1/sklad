@@ -12,7 +12,7 @@ export async function labelCfg(): Promise<LabelCfg> {
   }
 }
 
-export type LabelRow = { id: string; brand: string; margin: string; stock: string; price: string; marginUah: number | null; name: string };
+export type LabelRow = { id: string; brand: string; productType: string; margin: string; stock: string; price: string; marginUah: number | null; name: string };
 
 /**
  * Мітки для Google Merchant Center (додаткове джерело даних): маржа в гривнях з одного продажу,
@@ -22,7 +22,7 @@ export async function labelRows(): Promise<LabelRow[]> {
   const cfg = await labelCfg();
   const products = await db.product.findMany({
     where: { deletedAt: null },
-    select: { id: true, sdId: true, sku: true, name: true, nameTranslate: true, manufacturer: true, price: true, cost: true, baseProductId: true, kitQty: true, stocks: { select: { qty: true } } },
+    select: { id: true, sdId: true, sku: true, name: true, nameTranslate: true, manufacturer: true, categoryName: true, price: true, cost: true, baseProductId: true, kitQty: true, stocks: { select: { qty: true } } },
   });
   const stockOf = new Map<number, number>(products.map((p) => [p.id, p.stocks.reduce((s, x) => s + Number(x.qty), 0)]));
   const out: LabelRow[] = [];
@@ -37,6 +37,7 @@ export async function labelRows(): Promise<LabelRow[]> {
       id,
       name: p.nameTranslate || p.name,
       brand: p.manufacturer?.trim() ?? "",
+      productType: p.categoryName?.trim() ?? "",
       marginUah: m === null ? null : Math.round(m),
       margin: m === null ? "маржа-невідома" : m < cfg.low ? "маржа-низька" : m < cfg.high ? "маржа-середня" : "маржа-висока",
       stock: st <= 0 ? "залишок-0" : st === 1 ? "залишок-1" : st <= 3 ? "залишок-мало" : "залишок-багато",
