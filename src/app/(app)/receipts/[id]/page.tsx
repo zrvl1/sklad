@@ -64,6 +64,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
             note: r.note ?? "",
             currency: r.currency,
             rate: r.rateFixed ? String(r.rate) : "",
+            deliveryCost: r.deliveryCost ? String(r.deliveryCost) : "",
             lines: r.lines.map((l) => ({
               key: String(l.id),
               productId: l.productId,
@@ -128,6 +129,7 @@ export default async function ReceiptPage({ params, searchParams }: Props) {
         <div>
           Провів: {r.postedBy?.name ?? "—"}, {dateTimeUa(r.postedAt)}
         </div>
+        {r.deliveryCost > 0 && <div>Доставка від постачальника: {r.deliveryCost} грн (у собівартості товарів)</div>}
         <form action={togglePaidEarlier}>
           <input type="hidden" name="id" value={r.id} />
           {r.paidEarlier ? (

@@ -19,6 +19,7 @@ export type ReceiptInput = {
   note: string;
   currency: string; // валюта закупівлі
   rate?: string; // свій курс приходу (порожньо — курс дня)
+  deliveryCost?: string; // доставка від постачальника, грн
   lines: { productId: number; qty: number; cost: number; newPrice: number | null; cellId: number | null }[];
 };
 
@@ -76,6 +77,7 @@ export async function saveReceipt(id: number, input: ReceiptInput) {
         currency,
         rate,
         rateFixed,
+        deliveryCost: Math.max(0, Number(String(input.deliveryCost ?? "").replace(",", ".")) || 0),
         total,
         totalCurrency,
         lines: { create: lines.map((l) => ({ productId: l.productId, qty: l.qty, cost: l.cost, newPrice: l.newPrice, cellId: l.cellId })) },
@@ -155,15 +157,20 @@ export async function postReceipt(id: number) {
   // Метод собівартості: avg — середньозважена (старий залишок за старою ціною + новий за новою), last — ціна останньої закупівлі
   const costMethod = ((await db.setting.findUnique({ where: { key: "costMethod" } }))?.value ?? "avg") as "avg" | "last";
 
+  // доставка від постачальника (грн) — у собівартість, пропорційно вартості рядків
+  const goodsUah = [...agg.values()].reduce((s, a) => s + a.qty * a.cost * rate, 0);
+  const deliveryPerUah = r.deliveryCost > 0 && goodsUah > 0 ? r.deliveryCost / goodsUah : 0;
+
   const plan = products.map((p) => {
     const a = agg.get(p.id)!;
+    const landedUah = a.cost * rate * (1 + deliveryPerUah); // ціна одиниці в гривні разом із часткою доставки
     const old = Math.max(0, curQty.get(p.id) ?? 0);
     // у валюті документа: старий залишок рахуємо у валюті лише якщо собівартість товару вже в цій валюті
     const oldCost = r.currency === "UAH" ? p.cost : p.costCurrency === r.currency ? p.costOriginal : null;
     const unit =
       costMethod === "avg" && old > 0 && oldCost !== null && oldCost > 0 ? (old * oldCost + a.qty * a.cost) / (old + a.qty) : a.cost;
     // у гривні: старий залишок — за його гривневою собівартістю (курс попередніх приходів), новий — за курсом цього приходу
-    const unitUah = costMethod === "avg" && old > 0 && p.cost > 0 ? (old * p.cost + a.qty * a.cost * rate) / (old + a.qty) : a.cost * rate;
+    const unitUah = costMethod === "avg" && old > 0 && p.cost > 0 ? (old * p.cost + a.qty * landedUah) / (old + a.qty) : landedUah;
     a.cost = Math.round(unit * 100) / 100;
     return {
       // собівартість: у валюті приходу (SalesDrive сам перерахує в гривню) + у гривні для наших звітів

@@ -68,6 +68,7 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
     note: initial.note,
     currency: initial.currency || "UAH",
     rate: initial.rate ?? "",
+    deliveryCost: initial.deliveryCost ?? "",
   });
   const cur = header.currency;
   const ownRate = parseFloat(String(header.rate).replace(",", "."));
@@ -293,6 +294,15 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
           № накладної постачальника
           <input value={header.invoiceNo} onChange={(e) => (setHeader({ ...header, invoiceNo: e.target.value }), touch())} />
         </label>
+        <label title="Скільки заплатили перевізнику за доставку цього товару від постачальника. Розкладеться в собівартість товарів пропорційно їхній сумі">
+          Доставка від постачальника, грн
+          <input
+            value={header.deliveryCost}
+            inputMode="decimal"
+            placeholder="0"
+            onChange={(e) => (setHeader({ ...header, deliveryCost: e.target.value }), touch())}
+          />
+        </label>
         <label style={{ gridColumn: "1 / -1" }}>
           Коментар
           <input value={header.note} onChange={(e) => (setHeader({ ...header, note: e.target.value }), touch())} />
@@ -494,6 +504,9 @@ export default function ReceiptEditor({ receiptId, initial, warehouses, supplier
             {fmt(total)} {cur === "UAH" ? "грн" : cur}
           </b>
           {cur !== "UAH" && rate > 0 && <span className="muted"> ≈ {fmt(total * rate)} грн</span>}
+          {Number(String(header.deliveryCost).replace(",", ".")) > 0 && (
+            <span className="muted"> + доставка {fmt(Number(String(header.deliveryCost).replace(",", ".")))} грн (у собівартість)</span>
+          )}
         </span>
         <span className="spacer" />
         <button className="btn" disabled={pending} onClick={save}>

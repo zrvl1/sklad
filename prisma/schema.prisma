@@ -223,6 +223,7 @@ model Receipt {
   currency    String        @default("UAH") // валюта закупівлі
   rate        Float         @default(1)     // курс до гривні на момент приходу (з SalesDrive)
   rateFixed   Boolean       @default(false)
+  deliveryCost Float        @default(0)     // доставка від постачальника, грн — розкладається в собівартість товарів пропорційно сумі
   paidEarlier Boolean       @default(false) // оплачено раніше (напр. внесення наявного товару) — не рахувати в «Русі грошей» за місяць // курс вказано вручну (напр. за ним уже купили валюту) — не брати курс дня
   total       Float         @default(0)     // сума в гривні
   totalCurrency Float       @default(0)     // сума у валюті приходу

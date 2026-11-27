@@ -23,7 +23,7 @@ export async function monthSummary(from: Date, to: Date) {
     }),
     db.receipt.findMany({
       where: { status: "posted", date: { gte: from, lt: to } },
-      select: { total: true, paidEarlier: true, date: true, supplier: { select: { ledgerFrom: true } } },
+      select: { total: true, deliveryCost: true, paidEarlier: true, date: true, supplier: { select: { ledgerFrom: true } } },
     }),
     db.expense.groupBy({ by: ["kind"], where: { date: { gte: from, lt: to } }, _sum: { amount: true } }),
   ]);
@@ -38,8 +38,10 @@ export async function monthSummary(from: Date, to: Date) {
   // плюс реальні оплати постачальникам з боргом (у гривнях, як купили валюту/віддали готівку)
   const onCredit = (r: (typeof receipts)[number]) => Boolean(r.supplier?.ledgerFrom && r.date >= r.supplier.ledgerFrom);
   const paidOnReceipt = receipts.filter((r) => !r.paidEarlier && !onCredit(r)).reduce((s, r) => s + r.total, 0);
+  // доставку від постачальника платять перевізнику одразу — навіть якщо товар у борг
+  const delivery = receipts.filter((r) => !r.paidEarlier).reduce((s, r) => s + (r.deliveryCost ?? 0), 0);
   const supplierPaid = (await db.supplierPayment.aggregate({ where: { date: { gte: from, lt: to } }, _sum: { uah: true } }))._sum.uah ?? 0;
-  const purchases = Math.round((paidOnReceipt + supplierPaid) * 100) / 100;
+  const purchases = Math.round((paidOnReceipt + supplierPaid + delivery) * 100) / 100;
   const cashIn = revenue + k("income") + k("invest");
   const cashOut = purchases + commission + k("expense") + k("owner");
   return {
