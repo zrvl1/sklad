@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { saveFill, translateRuFromUa, translateUaKeywords } from "./actions";
 import { langIssues, uaKwMissing } from "@/lib/langcheck";
 import SelectAllButton from "@/components/SelectAllButton";
+import FixSmallPhotos from "@/components/FixSmallPhotos";
 
 type SP = Promise<{ f?: string; q?: string; page?: string; msg?: string; warn?: string }>;
 const PER = 50;
@@ -109,6 +110,7 @@ export default async function FillPage({ searchParams }: { searchParams: SP }) {
       <h1>Заповнення даних</h1>
       {sp.msg && <div className="msg ok">{sp.msg}</div>}
       {sp.warn && <div className="msg warn">{sp.warn}</div>}
+      {f === "photo" && <FixSmallPhotos />}
       <div className="toolbar">
         {Object.entries(FILTERS).map(([k, t], i) => (
           <Link key={k} className={`btn sm ${f === k ? "primary" : ""}`} href={`/products/fill?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`}>

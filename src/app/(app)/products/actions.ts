@@ -240,7 +240,9 @@ export async function saveProduct(formData: FormData) {
       const { ownImageUrl, warmImages } = await import("@/lib/images");
       const urls: string[] = [];
       for (const f of photos) {
-        const img = await db.productImage.create({ data: { productId, mime: f.type, data: Buffer.from(await f.arrayBuffer()) } });
+        const { enlargeIfSmall } = await import("@/lib/imageFix");
+        const fixed = await enlargeIfSmall(Buffer.from(await f.arrayBuffer()), f.type);
+        const img = await db.productImage.create({ data: { productId, mime: fixed.mime, data: fixed.buf } });
         urls.push(ownImageUrl(img.id));
       }
       await db.product.update({ where: { id: productId }, data: { images: JSON.stringify(urls) } });
@@ -941,7 +943,9 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
       const mime = r.type.split(";")[0] || "image/jpeg";
       const buf = r.body;
       if (r.status !== 200 || !/^image\//.test(mime) || buf.length > 4_000_000 || buf.length < 500) continue;
-      const img = await db.productImage.create({ data: { productId: created.id, mime, data: buf } });
+      const { enlargeIfSmall } = await import("@/lib/imageFix");
+      const fixed = await enlargeIfSmall(buf, mime);
+      const img = await db.productImage.create({ data: { productId: created.id, mime: fixed.mime, data: fixed.buf } });
       urls.push(ownImageUrl(img.id));
     } catch {
       photoNote = " Частину фото не вдалося завантажити.";

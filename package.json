@@ -19,7 +19,8 @@
     "jsbarcode": "^3.12.1",
     "next": "^15.3.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "sharp": "^0.34.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
