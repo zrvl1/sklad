@@ -288,7 +288,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
         if (!product.description) miss.push(["опис", "desc"]);
         if (!product.images || product.images === "[]") miss.push(["фото", "photo"]);
         if (stockTotal > 0 && !product.cells.some((c) => c.qty > 0)) miss.push(["комірка", "cell"]);
-        if (!miss.length) return null;
+        if (!miss.length && !product.nameChangedAt) return null;
+        if (!miss.length)
+          return (
+            <div className="msg warn small">
+              Назву змінено після появи товару на сайті — Хорошоп її сам не оновить. Завантажте файл у{" "}
+              <Link href="/settings">Налаштування → «Перейменовані — назви для Horoshop»</Link>.
+            </div>
+          );
         return (
           <div className="msg warn small">
             <b>Не заповнено:</b>{" "}

@@ -224,7 +224,9 @@ export async function saveProduct(formData: FormData) {
       else lockData.priceLocked = !wantAuto;
       opts.withPrice = before.price !== data.price;
     }
-    await db.product.update({ where: { id }, data: { ...data, ...costData, ...lockData, textEditedAt: new Date(), search: buildSearch(data) } });
+    // назву змінили, коли товар уже на сайті — Хорошоп сам її не перепише, позначаємо для файлу назв
+    const renamed = opts.withName && before.syncedAt ? { nameChangedAt: new Date() } : {};
+    await db.product.update({ where: { id }, data: { ...data, ...costData, ...lockData, ...renamed, textEditedAt: new Date(), search: buildSearch(data) } });
     productId = id;
     await finalizeNewProduct(id, gen);
     await logAction(user.id, "update", "product", id, data);
@@ -851,8 +853,10 @@ export async function alignKitPrices() {
  * Створити товар з фіду постачальника за кодом: назва, опис (таблиця характеристик), характеристики, бренд,
  * усі фото (копіюються в додаток), РРЦ × курс як ціна, код постачальника для накладних.
  */
-export async function createFromSupplierItem(input: { supplierId: number; code: string; name?: string; categoryName?: string; cost?: number; costCurrency?: string }) {
+export async function createFromSupplierItem(input: { supplierId: number; code: string; name?: string; nameRu?: string; categoryName?: string; cost?: number; costCurrency?: string }) {
   const user = await requirePerm("products.edit");
+  // назва одразу фінальна: Хорошоп бере назву лише при створенні товару, потім не оновлює
+  if (!input.name?.trim()) return { ok: false as const, error: "Впишіть фінальну назву UA — Хорошоп потім не оновлює назву" };
   const { paramsHtml, priceFromRrp } = await import("@/lib/supplierFeed");
   const s = await db.supplier.findUnique({ where: { id: input.supplierId } });
   const it = await db.supplierItem.findUnique({ where: { supplierId_code: { supplierId: input.supplierId, code: input.code.trim() } } });
@@ -898,10 +902,11 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
   const descUa = [paramsHtml(params), footer.ua].filter(Boolean).join("\n");
   let name = nameUa;
   let descRu: string | null = null;
+  const ownRu = input.nameRu?.trim();
   const { translate, translateConfigured } = await import("@/lib/translate");
   if (translateConfigured()) {
     try {
-      const [n] = await translate([nameUa], "UK", "RU");
+      const [n] = ownRu ? [ownRu] : await translate([nameUa], "UK", "RU");
       const [d] = paramsHtml(params) ? await translate([paramsHtml(params)], "UK", "RU", true) : [""];
       if (n) name = n;
       descRu = [d, footer.ru].filter(Boolean).join("\n");
@@ -909,6 +914,7 @@ export async function createFromSupplierItem(input: { supplierId: number; code: 
       /* перекладач недоступний — RU-назва українською, виправите вручну */
     }
   }
+  if (ownRu) name = ownRu;
   const data = {
     name,
     nameTranslate: nameUa,

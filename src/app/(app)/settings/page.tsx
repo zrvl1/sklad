@@ -4,7 +4,7 @@ import { PROM_UA_KW_ENABLED } from "@/lib/prom";
 import { ROLE_LABELS, can, requireUser } from "@/lib/auth";
 import { isSalesDriveConfigured } from "@/lib/salesdrive";
 import { dateTimeUa, getSetting } from "@/lib/util";
-import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveCustomCategories, resendOwnPhotos, saveSupplier, saveWarehouse, syncNow } from "./actions";
+import { addCell, addUser, changeOwnPassword, deleteCell, generateCells, manageUser, promFeedKeyAction, promFindDups, promHideDups, promKw, promRunNow, promTest, promToggle, saveCostMethod, saveCustomCategories, resendOwnPhotos, clearRenamed, saveSupplier, saveWarehouse, syncNow } from "./actions";
 import { promConfigured } from "@/lib/prom";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -29,6 +29,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const promOn = promOnRaw === "1";
   const promKwAuto = isAdmin ? (await getSetting("promKwAuto")) === "1" : false;
   const promFeedKey = isAdmin ? await getSetting("promFeedKey") : null;
+  const renamedCount = await db.product.count({ where: { deletedAt: null, nameChangedAt: { not: null } } });
   const promFeedUrl = promFeedKey ? `${process.env.APP_URL || "https://sklad-tau.vercel.app"}/api/feed/prom?key=${promFeedKey}` : null;
   const promNoKw = isAdmin
     ? await (async () => {
@@ -223,8 +224,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <a className="btn sm" href="/api/export/brands" title="Бренди для імпорту в Horoshop (SalesDrive їх туди не передає)">
                     ⬇ Бренди для Horoshop (CSV)
                   </a>
-                  <a className="btn sm" href="/api/export/names" title="Назви UA/RU для імпорту в Horoshop: SalesDrive не перезаписує там назви вже створених товарів">
-                    ⬇ Назви для Horoshop (CSV)
+                  <a className={`btn sm ${renamedCount ? "primary" : ""}`} href="/api/export/names?pending=1" title="Товари, перейменовані після появи на сайті: Хорошоп сам їхню назву не оновить">
+                    ⬇ Перейменовані — назви для Horoshop ({renamedCount})
+                  </a>
+                  {renamedCount > 0 && (
+                    <form action={clearRenamed}>
+                      <button className="btn sm" title="Натисніть після імпорту файлу в Хорошоп">✓ Імпортував у Хорошоп</button>
+                    </form>
+                  )}
+                  <a className="btn sm" href="/api/export/names" title="Назви UA/RU усіх товарів">
+                    ⬇ Усі назви (CSV)
                   </a>
                   <form method="get" action="/api/export/names" className="toolbar">
                     <input name="from" type="date" className="input" title="лише товари, змінені з цієї дати" />

@@ -23,7 +23,7 @@ export async function saveDupNames(formData: FormData) {
     const data = { name: newRu, nameTranslate: newUa };
     await db.product.update({
       where: { id },
-      data: { ...data, textEditedAt: new Date(), search: buildSearch({ ...p, ...data }) },
+      data: { ...data, textEditedAt: new Date(), ...(p.syncedAt ? { nameChangedAt: new Date() } : {}), search: buildSearch({ ...p, ...data }) },
     });
     changed.push(id);
   }

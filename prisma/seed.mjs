@@ -33,5 +33,14 @@ if ((await db.warehouse.count()) === 0) {
   await db.warehouse.create({ data: { name: "Основний", isDefault: true } });
 }
 
+// одноразово: товари постачальників, які вже перейменовували, — у список «назви для Хорошопу»
+if (!(await db.setting.findUnique({ where: { key: "backfill:nameChangedAt" } }))) {
+  await db.product.updateMany({
+    where: { deletedAt: null, supplierId: { not: null }, syncedAt: { not: null }, nameChangedAt: null },
+    data: { nameChangedAt: new Date() },
+  });
+  await db.setting.create({ data: { key: "backfill:nameChangedAt", value: new Date().toISOString() } });
+}
+
 console.log(`Готово. Вхід: ${login}`);
 await db.$disconnect();

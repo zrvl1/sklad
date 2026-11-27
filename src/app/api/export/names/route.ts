@@ -13,6 +13,7 @@ export async function GET(req: Request) {
   if (!user || user.role !== "admin") return new Response("forbidden", { status: 403 });
   const sp = new URL(req.url).searchParams;
   const from = sp.get("from") ? new Date(sp.get("from")!) : null;
+  const pending = sp.get("pending") === "1";
   const skus = (sp.get("sku") ?? "").split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
   const rows = await db.product.findMany({
     where: {
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
       sdId: { not: null },
       baseProductId: null,
       ...(skus.length ? { sku: { in: skus } } : {}),
+      ...(pending ? { nameChangedAt: { not: null } } : {}),
       ...(from && !isNaN(+from) ? { updatedAt: { gte: from } } : {}),
     },
     select: { sdId: true, sku: true, name: true, nameTranslate: true },

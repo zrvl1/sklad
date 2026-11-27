@@ -271,6 +271,14 @@ export async function saveCustomCategories(formData: FormData) {
   done(`Збережено категорій: ${list.length}`);
 }
 
+/** Назви перенесено в Хорошоп файлом — знімаємо позначку «перейменовано» */
+export async function clearRenamed() {
+  const user = await requirePerm("products.edit");
+  const r = await db.product.updateMany({ where: { nameChangedAt: { not: null } }, data: { nameChangedAt: null } });
+  await logAction(user.id, "names-exported", "products", null, { count: r.count });
+  return done(`Позначено як перенесені в Хорошоп: ${r.count}. Не забудьте завтра «Підібрати редиректи».`);
+}
+
 /** Повторно відправити в SalesDrive фото, завантажені в додаток (раніше йшли в неправильному полі) */
 export async function resendOwnPhotos() {
   const user = await requirePerm("sync");

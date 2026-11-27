@@ -29,6 +29,7 @@ export default function CreateFromFeed({
 }) {
   const [cat, setCat] = useState(defaultCategory);
   const [name, setName] = useState("");
+  const [nameRu, setNameRu] = useState("");
   const [res, setRes] = useState<{ ok: boolean; text: string; id?: number } | null>(null);
   const [pending, start] = useTransition();
 
@@ -44,18 +45,25 @@ export default function CreateFromFeed({
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Ваша назва UA (порожньо — як у постачальника)"
-        title="Краще вписати одразу: тоді на сайті з першого дня буде правильна адреса сторінки і не з’явиться 404 після перейменування"
-        style={{ minWidth: 320 }}
+        placeholder="Фінальна назва UA (обов'язково)"
+        title="Хорошоп бере назву лише при створенні товару і потім її не оновлює — вписуйте одразу остаточну"
+        style={{ minWidth: 320, borderColor: name.trim() ? undefined : "#f59e0b" }}
+      />
+      <input
+        value={nameRu}
+        onChange={(e) => setNameRu(e.target.value)}
+        placeholder="Назва RU (порожньо — перекладе DeepL)"
+        style={{ minWidth: 280 }}
       />
       <CategoryTreeSelect options={categoryOptions} mode="path" value={cat} onChange={(v) => setCat(v)} placeholder="Категорія на сайті" style={{ minWidth: 260 }} />
       <button
         type="button"
         className="btn sm"
-        disabled={pending}
+        disabled={pending || !name.trim()}
+        title={name.trim() ? undefined : "Спершу впишіть фінальну назву UA"}
         onClick={() =>
           start(async () => {
-            const r = await createFromSupplierItem({ supplierId, code, name: name.trim() || undefined, categoryName: cat || undefined, cost, costCurrency });
+            const r = await createFromSupplierItem({ supplierId, code, name: name.trim(), nameRu: nameRu.trim() || undefined, categoryName: cat || undefined, cost, costCurrency });
             if (!r.ok) return setRes({ ok: false, text: r.error });
             setRes({ ok: true, text: r.warning ?? "", id: r.product.id });
             onCreated?.(r.product, r.warning);

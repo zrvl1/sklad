@@ -146,6 +146,7 @@ model Product {
   supplierCode     String?        // код товару у фіді/накладній постачальника
   rrp              Float?         // РРЦ постачальника у валюті rrpCurrency
   rrpCurrency      String?
+  nameChangedAt DateTime?                  // назву змінили після передачі на сайт — Хорошоп її сам не оновить, треба файлом
   priceLocked      Boolean        @default(false) // ціна задана вручну — не перераховувати з РРЦ × курс
   seoAt            DateTime?      // коли завантажено SEO-тексти (назва, опис, запити) з файлу
   sdKitPending     Boolean        @default(false) // картку створено в додатку — у SalesDrive ще треба позначити «Комплект» і додати основний
