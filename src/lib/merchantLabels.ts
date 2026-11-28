@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { getSetting } from "./util";
+import { allCategories, PATH_SEP } from "./categories";
 
 export type LabelCfg = { low: number; high: number; idField: "both" | "sdId" | "sku" };
 
@@ -12,7 +13,7 @@ export async function labelCfg(): Promise<LabelCfg> {
   }
 }
 
-export type LabelRow = { id: string; brand: string; productType: string; margin: string; stock: string; price: string; marginUah: number | null; name: string };
+export type LabelRow = { id: string; brand: string; productType: string; segment: string; margin: string; stock: string; price: string; marginUah: number | null; name: string };
 
 /**
  * Мітки для Google Merchant Center (додаткове джерело даних): маржа в гривнях з одного продажу,
@@ -24,6 +25,14 @@ export async function labelRows(): Promise<LabelRow[]> {
     where: { deletedAt: null },
     select: { id: true, sdId: true, sku: true, name: true, nameTranslate: true, manufacturer: true, categoryName: true, price: true, cost: true, baseProductId: true, kitQty: true, stocks: { select: { qty: true } } },
   });
+  // повний шлях категорії (для product_type) і напрям: мотоблоки / мото / олива — для окремих груп об'єктів у Google Ads
+  const cats = await allCategories();
+  const pathByName = new Map<string, string>();
+  for (const c of cats) if (!pathByName.has(c.name)) pathByName.set(c.name, c.path);
+  const segmentOf = (path: string) => {
+    const root = path.split(PATH_SEP)[0].toLowerCase();
+    return /мотоблок/.test(root) ? "мотоблоки" : /мото/.test(root) ? "мото" : /олив|хімі/.test(root) ? "олива" : "інше";
+  };
   const stockOf = new Map<number, number>(products.map((p) => [p.id, p.stocks.reduce((s, x) => s + Number(x.qty), 0)]));
   const out: LabelRow[] = [];
   for (const p of products) {
@@ -37,7 +46,8 @@ export async function labelRows(): Promise<LabelRow[]> {
       id,
       name: p.nameTranslate || p.name,
       brand: p.manufacturer?.trim() ?? "",
-      productType: p.categoryName?.trim() ?? "",
+      productType: (pathByName.get(p.categoryName?.trim() ?? "") ?? p.categoryName?.trim() ?? "").split(PATH_SEP).join(" > "),
+      segment: segmentOf(pathByName.get(p.categoryName?.trim() ?? "") ?? p.categoryName ?? ""),
       marginUah: m === null ? null : Math.round(m),
       margin: m === null ? "маржа-невідома" : m < cfg.low ? "маржа-низька" : m < cfg.high ? "маржа-середня" : "маржа-висока",
       stock: st <= 0 ? "залишок-0" : st === 1 ? "залишок-1" : st <= 3 ? "залишок-мало" : "залишок-багато",
